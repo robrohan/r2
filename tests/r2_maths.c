@@ -7,7 +7,7 @@ static char *test_vec2_add()
 {
     vec2 v1 = {10.f, 10.f};
     vec2 v2 = {10.f, 10.f};
-    vec2 *v3 = calloc(1, sizeof(vec2));
+    vec2 *v3 = malloc(sizeof(vec2));
     vec2_add(&v1, &v2, v3);
     r2_assert("Vec2 add failed", (v3->x == 20.f && v3->y == 20.f));
     free(v3);
@@ -18,7 +18,7 @@ static char *test_vec2_sub()
 {
     vec2 v1 = {10.f, 10.f};
     vec2 v2 = {10.f, 10.f};
-    vec2 *v3 = calloc(1, sizeof(vec2));
+    vec2 *v3 = malloc(sizeof(vec2));
     vec2_sub(&v1, &v2, v3);
     r2_assert("Vec2 sub failed", (v3->x == 0.f && v3->y == 0.f));
     free(v3);
@@ -28,7 +28,7 @@ static char *test_vec2_sub()
 static char *test_vec2_div()
 {
     vec2 v1 = {10.f, 10.f};
-    vec2 *v3 = calloc(1, sizeof(vec2));
+    vec2 *v3 = malloc(sizeof(vec2));
     vec2_div(&v1, 2., v3);
     r2_assert("Vec2 div failed", (v3->x == 5.f && v3->y == 5.f));
     free(v3);
@@ -49,7 +49,7 @@ static char *test_vec2_div_vec2()
 {
     vec2 v1 = {10.f, 10.f};
     vec2 v2 = {5.f, 2.f};
-    vec2 *v3 = calloc(1, sizeof(vec2));
+    vec2 *v3 = malloc(sizeof(vec2));
     vec2_div_vec2(&v1, &v2, v3);
     r2_assert("Vec2 div failed", (v3->x == 2.f && v3->y == 5.f));
     free(v3);
@@ -60,7 +60,7 @@ static char *test_vec2_div_vec2_zero()
 {
     vec2 v1 = {10.f, 10.f};
     vec2 v2 = {0.f, 0.f};
-    vec2 *v3 = calloc(1, sizeof(vec2));
+    vec2 *v3 = malloc(sizeof(vec2));
     vec2_div_vec2(&v1, &v2, v3);
     r2_assert("Vec2 div zero failed", (v3->x == 10.f && v3->y == 10.f));
     free(v3);
@@ -90,7 +90,7 @@ static char *test_vec3_add()
 {
     vec3 v1 = {3.f, 3.f, 3.f};
     vec3 v2 = {-3.f, -3.f, -3.f};
-    vec4 *out = calloc(1, sizeof(vec4));
+    vec4 *out = malloc(sizeof(vec4));
     vec3_add(&v1, &v2, out);
     r2_assert("vec3 add is wrong", (out->x == 0.f && out->y == 0.f && out->z == 0.f));
     return 0;
@@ -100,7 +100,7 @@ static char *test_vec3_cross()
 {
     vec3 v1 = {3.f, 3.f, 3.f};
     vec3 v2 = {-30.f, 30.f, -30.f};
-    vec4 *out = calloc(1, sizeof(vec4));
+    vec4 *out = malloc(sizeof(vec4));
     vec3_cross(&v1, &v2, out);
     r2_assert("vec3 cross is wrong", (out->x == -180.f && out->y == 0.f && out->z == 180.f));
     return 0;
@@ -110,7 +110,7 @@ static char *test_vec3_equal()
 {
     vec3 v1 = {3.f, 3.f, 3.f};
     vec3 v2 = {-30.f, 30.f, -30.f};
-    r2_assert("vec3 equal is wrong", !vec3_equal(&v1, &v2));
+    r2_assert("vec3 equal is wrong", !vec3_equals(&v1, &v2));
     return 0;
 }
 
@@ -126,9 +126,46 @@ static char *test_vec3_to_array()
 static char *test_vec4_div()
 {
     vec3 v1 = {10.f, 10.f, 12.f, 12.f};
-    vec4 *out = calloc(1, sizeof(vec4));
+    vec4 *out = malloc(sizeof(vec4));
     vec4_div(&v1, 2., out);
     r2_assert("vec4 div is wrong", out->x == 5.f && out->y == 5.f && out->z == 6.f && out->w == 6.f);
+    return 0;
+}
+
+static char *test_quat_from_euler()
+{
+    vec3 v1 = {90.f, 0.f, 0.f};
+    quat *out = malloc(sizeof(quat));
+    quat_from_euler(&v1, out);
+
+    r2_assert("quat euler is wrong", r2_equals(out->x, 0.f) && r2_equals(out->y, 0.850904) && r2_equals(out->z, 0.) &&
+                                         r2_equals(out->w, .525322));
+    free(out);
+    return 0;
+}
+
+static char *test_quat_length()
+{
+    quat q1 = {0.000000, 0.850904, 0.000000, 0.525322};
+    float actual = quat_length(&q1);
+    r2_assert("quat length is wrong", r2_equals(actual, 1.));
+    return 0;
+}
+
+static char *test_quat_normalize()
+{
+    vec3 v1 = {90.f, 0.f, 0.f};
+    quat *out = malloc(sizeof(quat));
+    quat_from_euler(&v1, out);
+
+    quat *actual = malloc(sizeof(quat));
+    quat_normalize(out, actual);
+
+    r2_assert("quat normalize is wrong", r2_equals(out->x, 0.) && r2_equals(out->y, 0.850904) &&
+                                             r2_equals(out->z, 0.) && r2_equals(out->w, 0.525322));
+
+    free(out);
+    free(actual);
     return 0;
 }
 
@@ -147,6 +184,10 @@ static char *r2_maths_test()
     r2_run_test(test_vec3_to_array);
 
     r2_run_test(test_vec4_div);
+
+    r2_run_test(test_quat_from_euler);
+    r2_run_test(test_quat_length);
+    r2_run_test(test_quat_normalize);
 
     r2_run_test(test_new_vec4_ptr);
     return 0;

@@ -17,6 +17,10 @@ LICENSE
 #include <stdbool.h>
 #include <stdio.h>
 
+#ifndef EPSILON
+#define EPSILON 0.000000954
+#endif
+
 typedef struct s_vec2
 {
     float x; // 4
@@ -52,12 +56,25 @@ typedef struct s_mat4
 } mat4;
 
 ///////////////////////////////////////////////////////////////
+// FNS
+
+static bool r2_equals(float a, float b)
+{
+    return fabs(a - b) < EPSILON;
+}
+
+///////////////////////////////////////////////////////////////
 // Vec2
 
 static void vec2_zero(vec2 *out)
 {
     out->x = 0.;
     out->y = 0.;
+}
+
+static bool vec2_equals(vec2 *v1, vec2 *v2)
+{
+    return r2_equals(v1->x, v2->x) && r2_equals(v1->y, v2->y);
 }
 
 static void vec2_set(vec3 *v, float x, float y)
@@ -160,6 +177,11 @@ static void vec3_zero(vec3 *out)
     out->z = 0.;
 }
 
+static bool vec3_equals(vec3 *v1, vec3 *v2)
+{
+    return r2_equals(v1->x, v2->x) && r2_equals(v1->y, v2->y) && r2_equals(v1->z, v2->z);
+}
+
 static void vec3_set(vec3 *v, float x, float y, float z)
 {
     v->x = x;
@@ -253,17 +275,6 @@ static float vec3_dist(vec3 *v1, vec3 *v2)
     return sqrt(vec3_dist_sqrd(v1, v2));
 }
 
-static bool vec3_equal(vec3 *v1, vec3 *v2)
-{
-    if (v1->x != v2->x)
-        return false;
-    if (v1->y != v2->y)
-        return false;
-    if (v1->z != v2->z)
-        return false;
-    return true;
-}
-
 static void vec3_to_array(vec3 *v, float *out)
 {
     // not dangerous at all
@@ -290,6 +301,11 @@ static void vec4_zero(vec4 *out)
     out->y = 0.;
     out->z = 0.;
     out->w = 0.;
+}
+
+static bool vec4_equals(vec4 *v1, vec4 *v2)
+{
+    return r2_equals(v1->x, v2->x) && r2_equals(v1->y, v2->y) && r2_equals(v1->z, v2->z) && r2_equals(v1->w, v2->w);
 }
 
 static void vec4_add(vec4 *v1, vec4 *v2, vec4 *out)
@@ -418,6 +434,88 @@ static void vec4_to_array(vec4 *v, float *out)
     out[2] = v->z;
     out[3] = v->w;
 }
+
+///////////////////////////////////////////////////////////////
+// Quat
+
+static void quat_zero(quat *q)
+{
+    q->x = 0.;
+    q->y = 0.;
+    q->z = 0.;
+    q->w = 0.;
+}
+
+static void quat_identity(quat *q)
+{
+    q->x = 0.;
+    q->y = 0.;
+    q->z = 0.;
+    q->w = 1.;
+}
+
+static float quat_length(quat *q)
+{
+    return sqrtf(q->x * q->x + q->y * q->y + q->z * q->z + q->w * q->w);
+}
+
+// Given a set of euler angles create a quaterion
+static void quat_from_euler(vec3 *r, quat *q)
+{
+    float fc1 = cosf(r->z * .5f);
+    float fc2 = cosf(r->x * .5f);
+    float fc3 = cosf(r->y * .5f);
+
+    float fs1 = sinf(r->z * .5f);
+    float fs2 = sinf(r->x * .5f);
+    float fs3 = sinf(r->y * .5f);
+
+    q->x = fc1 * fc2 * fs3 - fs1 * fs2 * fc3;
+    q->y = fc1 * fs2 * fc3 + fs1 * fc2 * fs3;
+    q->z = fs1 * fc2 * fc3 - fc1 * fs2 * fs3;
+    q->w = fc1 * fc2 * fc3 + fs1 * fs2 * fs3;
+}
+
+static void quat_mul_quat(quat *q1, quat *q2, quat *out)
+{
+    out->x = (q1->w * q2->x) + (q1->x * q2->w) + (q1->y * q2->z) - (q1->z * q2->y);
+    out->y = (q1->w * q2->y) - (q1->x * q2->z) + (q1->y * q2->w) + (q1->z * q2->x);
+    out->z = (q1->w * q2->z) + (q1->x * q2->y) - (q1->y * q2->x) + (q1->z * q2->w);
+    out->w = (q1->w * q2->w) - (q1->x * q2->x) - (q1->y * q2->y) - (q1->z * q2->z);
+}
+
+static void quat_normalize(quat *q, quat *out)
+{
+
+    float mag = quat_length(q);
+    if (mag > EPSILON)
+    {
+        float d = 1 / ((mag == 0) ? 1 : mag);
+        out->x = q->x * d;
+        out->y = q->y * d;
+        out->z = q->z * d;
+        out->w = q->w * d;
+    }
+    else
+        return quat_zero(out);
+}
+
+/*
+static void quat_mul_vec3(quat *q, vec3 *v, vec3 *out)
+{
+    // quat work = q;
+    quat work = {0., 0., 0., 0.};
+    quat norm = {0., 0., 0., 0.};
+
+    work = quat_mul_quat(work, quat_normalize(quat_new(v->x, v->y, v->z, 0.0));
+    work = quat_mul_quat(work, quat_inverse(q));
+
+    vec3 res = vec3_new(work.x, work.y, work.z);
+
+    float mag = vec3_length(v);
+    return vec3_mul(res, mag);
+    }
+*/
 
 ///////////////////////////////////////////////////////////////
 
