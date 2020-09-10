@@ -13,9 +13,9 @@ LICENSE
 #ifndef R2_MATHS
 #define R2_MATHS
 
-#ifndef R2_NO_STDIO
+#include <math.h>
+#include <stdbool.h>
 #include <stdio.h>
-#endif // R2_NO_STDIO
 
 typedef struct s_vec2
 {
@@ -52,6 +52,19 @@ typedef struct s_mat4
 } mat4;
 
 ///////////////////////////////////////////////////////////////
+// Vec2
+
+static void vec2_zero(vec2 *out)
+{
+    out->x = 0.;
+    out->y = 0.;
+}
+
+static void vec2_set(vec3 *v, float x, float y)
+{
+    v->x = x;
+    v->y = y;
+}
 
 static void vec2_add(vec2 *v1, vec2 *v2, vec2 *out)
 {
@@ -76,6 +89,334 @@ static void vec2_div_vec2(vec2 *v1, vec2 *v2, vec2 *out)
 {
     out->x = v1->x / ((v2->x == 0) ? 1 : v2->x);
     out->y = v1->y / ((v2->y == 0) ? 1 : v2->y);
+}
+
+static void vec2_mul(vec2 *v, float fac, vec2 *out)
+{
+    out->x = v->x * fac;
+    out->y = v->y * fac;
+}
+
+static void vec2_mul_vec2(vec2 *v1, vec2 *v2, vec2 *out)
+{
+    out->x = v1->x * v2->x;
+    out->y = v1->y * v2->y;
+}
+
+static void vec2_pow(vec2 *v, float exp, vec2 *out)
+{
+    out->x = pow(v->x, exp);
+    out->y = pow(v->y, exp);
+}
+
+static float vec2_dot(vec2 *v1, vec2 *v2)
+{
+    return (v1->x * v2->x) + (v1->y * v2->y);
+}
+
+static float vec2_length_sqrd(vec2 *v)
+{
+    float length = 0.0;
+    length += v->x * v->x;
+    length += v->y * v->y;
+    return length;
+}
+
+static float vec2_length(vec2 *v)
+{
+    return sqrt(vec2_length_sqrd(v));
+}
+
+static float vec2_dist_sqrd(vec2 *v1, vec2 *v2)
+{
+    return (v1->x - v2->x) * (v1->x - v2->x) + (v1->y - v2->y) * (v1->y - v2->y);
+}
+
+static float vec2_dist(vec2 *v1, vec2 *v2)
+{
+    return sqrt(vec2_dist_sqrd(v1, v2));
+}
+
+static void vec2_normalize(vec2 *v, vec2 *out)
+{
+    float len = vec2_length(v);
+    vec2_div(v, len, out);
+}
+
+static void vec2_to_array(vec2 *v, float *out)
+{
+    // not dangerous at all
+    out[0] = v->x;
+    out[1] = v->y;
+}
+
+///////////////////////////////////////////////////////////////
+// Vec3
+
+static void vec3_zero(vec3 *out)
+{
+    out->x = 0.;
+    out->y = 0.;
+    out->z = 0.;
+}
+
+static void vec3_set(vec3 *v, float x, float y, float z)
+{
+    v->x = x;
+    v->y = y;
+    v->z = z;
+}
+
+static void vec3_add(vec3 *v1, vec3 *v2, vec3 *out)
+{
+    out->x = v1->x + v2->x;
+    out->y = v1->y + v2->y;
+    out->z = v1->z + v2->z;
+}
+
+static void vec3_sub(vec3 *v1, vec3 *v2, vec3 *out)
+{
+    out->x = v1->x - v2->x;
+    out->y = v1->y - v2->y;
+    out->z = v1->z - v2->z;
+}
+
+static void vec3_div(vec3 *v, float fac, vec3 *out)
+{
+    float d = 1 / ((fac == 0) ? 1 : fac);
+    out->x = v->x * d;
+    out->y = v->y * d;
+    out->z = v->z * d;
+}
+
+static void vec3_div_vec3(vec3 *v1, vec3 *v2, vec3 *out)
+{
+    out->x = v1->x / ((v2->x == 0) ? 1 : v2->x);
+    out->y = v1->y / ((v2->y == 0) ? 1 : v2->y);
+    out->z = v1->z / ((v2->z == 0) ? 1 : v2->z);
+}
+
+static void vec3_mul(vec3 *v, float fac, vec3 *out)
+{
+    out->x = v->x * fac;
+    out->y = v->y * fac;
+    out->z = v->z * fac;
+}
+
+static void vec3_mul_vec3(vec3 *v1, vec3 *v2, vec3 *out)
+{
+    out->x = v1->x * v2->x;
+    out->y = v1->y * v2->y;
+    out->z = v1->z * v2->z;
+}
+
+static void vec3_pow(vec3 *v, float exp, vec3 *out)
+{
+    out->x = pow(v->x, exp);
+    out->y = pow(v->y, exp);
+    out->z = pow(v->z, exp);
+}
+
+static float vec3_dot(vec3 *v1, vec3 *v2)
+{
+    return (v1->x * v2->x) + (v1->y * v2->y) + (v1->z * v2->z);
+}
+
+static void vec3_cross(vec3 *v1, vec3 *v2, vec3 *out)
+{
+    out->x = (v1->y * v2->z) - (v1->z * v2->y);
+    out->y = (v1->z * v2->x) - (v1->x * v2->z);
+    out->z = (v1->x * v2->y) - (v1->y * v2->x);
+}
+
+static float vec3_length_sqrd(vec3 *v)
+{
+    float length = 0.0;
+    length += v->x * v->x;
+    length += v->y * v->y;
+    length += v->z * v->z;
+    return length;
+}
+
+static float vec3_length(vec3 *v)
+{
+    return sqrt(vec3_length_sqrd(v));
+}
+
+static float vec3_dist_sqrd(vec3 *v1, vec3 *v2)
+{
+    return (v1->x - v2->x) * (v1->x - v2->x) + (v1->y - v2->y) * (v1->y - v2->y) + (v1->z - v2->z) * (v1->z - v2->z);
+}
+
+static float vec3_dist(vec3 *v1, vec3 *v2)
+{
+    return sqrt(vec3_dist_sqrd(v1, v2));
+}
+
+static bool vec3_equal(vec3 *v1, vec3 *v2)
+{
+    if (v1->x != v2->x)
+        return false;
+    if (v1->y != v2->y)
+        return false;
+    if (v1->z != v2->z)
+        return false;
+    return true;
+}
+
+static void vec3_to_array(vec3 *v, float *out)
+{
+    // not dangerous at all
+    out[0] = v->x;
+    out[1] = v->y;
+    out[2] = v->z;
+}
+
+static void vec3_normalize(vec3 *v, vec3 *out)
+{
+    float len = vec3_length(v);
+    if (len == 0.0)
+        return vec3_zero(out);
+    else
+        return vec3_div(v, len, out);
+}
+
+///////////////////////////////////////////////////////////////
+// Vec4
+
+static void vec4_zero(vec4 *out)
+{
+    out->x = 0.;
+    out->y = 0.;
+    out->z = 0.;
+    out->w = 0.;
+}
+
+static void vec4_add(vec4 *v1, vec4 *v2, vec4 *out)
+{
+    out->x = v1->x + v2->x;
+    out->y = v1->y + v2->y;
+    out->z = v1->z + v2->z;
+    out->w = v1->w + v2->w;
+}
+
+static void vec4_sub(vec4 *v1, vec4 *v2, vec4 *out)
+{
+    out->x = v1->x - v2->x;
+    out->y = v1->y - v2->y;
+    out->z = v1->z - v2->z;
+    out->w = v1->w - v2->w;
+}
+
+static void vec4_div(vec4 *v, float fac, vec4 *out)
+{
+    float d = 1 / ((fac == 0) ? 1 : fac);
+    out->x = v->x * d;
+    out->y = v->y * d;
+    out->z = v->z * d;
+    out->w = v->w * d;
+}
+
+static void vec4_mul(vec4 *v, float fac, vec4 *out)
+{
+    out->x = v->x * fac;
+    out->y = v->y * fac;
+    out->z = v->z * fac;
+    out->w = v->w * fac;
+}
+
+static void vec4_mul_vec4(vec4 *v1, vec4 *v2, vec4 *out)
+{
+    out->x = v1->x * v2->x;
+    out->y = v1->y * v2->y;
+    out->z = v1->z * v2->z;
+    out->w = v1->w * v2->w;
+}
+
+static void vec4_pow(vec4 *v, float exp, vec4 *out)
+{
+    out->x = pow(v->x, exp);
+    out->y = pow(v->y, exp);
+    out->z = pow(v->z, exp);
+    out->w = pow(v->w, exp);
+}
+
+static void vec4_abs(vec4 *v, vec4 *out)
+{
+    out->x = fabs(v->x);
+    out->y = fabs(v->y);
+    out->z = fabs(v->z);
+    out->w = fabs(v->w);
+}
+
+static void vec4_sqrt(vec4 *v, vec4 *out)
+{
+    out->x = sqrt(v->x);
+    out->y = sqrt(v->y);
+    out->z = sqrt(v->z);
+    out->w = sqrt(v->w);
+}
+
+static float vec4_dot(vec4 *v1, vec4 *v2)
+{
+    return (v1->x * v2->x) + (v1->y * v2->y) + (v1->z * v2->z) + (v1->w * v2->w);
+}
+
+static float vec4_length_sqrd(vec4 *v)
+{
+    float length = 0.0;
+    length += v->x * v->x;
+    length += v->y * v->y;
+    length += v->z * v->z;
+    length += v->w * v->w;
+    return length;
+}
+
+static float vec4_length(vec4 *v)
+{
+    return sqrt(vec4_length_sqrd(v));
+}
+
+static float vec4_dist_sqrd(vec4 *v1, vec4 *v2)
+{
+    return (v1->x - v2->x) * (v1->x - v2->x) + (v1->y - v2->y) * (v1->y - v2->y) + (v1->y - v2->z) * (v1->y - v2->z) +
+           (v1->y - v2->w) * (v1->y - v2->w);
+}
+
+static float vec4_dist(vec4 *v1, vec4 *v2)
+{
+    return sqrt(vec4_dist_sqrd(v1, v2));
+}
+
+static void vec4_normalize(vec4 *v, vec4 *out)
+{
+    float len = vec4_length(v);
+    if (len == 0.0)
+        return vec4_zero(out);
+    else
+        return vec4_div(v, len, out);
+}
+
+static bool vec4_equ(vec4 *v1, vec4 *v2)
+{
+    if (v1->x != v2->x)
+        return false;
+    if (v1->y == v2->y)
+        return false;
+    if (v1->z != v2->z)
+        return false;
+    if (v1->w != v2->w)
+        return false;
+
+    return true;
+}
+
+static void vec4_to_array(vec4 *v, float *out)
+{
+    out[0] = v->x;
+    out[1] = v->y;
+    out[2] = v->z;
+    out[3] = v->w;
 }
 
 ///////////////////////////////////////////////////////////////
