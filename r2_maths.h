@@ -21,6 +21,10 @@ LICENSE
 #define EPSILON 0.000000954
 #endif
 
+#ifndef M_PI
+#define M_PI 3.141592653589
+#endif
+
 typedef struct s_vec2
 {
     float x; // 4
@@ -61,6 +65,12 @@ typedef struct s_mat4
 static bool r2_equals(float a, float b)
 {
     return fabs(a - b) < EPSILON;
+}
+
+static float __g_pi_deg = M_PI / 180.f;
+static float deg_to_rad(float d)
+{
+    return d * __g_pi_deg;
 }
 
 ///////////////////////////////////////////////////////////////
@@ -459,16 +469,16 @@ static float quat_length(quat *q)
     return sqrtf(q->x * q->x + q->y * q->y + q->z * q->z + q->w * q->w);
 }
 
-// Given a set of euler angles create a quaterion
+// Given a set of euler angles (in degrees) create a quaterion
 static void quat_from_euler(vec3 *r, quat *q)
 {
-    float fc1 = cosf(r->z * .5f);
-    float fc2 = cosf(r->x * .5f);
-    float fc3 = cosf(r->y * .5f);
+    float fc1 = cosf(deg_to_rad(r->z) * .5f);
+    float fc2 = cosf(deg_to_rad(r->x) * .5f);
+    float fc3 = cosf(deg_to_rad(r->y) * .5f);
 
-    float fs1 = sinf(r->z * .5f);
-    float fs2 = sinf(r->x * .5f);
-    float fs3 = sinf(r->y * .5f);
+    float fs1 = sinf(deg_to_rad(r->z) * .5f);
+    float fs2 = sinf(deg_to_rad(r->x) * .5f);
+    float fs3 = sinf(deg_to_rad(r->y) * .5f);
 
     q->x = fc1 * fc2 * fs3 - fs1 * fs2 * fc3;
     q->y = fc1 * fs2 * fc3 + fs1 * fc2 * fs3;
@@ -484,9 +494,31 @@ static void quat_mul_quat(quat *q1, quat *q2, quat *out)
     out->w = (q1->w * q2->w) - (q1->x * q2->x) - (q1->y * q2->y) - (q1->z * q2->z);
 }
 
+static void quat_inverse_component(quat *q, quat *out)
+{
+    out->x = -q->x;
+    out->y = -q->y;
+    out->z = -q->z;
+    out->w = -q->w;
+}
+
+static void quat_inverse(quat *q, quat *out)
+{
+    quat_inverse_component(q, out);
+
+    float mag = quat_length(q);
+    if (mag > EPSILON)
+    {
+        float d = 1 / ((mag == 0) ? 1 : mag);
+        out->x *= d;
+        out->y *= d;
+        out->z *= d;
+        out->w *= d;
+    }
+}
+
 static void quat_normalize(quat *q, quat *out)
 {
-
     float mag = quat_length(q);
     if (mag > EPSILON)
     {
@@ -500,22 +532,30 @@ static void quat_normalize(quat *q, quat *out)
         return quat_zero(out);
 }
 
-/*
+static float quat_dot(quat *q1, quat *q2)
+{
+    return vec4_dot(q1, q2);
+}
+
 static void quat_mul_vec3(quat *q, vec3 *v, vec3 *out)
 {
-    // quat work = q;
-    quat work = {0., 0., 0., 0.};
-    quat norm = {0., 0., 0., 0.};
+    quat work = {0.};
+    quat norm = {0.};
+    quat inv = {0.};
 
-    work = quat_mul_quat(work, quat_normalize(quat_new(v->x, v->y, v->z, 0.0));
-    work = quat_mul_quat(work, quat_inverse(q));
+    quat_normalize(v, &norm);
+    quat_mul_quat(q, &norm, &work);
 
-    vec3 res = vec3_new(work.x, work.y, work.z);
+    quat_inverse(q, &inv);
+    quat_mul_quat(&work, &inv, &work);
+
+    out->x = work.x;
+    out->y = work.y;
+    out->z = work.z;
 
     float mag = vec3_length(v);
-    return vec3_mul(res, mag);
-    }
-*/
+    vec3_mul(out, mag, out);
+}
 
 ///////////////////////////////////////////////////////////////
 

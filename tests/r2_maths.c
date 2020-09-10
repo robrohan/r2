@@ -95,6 +95,14 @@ static char *test_vec3_add()
     return 0;
 }
 
+static char *test_vec3_mul_clobber()
+{
+    vec3 v1 = {3.f, 3.f, 3.f};
+    vec3_mul(&v1, 3, &v1);
+    r2_assert("vec3 mul is wrong", (v1.x == 9.f && v1.y == 9.f && v1.z == 9.f));
+    return 0;
+}
+
 static char *test_vec3_cross()
 {
     vec3 v1 = {3.f, 3.f, 3.f};
@@ -139,8 +147,8 @@ static char *test_quat_from_euler()
     quat *out = malloc(sizeof(quat));
     quat_from_euler(&v1, out);
 
-    r2_assert("quat euler is wrong", r2_equals(out->x, 0.f) && r2_equals(out->y, 0.850904) && r2_equals(out->z, 0.) &&
-                                         r2_equals(out->w, .525322));
+    r2_assert("quat euler is wrong", r2_equals(out->x, 0.f) && r2_equals(out->y, 0.707107) && r2_equals(out->z, 0.) &&
+                                         r2_equals(out->w, .707107));
     free(out);
     return 0;
 }
@@ -155,18 +163,54 @@ static char *test_quat_length()
 
 static char *test_quat_normalize()
 {
-    vec3 v1 = {90.f, 0.f, 0.f};
+    quat q1 = {.5f, .3f, .2f, .1f};
     quat *out = malloc(sizeof(quat));
-    quat_from_euler(&v1, out);
-
-    quat *actual = malloc(sizeof(quat));
-    quat_normalize(out, actual);
-
-    r2_assert("quat normalize is wrong", r2_equals(out->x, 0.) && r2_equals(out->y, 0.850904) &&
-                                             r2_equals(out->z, 0.) && r2_equals(out->w, 0.525322));
-
+    quat_normalize(&q1, out);
+    r2_assert("quat normalize is wrong", r2_equals(out->x, .800641) && r2_equals(out->y, 0.480384) &&
+                                             r2_equals(out->z, 0.320256) && r2_equals(out->w, 0.160128));
     free(out);
-    free(actual);
+    return 0;
+}
+
+static char *test_quat_mul_vec3_x()
+{
+    vec3 v1 = {180.f, 0.f, 0.f};
+    quat *q = malloc(sizeof(quat));
+    quat_from_euler(&v1, q);
+
+    vec3 v = {-10.f, 0.f, 0.f};
+    quat *result = malloc(sizeof(vec3));
+
+    quat_mul_vec3(q, &v, result);
+
+    printf("%f %f %f %f\n", result->x, result->y, result->z, result->w);
+
+    /*    r2_assert("quat mul vec3 is wrong", r2_equals(result->x, 10.) && r2_equals(result->y, 0.) &&
+                                            r2_equals(result->z, 0.) && r2_equals(result->w, 0.));
+    */
+    free(q);
+    free(result);
+    return 0;
+}
+
+static char *test_quat_mul_vec3_y()
+{
+    vec3 v1 = {0.f, 180.f, 0.f};
+    quat *q = malloc(sizeof(quat));
+    quat_from_euler(&v1, q);
+
+    vec3 v = {0.f, 10.f, 0.f};
+    quat *result = malloc(sizeof(vec3));
+
+    quat_mul_vec3(q, &v, result);
+
+    printf("%f %f %f %f\n", result->x, result->y, result->z, result->w);
+
+    /* r2_assert("quat mul vec3 is wrong", r2_equals(result->x, 0.) && r2_equals(result->y, -10.) && */
+    /*                                         r2_equals(result->z, 0.) && r2_equals(result->w, 0.)); */
+
+    free(q);
+    free(result);
     return 0;
 }
 
@@ -181,6 +225,7 @@ static char *r2_maths_test()
     r2_run_test(test_vec2_dot);
 
     r2_run_test(test_vec3_add);
+    r2_run_test(test_vec3_mul_clobber);
     r2_run_test(test_vec3_cross);
     r2_run_test(test_vec3_to_array);
 
@@ -189,6 +234,8 @@ static char *r2_maths_test()
     r2_run_test(test_quat_from_euler);
     r2_run_test(test_quat_length);
     r2_run_test(test_quat_normalize);
+    r2_run_test(test_quat_mul_vec3_x);
+    r2_run_test(test_quat_mul_vec3_y);
 
     r2_run_test(test_new_vec4_ptr);
     return 0;
