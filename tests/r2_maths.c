@@ -79,10 +79,8 @@ static char *test_vec2_dot()
 {
     vec2 v1 = {3.f, 3.f};
     vec2 v2 = {-3.f, -3.f};
-
     float theta = vec2_dot(&v1, &v2);
     r2_assert("vec2 dot was wonky", theta == -18.);
-
     return 0;
 }
 
@@ -93,6 +91,7 @@ static char *test_vec3_add()
     vec4 *out = malloc(sizeof(vec4));
     vec3_add(&v1, &v2, out);
     r2_assert("vec3 add is wrong", (out->x == 0.f && out->y == 0.f && out->z == 0.f));
+    free(out);
     return 0;
 }
 
@@ -103,6 +102,7 @@ static char *test_vec3_cross()
     vec4 *out = malloc(sizeof(vec4));
     vec3_cross(&v1, &v2, out);
     r2_assert("vec3 cross is wrong", (out->x == -180.f && out->y == 0.f && out->z == 180.f));
+    free(out);
     return 0;
 }
 
@@ -129,6 +129,7 @@ static char *test_vec4_div()
     vec4 *out = malloc(sizeof(vec4));
     vec4_div(&v1, 2., out);
     r2_assert("vec4 div is wrong", out->x == 5.f && out->y == 5.f && out->z == 6.f && out->w == 6.f);
+    free(out);
     return 0;
 }
 
