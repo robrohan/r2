@@ -425,6 +425,7 @@ static void vec4_to_array(vec4 *v, float *out)
 
 ///////////////////////////////////////////////////////////////
 // Quat
+// http://www.tobynorris.com/work/prog/csharp/quatview/help/orientations_and_quaternions.htm
 
 static void quat_zero(quat *q)
 {
@@ -446,22 +447,34 @@ static float quat_length(quat *q)
 {
     return sqrtf(q->x * q->x + q->y * q->y + q->z * q->z + q->w * q->w);
 }
+static float quat_magnitude(quat *q)
+{
+    return quat_length(q);
+}
 
 // Given a set of euler angles (in radians) create a quaterion
 static void quat_from_euler(vec3 *r, quat *q)
 {
-    float fc1 = cosf(r->z * .5f);
-    float fc2 = cosf(r->x * .5f);
-    float fc3 = cosf(r->y * .5f);
+    float roll = r->x;
+    float pitch = r->y;
+    float yaw = r->z;
 
-    float fs1 = sinf(r->z * .5f);
-    float fs2 = sinf(r->x * .5f);
-    float fs3 = sinf(r->y * .5f);
+    float cy = cosf(yaw * .5);
+    float sy = sinf(yaw * .5);
 
-    q->x = fc1 * fc2 * fs3 - fs1 * fs2 * fc3;
-    q->y = fc1 * fs2 * fc3 + fs1 * fc2 * fs3;
-    q->z = fs1 * fc2 * fc3 - fc1 * fs2 * fs3;
-    q->w = fc1 * fc2 * fc3 + fs1 * fs2 * fs3;
+    float cp = cosf(pitch * .5);
+    float sp = sinf(pitch * .5);
+
+    float cr = cosf(roll * .5);
+    float sr = sinf(roll * .5);
+
+    // Warning: in most maths apps and documentation about quats the w
+    // part (real) is in the front. We put it in the back because it makes
+    // more sense keeping x,y,z in the same order.
+    q->w = cr * cp * cy + sr * sp * sy; // r
+    q->x = sr * cp * cy - cr * sp * sy; // i
+    q->y = cr * sp * cy + sr * cp * sy; // j
+    q->z = cr * cp * sy - sr * sp * cy; // k
 }
 
 static void quat_mul_quat(quat *q1, quat *q2, quat *out)
@@ -472,7 +485,7 @@ static void quat_mul_quat(quat *q1, quat *q2, quat *out)
     out->w = (q1->w * q2->w) - (q1->x * q2->x) - (q1->y * q2->y) - (q1->z * q2->z);
 }
 
-static void quat_inverse_component(quat *q, quat *out)
+static void quat_conjugate(quat *q, quat *out)
 {
     out->x = -q->x;
     out->y = -q->y;
@@ -482,16 +495,18 @@ static void quat_inverse_component(quat *q, quat *out)
 
 static void quat_inverse(quat *q, quat *out)
 {
-    quat_inverse_component(q, out);
+    quat conj = {0.};
+    quat_conjugate(q, &conj);
 
-    float mag = quat_length(q);
-    if (mag > EPSILON)
+    float mag = quat_magnitude(q);
+    float mag_s = mag * mag;
+    if (mag_s > EPSILON)
     {
-        float d = 1 / ((mag == 0) ? 1 : mag);
-        out->x *= d;
-        out->y *= d;
-        out->z *= d;
-        out->w *= d;
+        float d = 1 / mag_s;
+        out->x = conj.x * d;
+        out->y = conj.y * d;
+        out->z = conj.z * d;
+        out->w = conj.w * d;
     }
 }
 
@@ -500,7 +515,7 @@ static void quat_normalize(quat *q, quat *out)
     float mag = quat_length(q);
     if (mag > EPSILON)
     {
-        float d = 1 / ((mag == 0) ? 1 : mag);
+        float d = 1 / mag;
         out->x = q->x * d;
         out->y = q->y * d;
         out->z = q->z * d;
@@ -517,22 +532,27 @@ static float quat_dot(quat *q1, quat *q2)
 
 static void quat_mul_vec3(quat *q, vec3 *v, vec3 *out)
 {
-    quat work = {0.};
+    vec3 work = {0.};
     quat norm = {0.};
     quat inv = {0.};
 
-    quat_normalize(v, &norm);
-    quat_mul_quat(q, &norm, &work);
+    // normalize quat for orientation in frame B
+    quat_normalize(q, &norm);
+    // quat_mul_quat(q, &norm, &work);
 
-    quat_inverse(q, &inv);
-    quat_mul_quat(&work, &inv, &work);
+    // conjugate of Q
+    quat_conjugate(q, &inv);
+    // quat_mul_quat(&work, &inv, &work);
 
-    out->x = work.x;
-    out->y = work.y;
-    out->z = work.z;
+    quat_mul_quat(&norm, v, &work);
+    quat_mul_quat(&inv, &work, out);
 
-    float mag = vec3_length(v);
-    vec3_mul(out, mag, out);
+    // out->x = work.x;
+    // out->y = work.y;
+    // out->z = work.z;
+
+    // float mag = vec3_length(v);
+    // vec3_mul(out, mag, out);
 }
 
 ///////////////////////////////////////////////////////////////

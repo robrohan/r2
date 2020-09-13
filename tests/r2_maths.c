@@ -166,8 +166,17 @@ static char *test_quat_from_euler()
     quat *out = malloc(sizeof(quat));
     quat_from_euler(&v1, out);
 
-    r2_assert("quat euler is wrong", r2_equals(out->x, 0.f) && r2_equals(out->y, 0.707107) && r2_equals(out->z, 0.) &&
-                                         r2_equals(out->w, .707107));
+    // Octave: q = 0.7071 + 0.7071i + 0j + 0k
+    float r = out->w;
+    float i = out->x;
+    float j = out->y;
+    float k = out->z;
+
+    // printf("%f %f %f %f\n", r, i, j, k);
+    // printf("%f %f %f %f\n", out->x, out->y, out->z, out->w);
+
+    r2_assert("quat euler is wrong",
+              r2_equals(r, 0.707107) && r2_equals(i, 0.707107) && r2_equals(j, 0.) && r2_equals(k, 0.));
     free(out);
     return 0;
 }
@@ -191,44 +200,60 @@ static char *test_quat_normalize()
     return 0;
 }
 
-static char *test_quat_mul_vec3_x()
+static char *test_quat_mul_vec3_x_90z()
 {
-    vec3 v1 = {M_PI, 0.f, 0.f};
+    // Rotate the X point 90 deg about the Z axis
+    //  --->x  10
+    //  |
+    //  |
+    //  y
+    // -10
+    vec3 v1 = {0.f, 0.f, M_PI / 2.};
     quat *q = malloc(sizeof(quat));
     quat_from_euler(&v1, q);
 
-    printf("%f %f %f %f\n", q->x, q->y, q->z, q->w);
+    // printf("--> %f %f %f %f\n", q->x, q->y, q->z, q->w);
 
-    vec3 v = {-10.f, 0.f, 0.f};
+    vec3 v = {10.f, 0.f, 0.f};
     quat *result = malloc(sizeof(vec3));
 
     quat_mul_vec3(q, &v, result);
 
-    printf("%f %f %f %f\n", result->x, result->y, result->z, result->w);
+    // printf("%f %f %f %f\n", result->x, result->y, result->z, result->w);
 
-    /*    r2_assert("quat mul vec3 is wrong", r2_equals(result->x, 10.) && r2_equals(result->y, 0.) &&
-                                            r2_equals(result->z, 0.) && r2_equals(result->w, 0.));
-    */
+    r2_assert("quat mul vec3 is wrong (x)", r2_equals(result->x, 0.) && r2_equals(result->y, -10.) &&
+                                                r2_equals(result->z, 0.) && r2_equals(result->w, 0.));
+
     free(q);
     free(result);
     return 0;
 }
 
-static char *test_quat_mul_vec3_y()
+static char *test_quat_mul_vec3_y_90x()
 {
-    vec3 v1 = {0.f, M_PI, 0.f};
+    // Rotate the Y point 90 deg about the X axis
+    //   10
+    //   y  -10
+    //   | /
+    //   |/
+    //   --->x
+    //  /
+    // z
+    vec3 v1 = {M_PI / 2, 0.f, 0.f};
     quat *q = malloc(sizeof(quat));
     quat_from_euler(&v1, q);
+
+    // printf("--> %f %f %f %f\n", q->x, q->y, q->z, q->w);
 
     vec3 v = {0.f, 10.f, 0.f};
     quat *result = malloc(sizeof(vec3));
 
     quat_mul_vec3(q, &v, result);
 
-    printf("%f %f %f %f\n", result->x, result->y, result->z, result->w);
+    // printf("%f %f %f %f\n", result->x, result->y, result->z, result->w);
 
-    /* r2_assert("quat mul vec3 is wrong", r2_equals(result->x, 0.) && r2_equals(result->y, -10.) && */
-    /*                                         r2_equals(result->z, 0.) && r2_equals(result->w, 0.)); */
+    r2_assert("quat mul vec3 is wrong (y 90x)", r2_equals(result->x, 0.) && r2_equals(result->y, 0.) &&
+                                                    r2_equals(result->z, -10.) && r2_equals(result->w, 0.));
 
     free(q);
     free(result);
@@ -257,8 +282,8 @@ static char *r2_maths_test()
     r2_run_test(test_quat_from_euler);
     r2_run_test(test_quat_length);
     r2_run_test(test_quat_normalize);
-    r2_run_test(test_quat_mul_vec3_x);
-    r2_run_test(test_quat_mul_vec3_y);
+    r2_run_test(test_quat_mul_vec3_x_90z);
+    r2_run_test(test_quat_mul_vec3_y_90x);
 
     r2_run_test(test_new_vec4_ptr);
     return 0;
