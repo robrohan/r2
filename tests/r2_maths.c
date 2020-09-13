@@ -162,7 +162,7 @@ static char *test_vec4_div()
 
 static char *test_quat_from_euler()
 {
-    vec3 v1 = {90.f, 0.f, 0.f};
+    vec3 v1 = {M_PI / 2., 0.f, 0.f};
     quat *out = malloc(sizeof(quat));
     quat_from_euler(&v1, out);
 
@@ -193,7 +193,7 @@ static char *test_quat_normalize()
 
 static char *test_quat_mul_vec3_x()
 {
-    vec3 v1 = {180.f, 0.f, 0.f};
+    vec3 v1 = {M_PI, 0.f, 0.f};
     quat *q = malloc(sizeof(quat));
     quat_from_euler(&v1, q);
 
@@ -216,7 +216,7 @@ static char *test_quat_mul_vec3_x()
 
 static char *test_quat_mul_vec3_y()
 {
-    vec3 v1 = {0.f, 180.f, 0.f};
+    vec3 v1 = {0.f, M_PI, 0.f};
     quat *q = malloc(sizeof(quat));
     quat_from_euler(&v1, q);
 

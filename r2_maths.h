@@ -447,16 +447,16 @@ static float quat_length(quat *q)
     return sqrtf(q->x * q->x + q->y * q->y + q->z * q->z + q->w * q->w);
 }
 
-// Given a set of euler angles (in degrees) create a quaterion
+// Given a set of euler angles (in radians) create a quaterion
 static void quat_from_euler(vec3 *r, quat *q)
 {
-    float fc1 = cosf(deg_to_rad(r->z) * .5f);
-    float fc2 = cosf(deg_to_rad(r->x) * .5f);
-    float fc3 = cosf(deg_to_rad(r->y) * .5f);
+    float fc1 = cosf(r->z * .5f);
+    float fc2 = cosf(r->x * .5f);
+    float fc3 = cosf(r->y * .5f);
 
-    float fs1 = sinf(deg_to_rad(r->z) * .5f);
-    float fs2 = sinf(deg_to_rad(r->x) * .5f);
-    float fs3 = sinf(deg_to_rad(r->y) * .5f);
+    float fs1 = sinf(r->z * .5f);
+    float fs2 = sinf(r->x * .5f);
+    float fs3 = sinf(r->y * .5f);
 
     q->x = fc1 * fc2 * fs3 - fs1 * fs2 * fc3;
     q->y = fc1 * fs2 * fc3 + fs1 * fc2 * fs3;
