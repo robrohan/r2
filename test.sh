@@ -11,5 +11,5 @@ ${CC} ${CFLAGS} tests.c ${TESTS} ${LIBS} -o ${OUT}
 if [ $? -eq 0 ]
 then
     ./${OUT}
-    rm ./${OUT}
+    # rm ./${OUT}
 fi
