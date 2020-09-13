@@ -262,10 +262,7 @@ static void vec3_cross(vec3 *v1, vec3 *v2, vec3 *out)
 
 static float vec3_length_sqrd(vec3 *v)
 {
-    float length = 0.0;
-    length += v->x * v->x;
-    length += v->y * v->y;
-    length += v->z * v->z;
+    float length = v->x * v->x + v->y * v->y + v->z * v->z;
     return length;
 }
 

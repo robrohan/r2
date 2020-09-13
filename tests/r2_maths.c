@@ -131,6 +131,25 @@ static char *test_vec3_to_array()
     return 0;
 }
 
+static char *test_vec3_normalize()
+{
+    vec3 v1 = {10.f, 0.f, 0.f};
+    vec4 *out = malloc(sizeof(vec3));
+    vec3_normalize(&v1, out);
+    r2_assert("vec3 normalize is wrong", (out->x == 1.f && out->y == 0.f && out->z == 0.f));
+    free(out);
+    return 0;
+}
+
+// Norm, Magnitude, Length? ... come on.
+static char *test_vec3_length()
+{
+    vec3 v1 = {10.f, 0.f, 0.f};
+    float l = vec3_length(&v1);
+    r2_assert("vec3 length is wrong", l == 10.f);
+    return 0;
+}
+
 static char *test_vec4_div()
 {
     vec3 v1 = {10.f, 10.f, 12.f, 12.f};
@@ -177,6 +196,8 @@ static char *test_quat_mul_vec3_x()
     vec3 v1 = {180.f, 0.f, 0.f};
     quat *q = malloc(sizeof(quat));
     quat_from_euler(&v1, q);
+
+    printf("%f %f %f %f\n", q->x, q->y, q->z, q->w);
 
     vec3 v = {-10.f, 0.f, 0.f};
     quat *result = malloc(sizeof(vec3));
@@ -228,6 +249,8 @@ static char *r2_maths_test()
     r2_run_test(test_vec3_mul_clobber);
     r2_run_test(test_vec3_cross);
     r2_run_test(test_vec3_to_array);
+    r2_run_test(test_vec3_normalize);
+    r2_run_test(test_vec3_length);
 
     r2_run_test(test_vec4_div);
 
