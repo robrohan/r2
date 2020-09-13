@@ -386,11 +386,7 @@ static float vec4_dot(vec4 *v1, vec4 *v2)
 
 static float vec4_length_sqrd(vec4 *v)
 {
-    float length = 0.0;
-    length += v->x * v->x;
-    length += v->y * v->y;
-    length += v->z * v->z;
-    length += v->w * v->w;
+    float length = v->x * v->x + v->y * v->y + v->z * v->z + v->w * v->w;
     return length;
 }
 
@@ -417,20 +413,6 @@ static void vec4_normalize(vec4 *v, vec4 *out)
         return vec4_zero(out);
     else
         return vec4_div(v, len, out);
-}
-
-static bool vec4_equ(vec4 *v1, vec4 *v2)
-{
-    if (v1->x != v2->x)
-        return false;
-    if (v1->y == v2->y)
-        return false;
-    if (v1->z != v2->z)
-        return false;
-    if (v1->w != v2->w)
-        return false;
-
-    return true;
 }
 
 static void vec4_to_array(vec4 *v, float *out)
