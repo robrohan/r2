@@ -469,8 +469,8 @@ static void quat_from_euler(vec3 *r, quat *q)
     float sr = sinf(roll * .5);
 
     // Warning: in most maths apps and documentation about quats the w
-    // part (real) is in the front. We put it in the back because it makes
-    // more sense keeping x,y,z in the same order.
+    // part (real) is in the front. We have some names here that make it
+    // a bit more difficult to see what is going on.
     q->w = cr * cp * cy + sr * sp * sy; // r
     q->x = sr * cp * cy - cr * sp * sy; // i
     q->y = cr * sp * cy + sr * cp * sy; // j
@@ -485,15 +485,15 @@ static void quat_mul_quat(quat *q1, quat *q2, quat *out)
     out->w = (q1->w * q2->w) - (q1->x * q2->x) - (q1->y * q2->y) - (q1->z * q2->z);
 }
 
-static void quat_conjugate(quat *q, quat *out)
+static void quat_inverse(quat *q, quat *out)
 {
+    out->w = q->w;
     out->x = -q->x;
     out->y = -q->y;
     out->z = -q->z;
-    out->w = -q->w;
 }
 
-static void quat_inverse(quat *q, quat *out)
+/* static void quat_inverse(quat *q, quat *out)
 {
     quat conj = {0.};
     quat_conjugate(q, &conj);
@@ -508,7 +508,7 @@ static void quat_inverse(quat *q, quat *out)
         out->z = conj.z * d;
         out->w = conj.w * d;
     }
-}
+    } */
 
 static void quat_normalize(quat *q, quat *out)
 {
@@ -537,15 +537,18 @@ static void quat_mul_vec3(quat *q, vec3 *v, vec3 *out)
     quat inv = {0.};
 
     // normalize quat for orientation in frame B
-    quat_normalize(q, &norm);
+    // quat_normalize(q, &norm);
     // quat_mul_quat(q, &norm, &work);
 
     // conjugate of Q
-    quat_conjugate(q, &inv);
+    quat_inverse(q, &inv);
     // quat_mul_quat(&work, &inv, &work);
 
-    quat_mul_quat(&norm, v, &work);
-    quat_mul_quat(&inv, &work, out);
+    // quat_mul_quat(&norm, v, &work);
+    // quat_mul_quat(&inv, &work, out);
+
+    quat_mul_quat(v, q, &work);
+    quat_mul_quat(&work, &inv, out);
 
     // out->x = work.x;
     // out->y = work.y;
