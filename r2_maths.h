@@ -453,6 +453,11 @@ static void quat_sub(quat *q1, quat *q2, quat *out)
     vec4_sub(q1, q2, out);
 }
 
+static float quat_dot(quat *q1, quat *q2)
+{
+    return vec4_dot(q1, q2);
+}
+
 static float quat_length(quat *q)
 {
     return sqrtf(q->x * q->x + q->y * q->y + q->z * q->z + q->w * q->w);
@@ -460,6 +465,13 @@ static float quat_length(quat *q)
 static float quat_magnitude(quat *q)
 {
     return quat_length(q);
+}
+
+static void quat_rot2q(vec3 *axis, float theta, quat *out)
+{
+    vec4_mul(axis, sinf(theta * .5), out);
+    float d = cosf(theta * .5);
+    out->w = d;
 }
 
 // Given a set of euler angles (in radians) create a quaterion
@@ -521,23 +533,6 @@ static void quat_conj(quat *q, quat *out)
     out->z = -q->z;
 }
 
-/* static void quat_inverse(quat *q, quat *out)
-{
-    quat conj = {0.};
-    quat_conjugate(q, &conj);
-
-    float mag = quat_magnitude(q);
-    float mag_s = mag * mag;
-    if (mag_s > EPSILON)
-    {
-        float d = 1 / mag_s;
-        out->x = conj.x * d;
-        out->y = conj.y * d;
-        out->z = conj.z * d;
-        out->w = conj.w * d;
-    }
-    } */
-
 static void quat_normalize(quat *q, quat *out)
 {
     float mag = quat_length(q);
@@ -551,11 +546,6 @@ static void quat_normalize(quat *q, quat *out)
     }
     else
         return quat_zero(out);
-}
-
-static float quat_dot(quat *q1, quat *q2)
-{
-    return vec4_dot(q1, q2);
 }
 
 static void quat_mul_vec3(quat *q, vec3 *v, vec3 *out)
