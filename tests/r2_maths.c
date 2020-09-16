@@ -67,14 +67,6 @@ static char *test_vec2_div_vec2_zero()
     return 0;
 }
 
-static char *test_new_vec4_ptr()
-{
-    vec4 *v4 = calloc(1, sizeof(vec4));
-    r2_assert("Vec4 as pointer", (v4->x == 0.f && v4->y == 0.f && v4->z == 0.f && v4->w == 0.f));
-    free(v4);
-    return 0;
-}
-
 static char *test_vec2_dot()
 {
     vec2 v1 = {3.f, 3.f};
@@ -312,8 +304,54 @@ static char *test_quat_mul_vec3_y_180x()
     return 0;
 }
 
+static char *test_quat_mat4()
+{
+    quat *q = malloc(sizeof(quat));
+    quat_identity(q);
+
+    mat4 *result = malloc(sizeof(mat4));
+    quat_mat4(q, result);
+
+    r2_assert("quat mat4 is wrong", r2_equals(result->m00, 1.) && r2_equals(result->m11, 1.) &&
+                                        r2_equals(result->m22, 1.) && r2_equals(result->m33, 1.));
+
+    free(q);
+    free(result);
+    return 0;
+}
+
+static char *test_mat4_transform()
+{
+    mat4 *kern = malloc(sizeof(mat4));
+    vec4 *p = malloc(sizeof(vec4));
+    vec4 *r = malloc(sizeof(vec4));
+
+    float ary[4] = {3., 3., 3., 0.};
+    vec4_set(p, ary);
+
+    // printf("%f %f %f %f\n", p->x, p->y, p->z, p->w);
+
+    float ary2[16] = {1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3, 4, 4, 4, 4};
+    mat4_set(kern, ary2);
+
+    mat4_transform(p, kern, r);
+
+    // printf("%f %f %f %f\n", r->x, r->y, r->z, r->w);
+
+    r2_assert("quat mat4 is wrong",
+              r2_equals(r->x, 18.) && r2_equals(r->y, 18.) && r2_equals(r->z, 18.) && r2_equals(r->w, 18.));
+
+    free(kern);
+    free(p);
+    free(r);
+    return 0;
+}
+
+////
+
 static char *r2_maths_test()
 {
+    // v2
     r2_run_test(test_vec2_add);
     r2_run_test(test_vec2_sub);
     r2_run_test(test_vec2_div);
@@ -321,7 +359,7 @@ static char *r2_maths_test()
     r2_run_test(test_vec2_div_vec2);
     r2_run_test(test_vec2_div_vec2_zero);
     r2_run_test(test_vec2_dot);
-
+    // v3
     r2_run_test(test_vec3_add);
     r2_run_test(test_vec3_mul_clobber);
     r2_run_test(test_vec3_cross);
@@ -329,8 +367,10 @@ static char *r2_maths_test()
     r2_run_test(test_vec3_normalize);
     r2_run_test(test_vec3_length);
 
+    // v4
     r2_run_test(test_vec4_div);
 
+    // quat
     r2_run_test(test_quat_rot2q);
     r2_run_test(test_quat_from_euler);
     r2_run_test(test_quat_length);
@@ -339,7 +379,10 @@ static char *r2_maths_test()
     r2_run_test(test_quat_mul_vec3_x_90z);
     r2_run_test(test_quat_mul_vec3_y_90x);
     r2_run_test(test_quat_mul_vec3_y_180x);
+    r2_run_test(test_quat_mat4);
 
-    r2_run_test(test_new_vec4_ptr);
+    // mat
+    r2_run_test(test_mat4_transform);
+
     return 0;
 }
