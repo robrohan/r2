@@ -443,6 +443,16 @@ static void quat_identity(quat *q)
     q->w = 1.;
 }
 
+static void quat_add(quat *q1, quat *q2, quat *out)
+{
+    vec4_add(q1, q2, out);
+}
+
+static void quat_sub(quat *q1, quat *q2, quat *out)
+{
+    vec4_sub(q1, q2, out);
+}
+
 static float quat_length(quat *q)
 {
     return sqrtf(q->x * q->x + q->y * q->y + q->z * q->z + q->w * q->w);
@@ -479,13 +489,31 @@ static void quat_from_euler(vec3 *r, quat *q)
 
 static void quat_mul_quat(quat *q1, quat *q2, quat *out)
 {
-    out->x = (q1->w * q2->x) + (q1->x * q2->w) + (q1->y * q2->z) - (q1->z * q2->y);
-    out->y = (q1->w * q2->y) - (q1->x * q2->z) + (q1->y * q2->w) + (q1->z * q2->x);
-    out->z = (q1->w * q2->z) + (q1->x * q2->y) - (q1->y * q2->x) + (q1->z * q2->w);
-    out->w = (q1->w * q2->w) - (q1->x * q2->x) - (q1->y * q2->y) - (q1->z * q2->z);
+    // i^2 = j^2 = k^2 = ijk = -1
+
+    // q1 = a+bi+cj+dk
+    float a = q1->w;
+    float b = q1->x;
+    float c = q1->y;
+    float d = q1->z;
+    // q2 = e+fi+gj+hk
+    float e = q2->w;
+    float f = q2->x;
+    float g = q2->y;
+    float h = q2->z;
+
+    //   |  i  j  k
+    //--------------
+    // i | -1  k -j
+    // j | -k -1  i
+    // k |  j -i -1
+    out->w = a * e - b * f - c * g - d * h;
+    out->x = a * f + b * e + c * h - d * g;
+    out->y = a * g - b * h + c * e + d * f;
+    out->z = a * h + b * g - c * f + d * e;
 }
 
-static void quat_inverse(quat *q, quat *out)
+static void quat_conj(quat *q, quat *out)
 {
     out->w = q->w;
     out->x = -q->x;
@@ -533,29 +561,13 @@ static float quat_dot(quat *q1, quat *q2)
 static void quat_mul_vec3(quat *q, vec3 *v, vec3 *out)
 {
     vec3 work = {0.};
-    quat norm = {0.};
     quat inv = {0.};
 
-    // normalize quat for orientation in frame B
-    // quat_normalize(q, &norm);
-    // quat_mul_quat(q, &norm, &work);
-
     // conjugate of Q
-    quat_inverse(q, &inv);
-    // quat_mul_quat(&work, &inv, &work);
+    quat_conj(q, &inv);
 
-    // quat_mul_quat(&norm, v, &work);
-    // quat_mul_quat(&inv, &work, out);
-
-    quat_mul_quat(v, q, &work);
+    quat_mul_quat(q, v, &work);
     quat_mul_quat(&work, &inv, out);
-
-    // out->x = work.x;
-    // out->y = work.y;
-    // out->z = work.z;
-
-    // float mag = vec3_length(v);
-    // vec3_mul(out, mag, out);
 }
 
 ///////////////////////////////////////////////////////////////
