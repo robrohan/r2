@@ -2,11 +2,12 @@
 #include "../r2_unit.h"
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 static char *test_vec2_add()
 {
-    vec2 v1 = {10.f, 10.f};
-    vec2 v2 = {10.f, 10.f};
+    vec2 v1 = {.x = 10, .y = 10};
+    vec2 v2 = {.x = 10.f, .y = 10.f};
     vec2 *v3 = malloc(sizeof(vec2));
     vec2_add(&v1, &v2, v3);
     r2_assert("Vec2 add failed", (v3->x == 20.f && v3->y == 20.f));
@@ -16,8 +17,8 @@ static char *test_vec2_add()
 
 static char *test_vec2_sub()
 {
-    vec2 v1 = {10.f, 10.f};
-    vec2 v2 = {10.f, 10.f};
+    vec2 v1 = {.x = 10.f, .y = 10.f};
+    vec2 v2 = {.x = 10.f, .y = 10.f};
     vec2 *v3 = malloc(sizeof(vec2));
     vec2_sub(&v1, &v2, v3);
     r2_assert("Vec2 sub failed", (v3->x == 0.f && v3->y == 0.f));
@@ -27,7 +28,7 @@ static char *test_vec2_sub()
 
 static char *test_vec2_div()
 {
-    vec2 v1 = {10.f, 10.f};
+    vec2 v1 = {.x = 10.f, .y = 10.f};
     vec2 *v3 = malloc(sizeof(vec2));
     vec2_div(&v1, 2., v3);
     r2_assert("Vec2 div failed", (v3->x == 5.f && v3->y == 5.f));
@@ -37,7 +38,7 @@ static char *test_vec2_div()
 
 static char *test_vec2_div_zero()
 {
-    vec2 v1 = {10.f, 10.f};
+    vec2 v1 = {.x = 10.f, .y = 10.f};
     vec2 *v3 = calloc(1, sizeof(vec2));
     vec2_div(&v1, 0, v3);
     r2_assert("Vec2 div zero failed", (v3->x == 10.f && v3->y == 10.f));
@@ -47,8 +48,8 @@ static char *test_vec2_div_zero()
 
 static char *test_vec2_div_vec2()
 {
-    vec2 v1 = {10.f, 10.f};
-    vec2 v2 = {5.f, 2.f};
+    vec2 v1 = {.x = 10.f, .y = 10.f};
+    vec2 v2 = {.x = 5.f, .y = 2.f};
     vec2 *v3 = malloc(sizeof(vec2));
     vec2_div_vec2(&v1, &v2, v3);
     r2_assert("Vec2 div failed", (v3->x == 2.f && v3->y == 5.f));
@@ -58,8 +59,8 @@ static char *test_vec2_div_vec2()
 
 static char *test_vec2_div_vec2_zero()
 {
-    vec2 v1 = {10.f, 10.f};
-    vec2 v2 = {0.f, 0.f};
+    vec2 v1 = {.x = 10.f, .y = 10.f};
+    vec2 v2 = {.x = 0.f, .y = 0.f};
     vec2 *v3 = malloc(sizeof(vec2));
     vec2_div_vec2(&v1, &v2, v3);
     r2_assert("Vec2 div zero failed", (v3->x == 10.f && v3->y == 10.f));
@@ -69,8 +70,8 @@ static char *test_vec2_div_vec2_zero()
 
 static char *test_vec2_dot()
 {
-    vec2 v1 = {3.f, 3.f};
-    vec2 v2 = {-3.f, -3.f};
+    vec2 v1 = {.x = 3.f, .y = 3.f};
+    vec2 v2 = {.x = -3.f, .y = -3.f};
     float theta = vec2_dot(&v1, &v2);
     r2_assert("vec2 dot was wonky", theta == -18.);
     return 0;
@@ -78,8 +79,8 @@ static char *test_vec2_dot()
 
 static char *test_vec3_add()
 {
-    vec3 v1 = {3.f, 3.f, 3.f};
-    vec3 v2 = {-3.f, -3.f, -3.f};
+    vec3 v1 = {.x = 3.f, .y = 3.f, .z = 3.f};
+    vec3 v2 = {.x = -3.f, .y = -3.f, .z = -3.f};
     vec4 *out = malloc(sizeof(vec4));
     vec3_add(&v1, &v2, out);
     r2_assert("vec3 add is wrong", (out->x == 0.f && out->y == 0.f && out->z == 0.f));
@@ -89,7 +90,7 @@ static char *test_vec3_add()
 
 static char *test_vec3_mul_clobber()
 {
-    vec3 v1 = {3.f, 3.f, 3.f};
+    vec3 v1 = {.x = 3.f, .y = 3.f, .z = 3.f};
     vec3_mul(&v1, 3, &v1);
     r2_assert("vec3 mul is wrong", (v1.x == 9.f && v1.y == 9.f && v1.z == 9.f));
     return 0;
@@ -97,8 +98,8 @@ static char *test_vec3_mul_clobber()
 
 static char *test_vec3_cross()
 {
-    vec3 v1 = {3.f, 3.f, 3.f};
-    vec3 v2 = {-30.f, 30.f, -30.f};
+    vec3 v1 = {.x = 3.f, .y = 3.f, .z = 3.f};
+    vec3 v2 = {.x = -30.f, .y = 30.f, .z = -30.f};
     vec4 *out = malloc(sizeof(vec4));
     vec3_cross(&v1, &v2, out);
     r2_assert("vec3 cross is wrong", (out->x == -180.f && out->y == 0.f && out->z == 180.f));
@@ -108,16 +109,17 @@ static char *test_vec3_cross()
 
 static char *test_vec3_equal()
 {
-    vec3 v1 = {3.f, 3.f, 3.f};
-    vec3 v2 = {-30.f, 30.f, -30.f};
+    vec3 v1 = {.x = 3.f, .y = 3.f, .z = 3.f};
+    vec3 v2 = {.x = -30.f, .y = 30.f, .z = -30.f};
     r2_assert("vec3 equal is wrong", !vec3_equals(&v1, &v2));
     return 0;
 }
 
 static char *test_vec3_to_array()
 {
-    vec3 v1 = {3.f, 3.f, 3.f};
+    vec3 v1 = {.x = 3.f, .y = 3.f, .z = 3.f};
     float v2[3] = {0., 0., 0.};
+    // TODO: I don't think this is needed this anymore
     vec3_to_array(&v1, v2);
     r2_assert("vec3 to array is wrong", (v2[0] == 3. && v2[1] == 3. && v2[2] == 3.));
     return 0;
@@ -125,7 +127,7 @@ static char *test_vec3_to_array()
 
 static char *test_vec3_normalize()
 {
-    vec3 v1 = {10.f, 0.f, 0.f};
+    vec3 v1 = {.x = 10.f, .y = 0.f, .z = 0.f};
     vec4 *out = malloc(sizeof(vec3));
     vec3_normalize(&v1, out);
     r2_assert("vec3 normalize is wrong", (out->x == 1.f && out->y == 0.f && out->z == 0.f));
@@ -136,7 +138,7 @@ static char *test_vec3_normalize()
 // Magnitude, Length...
 static char *test_vec3_length()
 {
-    vec3 v1 = {10.f, 0.f, 0.f};
+    vec3 v1 = {.x = 10.f, .y = 0.f, .z = 0.f};
     float l = vec3_length(&v1);
     r2_assert("vec3 length is wrong", l == 10.f);
     return 0;
@@ -144,7 +146,7 @@ static char *test_vec3_length()
 
 static char *test_vec4_div()
 {
-    vec3 v1 = {10.f, 10.f, 12.f, 12.f};
+    vec3 v1 = {.x = 10.f, .y = 10.f, .z = 12.f, .w = 12.f};
     vec4 *out = malloc(sizeof(vec4));
     vec4_div(&v1, 2., out);
     r2_assert("vec4 div is wrong", out->x == 5.f && out->y == 5.f && out->z == 6.f && out->w == 6.f);
@@ -154,7 +156,7 @@ static char *test_vec4_div()
 
 static char *test_vec4_normalize()
 {
-    vec4 v1 = {1.f, 2.f, 3.f, 4.f};
+    vec4 v1 = {.x = 1.f, .y = 2.f, .z = 3.f, .w = 4.f};
     vec4 *out = malloc(sizeof(vec4));
     vec4_normalize(&v1, out);
 
@@ -168,8 +170,8 @@ static char *test_vec4_normalize()
 
 static char *test_vec4_cross()
 {
-    vec4 v1 = {1.f, 1.f, 0.f, 0.f};
-    vec4 v2 = {0.f, 1.f, 1.f, 0.f};
+    vec4 v1 = {.x = 1.f, .y = 1.f, .z = 0.f, .w = 0.f};
+    vec4 v2 = {.x = 0.f, .y = 1.f, .z = 1.f, .w = 0.f};
     vec4 *out = malloc(sizeof(vec4));
 
     vec3_cross(&v1, &v2, out);
@@ -185,7 +187,7 @@ static char *test_quat_rot2q()
 {
     quat *out = malloc(sizeof(quat));
 
-    vec3 axis = {0, 1, 0};
+    vec3 axis = {.x = 0, .y = 1, .z = 0};
     float angle = M_PI / 4;
 
     quat_rot2q(&axis, angle, out);
@@ -205,7 +207,7 @@ static char *test_quat_rot2q()
 
 static char *test_quat_from_euler()
 {
-    vec3 v1 = {M_PI / 2., 0.f, 0.f};
+    vec3 v1 = {.x = M_PI / 2., .y = 0.f, .z = 0.f};
     quat *out = malloc(sizeof(quat));
     quat_from_euler(&v1, out);
 
@@ -223,7 +225,7 @@ static char *test_quat_from_euler()
 
 static char *test_quat_length()
 {
-    quat q1 = {0.000000, 0.850904, 0.000000, 0.525322};
+    quat q1 = {.x = 0.000000, .y = 0.850904, .z = 0.000000, .w = 0.525322};
     float actual = quat_length(&q1);
     r2_assert("quat length is wrong", r2_equals(actual, 1.));
     return 0;
@@ -231,7 +233,7 @@ static char *test_quat_length()
 
 static char *test_quat_normalize()
 {
-    quat q1 = {.5f, .3f, .2f, .1f};
+    quat q1 = {.x = .5f, .y = .3f, .z = .2f, .w = .1f};
     quat *out = malloc(sizeof(quat));
     quat_normalize(&q1, out);
     r2_assert("quat normalize is wrong", r2_equals(out->x, .800641) && r2_equals(out->y, 0.480384) &&
@@ -242,11 +244,11 @@ static char *test_quat_normalize()
 
 static char *test_quat_mul_quat()
 {
-    vec3 v1 = {0.f, M_PI / 2, 0.f};
+    vec3 v1 = {.x = 0.f, .y = M_PI / 2, .z = 0.f};
     quat *q1 = malloc(sizeof(quat));
     quat_from_euler(&v1, q1);
 
-    vec3 v2 = {M_PI / 4, 0.f, 0.f};
+    vec3 v2 = {.x = M_PI / 4, .y = 0.f, .z = 0.f};
     quat *q2 = malloc(sizeof(quat));
     quat_from_euler(&v2, q2);
 
@@ -270,11 +272,11 @@ static char *test_quat_mul_vec3_x_90z()
     //  |
     //  |   1
     //  ----->x
-    vec3 v1 = {0.f, 0.f, M_PI / 2};
+    vec3 v1 = {.x = 0.f, .y = 0.f, .z = M_PI / 2};
     quat *q = malloc(sizeof(quat));
     quat_from_euler(&v1, q);
 
-    vec3 v = {1.f, 0.f, 0.f};
+    vec3 v = {.x = 1.f, .y = 0.f, .z = 0.f};
     quat *result = malloc(sizeof(vec3));
 
     quat_mul_vec3(q, &v, result);
@@ -297,11 +299,11 @@ static char *test_quat_mul_vec3_y_90x()
     //   --->x
     //  /
     // z
-    vec3 v1 = {M_PI / 2, 0.f, 0.f};
+    vec3 v1 = {.x = M_PI / 2, .y = 0.f, .z = 0.f};
     quat *q = malloc(sizeof(quat));
     quat_from_euler(&v1, q);
 
-    vec3 v = {0.f, 1.f, 0.f};
+    vec3 v = {.x = 0.f, .y = 1.f, .z = 0.f};
     quat *result = malloc(sizeof(vec3));
 
     quat_mul_vec3(q, &v, result);
@@ -316,11 +318,11 @@ static char *test_quat_mul_vec3_y_90x()
 
 static char *test_quat_mul_vec3_y_180x()
 {
-    vec3 v1 = {M_PI, 0.f, 0.f};
+    vec3 v1 = {.x = M_PI, .y = 0.f, .z = 0.f};
     quat *q = malloc(sizeof(quat));
     quat_from_euler(&v1, q);
 
-    vec3 v = {0.f, 1.f, 0.f};
+    vec3 v = {.x = 0.f, .y = 1.f, .z = 0.f};
     quat *result = malloc(sizeof(vec3));
 
     quat_mul_vec3(q, &v, result);
@@ -363,12 +365,34 @@ static char *test_mat4_transform()
 
     mat4_transform(p, kern, r);
 
-    r2_assert("quat mat4 is wrong",
+    r2_assert("mat4 transform is wrong",
               r2_equals(r->x, 18.) && r2_equals(r->y, 18.) && r2_equals(r->z, 18.) && r2_equals(r->w, 18.));
 
     free(kern);
     free(p);
     free(r);
+    return 0;
+}
+
+static char *test_mat4_mul()
+{
+    mat4 *k1 = malloc(sizeof(mat4));
+    mat4 *k2 = malloc(sizeof(mat4));
+    mat4 *out = malloc(sizeof(mat4));
+
+    static const float k1mat[16] = {1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3, 4, 4, 4, 4};
+    memcpy(k1->a_mat4, k1mat, sizeof(k1mat));
+
+    static const float k1mat2[16] = {4, 4, 4, 4, 3, 3, 3, 3, 2, 2, 2, 2, 1, 1, 1, 1};
+    memcpy(k2->a_mat4, k1mat2, sizeof(k1mat2));
+
+    mat4_mul(k1, k2, out);
+
+    r2_assert("mat4 mul is wrong", r2_equals(out->m00, 10.));
+
+    free(k1);
+    free(k2);
+    free(out);
     return 0;
 }
 
@@ -410,6 +434,7 @@ static char *r2_maths_test()
 
     // mat
     r2_run_test(test_mat4_transform);
+    r2_run_test(test_mat4_mul);
 
     return 0;
 }
