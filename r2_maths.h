@@ -47,19 +47,19 @@ extern "C"
     typedef struct s_mat3
     {
         // clang-format off
-    float m00; float m10; float m20; // 12
-    float m01; float m11; float m21; // 12
-    float m02; float m12; float m22; // 12 -- 36
+      float m00; float m10; float m20; // 12
+      float m01; float m11; float m21; // 12
+      float m02; float m12; float m22; // 12 -- 36
         // clang-format on
     } mat3;
 
     typedef struct s_mat4
     {
         // clang-format off
-    float m00; float m10; float m20; float m30; // 16
-    float m01; float m11; float m21; float m31; // 16
-    float m02; float m12; float m22; float m32; // 16
-    float m03; float m13; float m23; float m33; // 16 -- 64
+      float m00; float m10; float m20; float m30; // 16
+      float m01; float m11; float m21; float m31; // 16
+      float m02; float m12; float m22; float m32; // 16
+      float m03; float m13; float m23; float m33; // 16 -- 64
         // clang-format on
     } mat4;
 
