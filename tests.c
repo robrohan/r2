@@ -21,7 +21,6 @@ char *(*s[1])(void) = {r2_maths_test};
 //
 // Running
 //
-
 int r2_tests_run = 0;
 
 static char *all_tests()
@@ -39,35 +38,37 @@ static char *all_tests()
     return 0;
 }
 
-// static void test_error(const char *str)
-// {
-//    fprintf(stderr, "%s\n", str);
-//    fflush(stderr);
-// }
+static void test_error(const char *str)
+{
+    fprintf(stderr, "%s\n", str);
+    fflush(stderr);
+}
 
-// static void test_debug(const char *str)
-// {
-//    fprintf(stdout, "%s\n", str);
-//    fflush(stdout);
-// }
+static void test_debug(const char *str)
+{
+    fprintf(stdout, "%s\n", str);
+    fflush(stdout);
+}
 
 int main(int argc, char **argv)
 {
-    // at_error(test_error);
-    // at_debug(test_debug);
-
     char *result = all_tests();
-    printf("\n\n");
+    test_debug("\n");
     if (result != 0)
     {
-        printf("FAIL: %s\n", result);
+        char f[100];
+        snprintf(f, 100, "FAIL: %s", result);
+        test_error(f);
     }
     else
     {
-        printf("ALL TESTS PASSED\n");
+        test_debug("ALL TESTS PASSED");
     }
-    printf("-------------------------\n");
-    printf("Tests run: %d\n\n", r2_tests_run);
+    test_debug("-------------------------");
+
+    char p[20];
+    snprintf(p, 20, "Tests run: %d\n", r2_tests_run);
+    test_debug(p);
     // To have Make not get mad about error state
     return !(NULL == result);
 }
