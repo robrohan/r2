@@ -289,7 +289,7 @@ extern "C"
 
     static void vec3_to_array(vec3 *v, float *out)
     {
-        // not dangerous at all
+        // this is fine.
         out[0] = v->x;
         out[1] = v->y;
         out[2] = v->z;
@@ -399,15 +399,14 @@ extern "C"
         return (v1->x * v2->x) + (v1->y * v2->y) + (v1->z * v2->z) + (v1->w * v2->w);
     }
 
-    static float vec4_length_sqrd(vec4 *v)
+    static void vec4_cross(vec4 *v1, vec4 *v2, vec4 *out)
     {
-        float length = v->x * v->x + v->y * v->y + v->z * v->z + v->w * v->w;
-        return length;
+        return vec3_cross(v1, v2, out);
     }
 
     static float vec4_length(vec4 *v)
     {
-        return sqrt(vec4_length_sqrd(v));
+        return sqrtf(v->x * v->x + v->y * v->y + v->z * v->z + v->w * v->w);
     }
 
     static float vec4_dist_sqrd(vec4 *v1, vec4 *v2)
@@ -423,15 +422,22 @@ extern "C"
 
     static void vec4_normalize(vec4 *v, vec4 *out)
     {
-        float len = vec4_length(v);
-        if (len == 0.0)
+        float mag = vec4_length(v);
+        if (mag < EPSILON)
             return vec4_zero(out);
         else
-            return vec4_div(v, len, out);
+        {
+            float d = 1 / mag;
+            out->x = v->x * d;
+            out->y = v->y * d;
+            out->z = v->z * d;
+            out->w = v->w * d;
+        }
     }
 
     static void vec4_to_array(vec4 *v, float *out)
     {
+        // you break it, you buy it.
         out[0] = v->x;
         out[1] = v->y;
         out[2] = v->z;
@@ -475,7 +481,7 @@ extern "C"
 
     static float quat_length(quat *q)
     {
-        return sqrtf(q->x * q->x + q->y * q->y + q->z * q->z + q->w * q->w);
+        return vec4_length(q);
     }
     static float quat_magnitude(quat *q)
     {
@@ -550,17 +556,7 @@ extern "C"
 
     static void quat_normalize(quat *q, quat *out)
     {
-        float mag = quat_length(q);
-        if (mag > EPSILON)
-        {
-            float d = 1 / mag;
-            out->x = q->x * d;
-            out->y = q->y * d;
-            out->z = q->z * d;
-            out->w = q->w * d;
-        }
-        else
-            return quat_zero(out);
+        return vec4_normalize(q, out);
     }
 
     static void quat_mul_vec3(quat *q, vec3 *v, vec3 *out)
@@ -568,9 +564,7 @@ extern "C"
         vec3 work = {0.};
         quat inv = {0.};
 
-        // conjugate of Q
         quat_conj(q, &inv);
-
         quat_mul_quat(q, v, &work);
         quat_mul_quat(&work, &inv, out);
     }

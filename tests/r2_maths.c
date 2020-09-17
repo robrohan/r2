@@ -152,6 +152,35 @@ static char *test_vec4_div()
     return 0;
 }
 
+static char *test_vec4_normalize()
+{
+    vec4 v1 = {1.f, 2.f, 3.f, 4.f};
+    vec4 *out = malloc(sizeof(vec4));
+    vec4_normalize(&v1, out);
+
+    // Octave: 0.18257   0.36515   0.54772   0.73030
+    r2_assert("vec4 normalize is wrong", r2_equals(out->x, .182574) && r2_equals(out->y, 0.365148) &&
+                                             r2_equals(out->z, 0.547723) && r2_equals(out->w, 0.730297));
+
+    free(out);
+    return 0;
+}
+
+static char *test_vec4_cross()
+{
+    vec4 v1 = {1.f, 1.f, 0.f, 0.f};
+    vec4 v2 = {0.f, 1.f, 1.f, 0.f};
+    vec4 *out = malloc(sizeof(vec4));
+
+    vec4_cross(&v1, &v2, out);
+
+    // Octave: 1 -1 1
+    r2_assert("vec4 cross is wrong", r2_equals(out->x, 1.) && r2_equals(out->y, -1.) && r2_equals(out->z, 1.));
+
+    free(out);
+    return 0;
+}
+
 static char *test_quat_rot2q()
 {
     quat *out = malloc(sizeof(quat));
@@ -353,6 +382,7 @@ static char *r2_maths_test()
     r2_run_test(test_vec2_div_vec2);
     r2_run_test(test_vec2_div_vec2_zero);
     r2_run_test(test_vec2_dot);
+
     // v3
     r2_run_test(test_vec3_add);
     r2_run_test(test_vec3_mul_clobber);
@@ -364,6 +394,8 @@ static char *r2_maths_test()
 
     // v4
     r2_run_test(test_vec4_div);
+    r2_run_test(test_vec4_normalize);
+    r2_run_test(test_vec4_cross);
 
     // quat
     r2_run_test(test_quat_rot2q);
