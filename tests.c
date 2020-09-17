@@ -39,17 +39,17 @@ static char *all_tests()
     return 0;
 }
 
-static void test_error(const char *str)
-{
-    fprintf(stderr, "%s\n", str);
-    fflush(stderr);
-}
+// static void test_error(const char *str)
+// {
+//    fprintf(stderr, "%s\n", str);
+//    fflush(stderr);
+// }
 
-static void test_debug(const char *str)
-{
-    fprintf(stdout, "%s\n", str);
-    fflush(stdout);
-}
+// static void test_debug(const char *str)
+// {
+//    fprintf(stdout, "%s\n", str);
+//    fflush(stdout);
+// }
 
 int main(int argc, char **argv)
 {

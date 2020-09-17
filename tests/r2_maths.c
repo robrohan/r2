@@ -236,11 +236,11 @@ static char *test_quat_mul_quat()
 static char *test_quat_mul_vec3_x_90z()
 {
     // Rotate the X point 90 deg about the Z axis
-    //  --->x  1
-    //  |
-    //  |
     //  y
-    // -1
+    //  |1
+    //  |
+    //  |   1
+    //  ----->x
     vec3 v1 = {0.f, 0.f, M_PI / 2};
     quat *q = malloc(sizeof(quat));
     quat_from_euler(&v1, q);
@@ -329,14 +329,10 @@ static char *test_mat4_transform()
     float ary[4] = {3., 3., 3., 0.};
     vec4_set(p, ary);
 
-    // printf("%f %f %f %f\n", p->x, p->y, p->z, p->w);
-
     float ary2[16] = {1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3, 4, 4, 4, 4};
     mat4_set(kern, ary2);
 
     mat4_transform(p, kern, r);
-
-    // printf("%f %f %f %f\n", r->x, r->y, r->z, r->w);
 
     r2_assert("quat mat4 is wrong",
               r2_equals(r->x, 18.) && r2_equals(r->y, 18.) && r2_equals(r->z, 18.) && r2_equals(r->w, 18.));
@@ -346,8 +342,6 @@ static char *test_mat4_transform()
     free(r);
     return 0;
 }
-
-////
 
 static char *r2_maths_test()
 {
@@ -366,6 +360,7 @@ static char *r2_maths_test()
     r2_run_test(test_vec3_to_array);
     r2_run_test(test_vec3_normalize);
     r2_run_test(test_vec3_length);
+    r2_run_test(test_vec3_equal);
 
     // v4
     r2_run_test(test_vec4_div);

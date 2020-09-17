@@ -1,3 +1,7 @@
+###
+#
+###
+
 CC=${CC:-gcc}
 CFLAGS=${CFLAGS:- -std=c99 -Wall -Werror -Wno-unused \
   -g3 -v -O0 }
