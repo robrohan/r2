@@ -172,7 +172,7 @@ static char *test_vec4_cross()
     vec4 v2 = {0.f, 1.f, 1.f, 0.f};
     vec4 *out = malloc(sizeof(vec4));
 
-    vec4_cross(&v1, &v2, out);
+    vec3_cross(&v1, &v2, out);
 
     // Octave: 1 -1 1
     r2_assert("vec4 cross is wrong", r2_equals(out->x, 1.) && r2_equals(out->y, -1.) && r2_equals(out->z, 1.));

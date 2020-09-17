@@ -399,11 +399,6 @@ extern "C"
         return (v1->x * v2->x) + (v1->y * v2->y) + (v1->z * v2->z) + (v1->w * v2->w);
     }
 
-    static void vec4_cross(vec4 *v1, vec4 *v2, vec4 *out)
-    {
-        return vec3_cross(v1, v2, out);
-    }
-
     static float vec4_length(vec4 *v)
     {
         return sqrtf(v->x * v->x + v->y * v->y + v->z * v->z + v->w * v->w);
