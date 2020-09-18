@@ -62,7 +62,7 @@ extern "C"
     } mat3;
 
     typedef union u_mat4 {
-        float a_mat4[15];
+        float a_mat4[16];
         struct
         {
             // clang-format off
@@ -645,16 +645,27 @@ extern "C"
 
     static void mat4_mul(mat4 *m1, mat4 *m2, mat4 *out)
     {
-        unsigned short i;
+        float r1,r2,r3,r4,c1,c2,c3,c4,a1;
+        unsigned short i, q;
         unsigned short c = 0;
-        for (i = 0; i < 16; i++)
+        for (i = 0; i < 16; i += 4)
         {
-            if (i != 0 && (i % 4 == 0 || i == 16))
-            {
-                printf("\n");
-                c++;
-            }
-            printf("%f x %d \t", m1->a_mat4[i], c);
+	    // Row
+            r1 = m1->a_mat4[i + 0];
+            r2 = m1->a_mat4[i + 1];
+            r3 = m1->a_mat4[i + 2];
+            r4 = m1->a_mat4[i + 3];
+
+	    for(q = 0; q < 4; q++) {
+	      // Column
+	      c1 = m2->a_mat4[q + 0];
+	      c2 = m2->a_mat4[q + 4];
+	      c3 = m2->a_mat4[q + 8];
+	      c4 = m2->a_mat4[q + 12];
+
+	      a1 = r1 * c1 + r2 * c2 + r3 * c3 + r4 * c4;
+	      out->a_mat4[i+q] = a1;
+	    }
         }
     }
 
