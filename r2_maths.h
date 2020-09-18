@@ -645,11 +645,10 @@ extern "C"
 
     static void mat4_mul(mat4 *m1, mat4 *m2, mat4 *out)
     {
-        float r1,r2,r3,r4,c1,c2,c3,c4,a1;
         unsigned char i, q;
-        unsigned char c = 0;
         for (i = 0; i < 16; i += 4)
         {
+	    float r1,r2,r3,r4;
 	    // Row
             r1 = m1->a_mat4[i + 0];
             r2 = m1->a_mat4[i + 1];
@@ -657,14 +656,14 @@ extern "C"
             r4 = m1->a_mat4[i + 3];
 
 	    for(q = 0; q < 4; q++) {
+	      float c1,c2,c3,c4;
 	      // Column
 	      c1 = m2->a_mat4[q + 0];
 	      c2 = m2->a_mat4[q + 4];
 	      c3 = m2->a_mat4[q + 8];
 	      c4 = m2->a_mat4[q + 12];
 
-	      a1 = r1 * c1 + r2 * c2 + r3 * c3 + r4 * c4;
-	      out->a_mat4[i+q] = a1;
+	      out->a_mat4[i+q] = r1 * c1 + r2 * c2 + r3 * c3 + r4 * c4;
 	    }
         }
     }
