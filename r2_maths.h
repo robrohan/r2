@@ -646,8 +646,8 @@ extern "C"
     static void mat4_mul(mat4 *m1, mat4 *m2, mat4 *out)
     {
         float r1,r2,r3,r4,c1,c2,c3,c4,a1;
-        unsigned short i, q;
-        unsigned short c = 0;
+        unsigned char i, q;
+        unsigned char c = 0;
         for (i = 0; i < 16; i += 4)
         {
 	    // Row
