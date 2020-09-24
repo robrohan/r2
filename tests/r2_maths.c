@@ -1,8 +1,14 @@
 #include "../r2_maths.h"
 #include "../r2_unit.h"
+#include <limits.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
+
+#if (__WORDSIZE == 64)
+#define BUILD_64 1
+#endif
 
 static char *test_vec2_add()
 {
@@ -351,6 +357,15 @@ static char *test_quat_mat4()
     return 0;
 }
 
+static char *test_mat4_size()
+{
+    r2_assert("mat4 padding is wrong", sizeof(mat4) == 64);
+    r2_assert("mat3 padding is wrong", sizeof(mat3) == 36);
+    r2_assert("vec4 padding is wrong", sizeof(vec4) == 16);
+    r2_assert("vec2 padding is wrong", sizeof(vec2) == 8);
+    return 0;
+}
+
 static char *test_mat4_transform()
 {
     mat4 *kern = malloc(sizeof(mat4));
@@ -421,11 +436,7 @@ static char *test_mat4_mul2()
 
     mat4_mul(k1, k2, out);
 
-    // 4.198400 44.168995 28.120401 8.986000
-    // 5.518640 20.563999 10.129999 3.210000
-    // 1.872000 11.150001 7.860000 3.500000
-    // 4.240800 1.530000 3.760000 3.100000
-
+#ifdef BUILD_64
     r2_assert("mat4 mul 2 is wrong",
               r2_equals(out->m00, 4.198400) && r2_equals(out->m10, 44.168995) && r2_equals(out->m20, 28.120401) &&
                   r2_equals(out->m30, 8.986000) && r2_equals(out->m01, 5.518640) && r2_equals(out->m11, 20.563999) &&
@@ -433,10 +444,66 @@ static char *test_mat4_mul2()
                   r2_equals(out->m12, 11.150001) && r2_equals(out->m22, 7.86000) && r2_equals(out->m32, 3.500000) &&
                   r2_equals(out->m03, 4.240800) && r2_equals(out->m13, 1.530000) && r2_equals(out->m23, 3.76000) &&
                   r2_equals(out->m33, 3.10000));
+#else
+    // clang-format off
+    printf("%f %f %f %f\n%f %f %f %f\n%f %f %f %f\n%f %f %f %f\n",
+	   out->m00, out->m10, out->m20, out->m30,
+	   out->m01, out->m11, out->m21, out->m31,
+	   out->m02, out->m12, out->m22, out->m32,
+	   out->m03, out->m13, out->m23, out->m33);
+    // clang-format on
+
+    r2_assert("mat4 mul 2 is wrong",
+              r2_equals(out->m00, 4.198400) && r2_equals(out->m10, 44.168999) && r2_equals(out->m20, 28.120399) &&
+                  r2_equals(out->m30, 8.986000) && r2_equals(out->m01, 5.518640) && r2_equals(out->m11, 20.563999) &&
+                  r2_equals(out->m21, 10.13000) && r2_equals(out->m31, 3.21000) && r2_equals(out->m02, 1.87200) &&
+                  r2_equals(out->m12, 11.150001) && r2_equals(out->m22, 7.86000) && r2_equals(out->m32, 3.500000) &&
+                  r2_equals(out->m03, 4.240800) && r2_equals(out->m13, 1.530000) && r2_equals(out->m23, 3.76000) &&
+                  r2_equals(out->m33, 3.10000));
+#endif
 
     free(k1);
     free(k2);
     free(out);
+    return 0;
+}
+
+static char *test_mat4_mul_speed()
+{
+    time_t ti;
+    mat4 *k1 = malloc(sizeof(mat4));
+    mat4 *k2 = malloc(sizeof(mat4));
+    mat4 *out = malloc(sizeof(mat4));
+
+    static const float k1mat[16] = {.9, .82, .01, 3, .3, 4, 1, .22, .20, 3, 111.03, 1, 0, 3, 1, .9};
+    memcpy(k1->a_mat4, k1mat, sizeof(k1mat));
+
+    static const float k1mat2[16] = {3, 4.8, 21, 3, .32, .45, .22, .3, 3, 0.993, .4, .4, .312, .2, 3.99999, 2};
+    memcpy(k2->a_mat4, k1mat2, sizeof(k1mat2));
+
+    srand((unsigned)time(&ti));
+
+    printf("Matrix Mul 4x4 10 run of 1000...\n");
+    for (int z = 0; z < 10; z++)
+    {
+        double time_taken;
+        clock_t t;
+        for (unsigned int x = 0; x < 10000; x++)
+        {
+            k1->m00 = rand();
+            k1->m10 = rand();
+            k1->m31 = rand();
+
+            t = clock();
+            mat4_mul(k1, k2, out);
+            time_taken += ((double)clock() - t) / CLOCKS_PER_SEC;
+        }
+        ////////////////////////
+        printf("Run %d; Time %f sec\n", z, time_taken);
+        // printf("%f\n", time_taken);
+        time_taken = 0;
+    }
+
     return 0;
 }
 
@@ -477,9 +544,11 @@ static char *r2_maths_test()
     r2_run_test(test_quat_mat4);
 
     // mat
+    r2_run_test(test_mat4_size);
     r2_run_test(test_mat4_transform);
     r2_run_test(test_mat4_mul);
     r2_run_test(test_mat4_mul2);
+    r2_run_test(test_mat4_mul_speed);
 
     return 0;
 }

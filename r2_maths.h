@@ -5,6 +5,8 @@
 
    This is written with game development in mind.
 
+   Only include this once.
+
 LICENSE
   See end of file for license information.
 
@@ -643,28 +645,37 @@ extern "C"
         out->w = (mat->m30 * p->x) + (mat->m31 * p->y) + (mat->m32 * p->z) + (mat->m33 * p->w);
     }
 
+    // Multiply two 4x4 matrix output to out
     static void mat4_mul(mat4 *m1, mat4 *m2, mat4 *out)
     {
+        // unrolling the loops makes this function faster
+        // so if you're keen you can use the -funroll-loops gcc flag.
+        // I am too lazy to unroll this by hand at the moment; PRs welcome
+        //
+        //  10 runs of 10000 multiplies (average time in seconds):
+        //  -funroll-all-loops  -funroll-loops   looping
+        //  0.0018666           0.0018094        0.0019127
         unsigned char i, q;
         for (i = 0; i < 16; i += 4)
         {
-	    float r1,r2,r3,r4;
-	    // Row
+            float r1, r2, r3, r4;
+            // Row
             r1 = m1->a_mat4[i + 0];
             r2 = m1->a_mat4[i + 1];
             r3 = m1->a_mat4[i + 2];
             r4 = m1->a_mat4[i + 3];
 
-	    for(q = 0; q < 4; q++) {
-	      float c1,c2,c3,c4;
-	      // Column
-	      c1 = m2->a_mat4[q + 0];
-	      c2 = m2->a_mat4[q + 4];
-	      c3 = m2->a_mat4[q + 8];
-	      c4 = m2->a_mat4[q + 12];
+            for (q = 0; q < 4; q++)
+            {
+                float c1, c2, c3, c4;
+                // Column
+                c1 = m2->a_mat4[q + 0];
+                c2 = m2->a_mat4[q + 4];
+                c3 = m2->a_mat4[q + 8];
+                c4 = m2->a_mat4[q + 12];
 
-	      out->a_mat4[i+q] = r1 * c1 + r2 * c2 + r3 * c3 + r4 * c4;
-	    }
+                out->a_mat4[i + q] = r1 * c1 + r2 * c2 + r3 * c3 + r4 * c4;
+            }
         }
     }
 
