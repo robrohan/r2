@@ -655,26 +655,35 @@ extern "C"
         //  10 runs of 10000 multiplies (average time in seconds):
         //  -funroll-all-loops  -funroll-loops   looping
         //  0.0018666           0.0018094        0.0019127
-        unsigned char i, q;
+        unsigned char i, j;
+        float row[4];
+        float col[4];
+
+// #pragma omp parallel for simd collapse(2)
+#pragma omp simd collapse(2)
         for (i = 0; i < 16; i += 4)
         {
-            float r1, r2, r3, r4;
-            // Row
-            r1 = m1->a_mat4[i + 0];
-            r2 = m1->a_mat4[i + 1];
-            r3 = m1->a_mat4[i + 2];
-            r4 = m1->a_mat4[i + 3];
-
-            for (q = 0; q < 4; q++)
+            for (j = 0; j < 4; j++)
             {
-                float c1, c2, c3, c4;
-                // Column
-                c1 = m2->a_mat4[q + 0];
-                c2 = m2->a_mat4[q + 4];
-                c3 = m2->a_mat4[q + 8];
-                c4 = m2->a_mat4[q + 12];
+                // Row
+                row[0] = m1->a_mat4[i + 0];
+                row[1] = m1->a_mat4[i + 1];
+                row[2] = m1->a_mat4[i + 2];
+                row[3] = m1->a_mat4[i + 3];
 
-                out->a_mat4[i + q] = r1 * c1 + r2 * c2 + r3 * c3 + r4 * c4;
+                // Column
+                col[0] = m2->a_mat4[j + 0];
+                col[1] = m2->a_mat4[j + 4];
+                col[2] = m2->a_mat4[j + 8];
+                col[3] = m2->a_mat4[j + 12];
+
+                // clang-format off
+                out->a_mat4[i + j] =
+		  row[0] * col[0] +
+		  row[1] * col[1] +
+		  row[2] * col[2] +
+		  row[3] * col[3];
+                // clang-format on
             }
         }
     }

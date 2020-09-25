@@ -436,15 +436,6 @@ static char *test_mat4_mul2()
 
     mat4_mul(k1, k2, out);
 
-#ifdef BUILD_64
-    r2_assert("mat4 mul 2 is wrong",
-              r2_equals(out->m00, 4.198400) && r2_equals(out->m10, 44.168995) && r2_equals(out->m20, 28.120401) &&
-                  r2_equals(out->m30, 8.986000) && r2_equals(out->m01, 5.518640) && r2_equals(out->m11, 20.563999) &&
-                  r2_equals(out->m21, 10.129999) && r2_equals(out->m31, 3.21000) && r2_equals(out->m02, 1.87200) &&
-                  r2_equals(out->m12, 11.150001) && r2_equals(out->m22, 7.86000) && r2_equals(out->m32, 3.500000) &&
-                  r2_equals(out->m03, 4.240800) && r2_equals(out->m13, 1.530000) && r2_equals(out->m23, 3.76000) &&
-                  r2_equals(out->m33, 3.10000));
-#else
     // clang-format off
     printf("%f %f %f %f\n%f %f %f %f\n%f %f %f %f\n%f %f %f %f\n",
 	   out->m00, out->m10, out->m20, out->m30,
@@ -453,6 +444,27 @@ static char *test_mat4_mul2()
 	   out->m03, out->m13, out->m23, out->m33);
     // clang-format on
 
+#ifdef BUILD_64
+    r2_assert("mat4 mul 2 is wrong",
+              r2_equals(out->m00, 4.198400) && r2_equals(out->m10, 44.168995) && r2_equals(out->m20, 28.120401) &&
+                  r2_equals(out->m30, 8.986000) && r2_equals(out->m01, 5.518640) && r2_equals(out->m11, 20.563999) &&
+                  r2_equals(out->m21, 10.129999) && r2_equals(out->m31, 3.21000) && r2_equals(out->m02, 1.87200) &&
+                  r2_equals(out->m12, 11.150001) && r2_equals(out->m22, 7.86000) && r2_equals(out->m32, 3.500000) &&
+                  r2_equals(out->m03, 4.240800) && r2_equals(out->m13, 1.530000) && r2_equals(out->m23, 3.76000) &&
+                  r2_equals(out->m33, 3.10000));
+#elif EMSCRIPTEN
+    // 4.198400 44.168995 28.120401 8.986000
+    // 5.518640 20.563999 10.129999 3.210000
+    // 1.872000 11.150001 7.860000 3.500000
+    // 4.240800 1.530000 3.760000 3.100000
+    r2_assert("mat4 mul 2 is wrong",
+              r2_equals(out->m00, 4.198400) && r2_equals(out->m10, 44.168995) && r2_equals(out->m20, 28.120401) &&
+                  r2_equals(out->m30, 8.986000) && r2_equals(out->m01, 5.518640) && r2_equals(out->m11, 20.563999) &&
+                  r2_equals(out->m21, 10.129999) && r2_equals(out->m31, 3.21000) && r2_equals(out->m02, 1.87200) &&
+                  r2_equals(out->m12, 11.150001) && r2_equals(out->m22, 7.86000) && r2_equals(out->m32, 3.500000) &&
+                  r2_equals(out->m03, 4.240800) && r2_equals(out->m13, 1.530000) && r2_equals(out->m23, 3.76000) &&
+                  r2_equals(out->m33, 3.10000));
+#else
     r2_assert("mat4 mul 2 is wrong",
               r2_equals(out->m00, 4.198400) && r2_equals(out->m10, 44.168999) && r2_equals(out->m20, 28.120399) &&
                   r2_equals(out->m30, 8.986000) && r2_equals(out->m01, 5.518640) && r2_equals(out->m11, 20.563999) &&
@@ -484,10 +496,11 @@ static char *test_mat4_mul_speed()
     srand((unsigned)time(&ti));
 
     printf("Matrix Mul 4x4 10 run of 1000...\n");
+    double time_taken = 0;
+    clock_t t = clock();
+
     for (int z = 0; z < 10; z++)
     {
-        double time_taken;
-        clock_t t;
         for (unsigned int x = 0; x < 10000; x++)
         {
             k1->m00 = rand();
