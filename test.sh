@@ -17,7 +17,7 @@ CFLAGS=${CFLAGS:- -std=c99 -Wall -Werror -Wno-unused -g3 -v -O3 -funroll-loops -
 # CFLAGS=${CFLAGS:- -std=c99 -Wall -Werror -Wno-unused -g3 -v -O3 -fopenmp }
 
 ## Webassembly
-#CFLAGS=${CFLAGS:- -std=c99 -Wall -Werror -Wno-unused -v -Os -funroll-loops -fopenmp }
+# CFLAGS=${CFLAGS:- -std=c99 -Wall -Werror -Wno-unused -v -Os -funroll-loops -fopenmp }
 
 OUT=${OUT:-run_tests}
 LIBS=${LIBS:- -lm}
