@@ -1,5 +1,6 @@
 ###
-# -funroll-loops : Unroll loops whose number of iterations can be determined at compile time or upon entry to the loop.
+# -funroll-loops : Unroll loops whose number of iterations can be determined at compile 
+# time or upon entry to the loop.
 # -m32 for 32 bit
 # objdump -S --disassemble run_tests > dmp.asm
 # -opt-report
@@ -14,8 +15,6 @@ CC=${CC:-gcc}
 
 ## Desktop version
 CFLAGS=${CFLAGS:- -std=c99 -Wall -Werror -Wno-unused -g3 -v -O3 -funroll-loops -msse3 -fopenmp }
-# CFLAGS=${CFLAGS:- -std=c99 -Wall -Werror -Wno-unused -g3 -v -O3 -fopenmp }
-
 ## Webassembly
 # CFLAGS=${CFLAGS:- -std=c99 -Wall -Werror -Wno-unused -v -Os -funroll-loops -fopenmp }
 
@@ -28,8 +27,8 @@ TESTS=./tests/*.c
 ${CC} ${CFLAGS} tests.c ${TESTS} ${LIBS} -o ${OUT}
 #############################
 
-if [ $? -eq 0 ]
-then
-    ./${OUT}
-    # rm ./${OUT}
-fi
+# if [ $? -eq 0 ]
+# then
+#     ./${OUT}
+#     # rm ./${OUT}
+# fi

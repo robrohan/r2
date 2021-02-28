@@ -497,7 +497,7 @@ static char *test_mat4_mul_speed()
 
     printf("Matrix Mul 4x4 10 run of 1000...\n");
     double time_taken = 0;
-    clock_t t = clock();
+    clock_t t;
 
     for (int z = 0; z < 10; z++)
     {
