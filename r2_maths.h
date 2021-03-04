@@ -56,9 +56,9 @@ extern "C"
         struct
         {
             // clang-format off
-	  float m00; float m10; float m20; // 12
-	  float m01; float m11; float m21; // 12
-	  float m02; float m12; float m22; // 12 -- 36
+            float m00; float m10; float m20; // 12
+            float m01; float m11; float m21; // 12
+            float m02; float m12; float m22; // 12 -- 36
             // clang-format on
         };
     } mat3;
@@ -68,10 +68,10 @@ extern "C"
         struct
         {
             // clang-format off
-	  float m00; float m10; float m20; float m30; // 16
-	  float m01; float m11; float m21; float m31; // 16
-	  float m02; float m12; float m22; float m32; // 16
-	  float m03; float m13; float m23; float m33; // 16 -- 64
+            float m00; float m10; float m20; float m30; // 16
+            float m01; float m11; float m21; float m31; // 16
+            float m02; float m12; float m22; float m32; // 16
+            float m03; float m13; float m23; float m33; // 16 -- 64
             // clang-format on
         };
     } mat4;
@@ -679,10 +679,50 @@ extern "C"
 
                 // clang-format off
                 out->a_mat4[i + j] =
-		  row[0] * col[0] +
-		  row[1] * col[1] +
-		  row[2] * col[2] +
-		  row[3] * col[3];
+                   row[0] * col[0] +
+                   row[1] * col[1] +
+                   row[2] * col[2] +
+                   row[3] * col[3];
+                // clang-format on
+            }
+        }
+    }
+
+    // Multiply two 3x3 matrix output to out
+    static void mat3_mul(mat3 *m1, mat3 *m2, mat3 *out)
+    {
+        // unrolling the loops makes this function faster
+        // so if you're keen you can use the -funroll-loops gcc flag.
+        // I am too lazy to unroll this by hand at the moment; PRs welcome
+        //
+        //  10 runs of 10000 multiplies (average time in seconds):
+        //  -funroll-all-loops  -funroll-loops   looping
+        //  0.0018666           0.0018094        0.0019127
+        unsigned char i, j;
+        float row[4];
+        float col[4];
+
+// #pragma omp parallel for simd collapse(2)
+#pragma omp simd collapse(2)
+        for (i = 0; i < 9; i += 3)
+        {
+            for (j = 0; j < 3; j++)
+            {
+                // Row
+                row[0] = m1->a_mat3[i + 0];
+                row[1] = m1->a_mat3[i + 1];
+                row[2] = m1->a_mat3[i + 2];
+
+                // Column
+                col[0] = m2->a_mat3[j + 0];
+                col[1] = m2->a_mat3[j + 3];
+                col[2] = m2->a_mat3[j + 6];
+
+                // clang-format off
+                out->a_mat3[i + j] =
+                   row[0] * col[0] +
+                   row[1] * col[1] +
+                   row[2] * col[2];
                 // clang-format on
             }
         }

@@ -520,6 +520,47 @@ static char *test_mat4_mul_speed()
     return 0;
 }
 
+static char *test_mat3_mul()
+{
+    mat3 *k1 = malloc(sizeof(mat3));
+    mat3 *k2 = malloc(sizeof(mat3));
+    mat3 *out = malloc(sizeof(mat3));
+
+    // clang-format off
+    static const float k1mat[9] = {
+        1, 0, 300,
+        0, 2, 300,
+        0, 0, 1
+    };
+    // clang-format on
+    memcpy(k1->a_mat3, k1mat, sizeof(k1mat));
+
+    // clang-format off
+    static const float k1mat2[9] = {
+        -1.836970198, 1, 0,
+        -1, -1.836970198, 0,
+        0, 0, 1
+    };
+    // clang-format on
+
+    memcpy(k2->a_mat3, k1mat2, sizeof(k1mat2));
+
+    mat3_mul(k1, k2, out);
+
+    // -1.836970198, 1, 300,
+    // -2, -3.67394039, 300,
+    // 0, 0, 1
+    r2_assert("mat3 mul is wrong",
+        r2_equals(out->m00, -1.836970) && r2_equals(out->m10, 1.) && r2_equals(out->m20, 300.) &&
+        r2_equals(out->m01, -2.) && r2_equals(out->m11, -3.673940) && r2_equals(out->m21, 300.) &&
+        r2_equals(out->m02, 0.) && r2_equals(out->m12, 0.) && r2_equals(out->m22, 1.));
+
+    free(k1);
+    free(k2);
+    free(out);
+    return 0;
+}
+
 static char *r2_maths_test()
 {
     // v2
@@ -562,6 +603,7 @@ static char *r2_maths_test()
     r2_run_test(test_mat4_mul);
     r2_run_test(test_mat4_mul2);
     r2_run_test(test_mat4_mul_speed);
+    r2_run_test(test_mat3_mul);
 
     return 0;
 }
