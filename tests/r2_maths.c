@@ -545,6 +545,7 @@ static char *test_mat3_mul()
 
     memcpy(k2->a_mat3, k1mat2, sizeof(k1mat2));
 
+    printf("Matrix Mul 3x3 run...\n");
     mat3_mul(k1, k2, out);
 
     // -1.836970198, 1, 300,

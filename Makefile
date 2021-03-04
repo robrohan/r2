@@ -8,9 +8,9 @@ test_wasm:
 	CFLAGS='-std=c99 -Wall -Werror -Wno-unused -v -Os -funroll-loops -fopenmp' \
 	./test.sh 
 
-test:
+test: check
 	mkdir -p bin
-	OUT=./bin/run_tests ./test.sh
+	CC=clang OUT=./bin/run_tests ./test.sh
 	./bin/run_tests
 
 check:
