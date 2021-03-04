@@ -437,11 +437,11 @@ static char *test_mat4_mul2()
     mat4_mul(k1, k2, out);
 
     // clang-format off
-    printf("%f %f %f %f\n%f %f %f %f\n%f %f %f %f\n%f %f %f %f\n",
-	   out->m00, out->m10, out->m20, out->m30,
-	   out->m01, out->m11, out->m21, out->m31,
-	   out->m02, out->m12, out->m22, out->m32,
-	   out->m03, out->m13, out->m23, out->m33);
+    // printf("%f %f %f %f\n%f %f %f %f\n%f %f %f %f\n%f %f %f %f\n",
+    //    out->m00, out->m10, out->m20, out->m30,
+    //    out->m01, out->m11, out->m21, out->m31,
+    //    out->m02, out->m12, out->m22, out->m32,
+    //    out->m03, out->m13, out->m23, out->m33);
     // clang-format on
 
 #ifdef BUILD_64
