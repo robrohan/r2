@@ -23,6 +23,7 @@ extern "C"
 #include <math.h>
 #include <stdbool.h>
 #include <stdio.h>
+#include <stdlib.h>
 
 #ifndef EPSILON
 #define EPSILON 0.000000954
@@ -726,6 +727,57 @@ extern "C"
                 // clang-format on
             }
         }
+    }
+
+    ///////////////////////////////////////////////////////////////
+    // Generic Matrix Multiply
+    /**
+     * Raw multiply of any-size matrix against any-size (as long as the rows of the
+     * first one is the same size as the column of the second one).
+     *
+     * `out` must be the right size of the answer and must be initialized to 0
+     *
+     * r1,c1 = rows and column size of m1
+     * r2,c2 = rows and column size of m2
+     */
+    static void mat_mul(float *m1, float *m2, unsigned char r1, unsigned char c1, unsigned char r2, unsigned char c2,
+                        float *out)
+    {
+        if (c1 != r2)
+        {
+            // Error ("column size of m1 must match row size of m2");
+            return;
+        }
+
+        float *row = (float *)malloc(sizeof(float) * r1);
+        float *col = (float *)malloc(sizeof(float) * c2);
+
+        unsigned char i, r, j, c;
+        float v;
+        // Loop over each row of the first matrix
+        for (i = 0; i < r1; i++)
+        {
+            // Load a single Row
+            for (r = 0; r < c1; r++)
+            {
+                row[r] = m1[r + i * c1];
+            }
+            // Loop over the columns to use when multiplying
+            // against the row loaded above
+#pragma omp simd collapse(2)
+            for (j = 0; j < c2; j++)
+            {
+                for (c = 0; c < r2; c++)
+                {
+                    // Load a single column
+                    col[c] = m2[j + c * c2];
+                    // v = E row * col
+                    out[j + i * r1] += row[c] * col[c];
+                }
+            }
+        }
+        free(row);
+        free(col);
     }
 
 #ifdef __cplusplus

@@ -548,6 +548,64 @@ static char *test_mat3_mul()
     printf("Matrix Mul 3x3 run...\n");
     mat3_mul(k1, k2, out);
 
+    // clang-format off
+    printf("%f %f %f\n%f %f %f\n%f %f %f\n",
+       out->m00, out->m10, out->m20,
+       out->m01, out->m11, out->m21,
+       out->m02, out->m12, out->m22);
+    // clang-format on
+
+    // -1.836970198, 1, 300,
+    // -2, -3.67394039, 300,
+    // 0, 0, 1
+    r2_assert("mat3 mul is wrong",
+        r2_equals(out->m00, -1.836970) && r2_equals(out->m10, 1.) && r2_equals(out->m20, 300.) &&
+        r2_equals(out->m01, -2.) && r2_equals(out->m11, -3.673940) && r2_equals(out->m21, 300.) &&
+        r2_equals(out->m02, 0.) && r2_equals(out->m12, 0.) && r2_equals(out->m22, 1.));
+
+    free(k1);
+    free(k2);
+    free(out);
+    return 0;
+}
+
+static char *test_mat_mul()
+{
+    mat3 *k1 = malloc(sizeof(mat3));
+    mat3 *k2 = malloc(sizeof(mat3));
+    mat3 *out = malloc(sizeof(mat3));
+
+    // clang-format off
+    static const float k1mat[9] = {
+        1, 0, 300,
+        0, 2, 300,
+        0, 0, 1
+    };
+    // clang-format on
+    memcpy(k1->a_mat3, k1mat, sizeof(float)*9);
+
+    // clang-format off
+    static const float k1mat2[9] = {
+        -1.836970198, 1, 0,
+        -1, -1.836970198, 0,
+        0, 0, 1
+    };
+    // clang-format on
+    memcpy(k2->a_mat3, k1mat2, sizeof(float)*9);
+
+    static const float zero[9] = {0, 0, 0, 0, 0, 0, 0, 0, 0};
+    memcpy(out->a_mat3, zero, sizeof(float)*9);
+
+    printf("Matrix Generic Mul 3x3 run...\n");
+    mat_mul(k1->a_mat3, k2->a_mat3, 3, 3, 3, 3, out->a_mat3);
+
+    // clang-format off
+    printf("%f %f %f\n%f %f %f\n%f %f %f\n",
+       out->m00, out->m10, out->m20,
+       out->m01, out->m11, out->m21,
+       out->m02, out->m12, out->m22);
+    // clang-format on
+
     // -1.836970198, 1, 300,
     // -2, -3.67394039, 300,
     // 0, 0, 1
@@ -605,6 +663,7 @@ static char *r2_maths_test()
     r2_run_test(test_mat4_mul2);
     r2_run_test(test_mat4_mul_speed);
     r2_run_test(test_mat3_mul);
+    r2_run_test(test_mat_mul);
 
     return 0;
 }
