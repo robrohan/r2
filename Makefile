@@ -6,9 +6,9 @@ test_wasm:
 	mkdir -p bin
 	CC=emcc OUT=./bin/run_tests.html \
 	CFLAGS='-std=c99 -Wall -Werror -Wno-unused -v -Os -funroll-loops -fopenmp' \
-	./test.sh 
+	./test.sh
 
-test: check
+test:
 	mkdir -p bin
 	CC=clang OUT=./bin/run_tests ./test.sh
 	./bin/run_tests
