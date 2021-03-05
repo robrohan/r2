@@ -753,7 +753,6 @@ extern "C"
         float *col = (float *)malloc(sizeof(float) * c2);
 
         unsigned char i, r, j, c;
-        float v;
         // Loop over each row of the first matrix
         for (i = 0; i < r1; i++)
         {
