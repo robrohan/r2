@@ -88,6 +88,7 @@ extern "C"
         };
     } mat4;
 
+    bool r2_equals(float a, float b);
     float deg_to_rad(float d);
     void mat_mul(float *m1, float *m2, unsigned char r1, unsigned char c1, unsigned char r2, unsigned char c2,
                  float *out);

@@ -558,10 +558,10 @@ static char *test_mat3_mul()
     // -1.836970198, 1, 300,
     // -2, -3.67394039, 300,
     // 0, 0, 1
-    r2_assert("mat3 mul is wrong",
-        r2_equals(out->m00, -1.836970) && r2_equals(out->m10, 1.) && r2_equals(out->m20, 300.) &&
-        r2_equals(out->m01, -2.) && r2_equals(out->m11, -3.673940) && r2_equals(out->m21, 300.) &&
-        r2_equals(out->m02, 0.) && r2_equals(out->m12, 0.) && r2_equals(out->m22, 1.));
+    r2_assert("mat3 mul is wrong", r2_equals(out->m00, -1.836970) && r2_equals(out->m10, 1.) &&
+                                       r2_equals(out->m20, 300.) && r2_equals(out->m01, -2.) &&
+                                       r2_equals(out->m11, -3.673940) && r2_equals(out->m21, 300.) &&
+                                       r2_equals(out->m02, 0.) && r2_equals(out->m12, 0.) && r2_equals(out->m22, 1.));
 
     free(k1);
     free(k2);
@@ -582,7 +582,7 @@ static char *test_mat_mul()
         0, 0, 1
     };
     // clang-format on
-    memcpy(k1->a_mat3, k1mat, sizeof(float)*9);
+    memcpy(k1->a_mat3, k1mat, sizeof(float) * 9);
 
     // clang-format off
     static const float k1mat2[9] = {
@@ -591,10 +591,10 @@ static char *test_mat_mul()
         0, 0, 1
     };
     // clang-format on
-    memcpy(k2->a_mat3, k1mat2, sizeof(float)*9);
+    memcpy(k2->a_mat3, k1mat2, sizeof(float) * 9);
 
     static const float zero[9] = {0, 0, 0, 0, 0, 0, 0, 0, 0};
-    memcpy(out->a_mat3, zero, sizeof(float)*9);
+    memcpy(out->a_mat3, zero, sizeof(float) * 9);
 
     printf("Matrix Generic Mul 3x3 run...\n");
     mat_mul(k1->a_mat3, k2->a_mat3, 3, 3, 3, 3, out->a_mat3);
@@ -609,10 +609,10 @@ static char *test_mat_mul()
     // -1.836970198, 1, 300,
     // -2, -3.67394039, 300,
     // 0, 0, 1
-    r2_assert("mat3 mul is wrong",
-        r2_equals(out->m00, -1.836970) && r2_equals(out->m10, 1.) && r2_equals(out->m20, 300.) &&
-        r2_equals(out->m01, -2.) && r2_equals(out->m11, -3.673940) && r2_equals(out->m21, 300.) &&
-        r2_equals(out->m02, 0.) && r2_equals(out->m12, 0.) && r2_equals(out->m22, 1.));
+    r2_assert("mat3 mul is wrong", r2_equals(out->m00, -1.836970) && r2_equals(out->m10, 1.) &&
+                                       r2_equals(out->m20, 300.) && r2_equals(out->m01, -2.) &&
+                                       r2_equals(out->m11, -3.673940) && r2_equals(out->m21, 300.) &&
+                                       r2_equals(out->m02, 0.) && r2_equals(out->m12, 0.) && r2_equals(out->m22, 1.));
 
     free(k1);
     free(k2);

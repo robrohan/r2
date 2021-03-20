@@ -5,6 +5,9 @@
 #include "r2_unit.h"
 #include <stdio.h>
 
+#define R2_MATHS_IMPLEMENTATION
+#include "r2_maths.h"
+
 ///////////////////////////////////////////////
 // ADD TESTS HERE
 // This is crazy town :-o
