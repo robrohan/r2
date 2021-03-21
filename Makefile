@@ -10,7 +10,7 @@ test_wasm:
 
 test:
 	mkdir -p bin
-	CC=clang OUT=./bin/run_tests ./test.sh
+	CC=gcc OUT=./bin/run_tests ./test.sh
 	./bin/run_tests
 
 check:
