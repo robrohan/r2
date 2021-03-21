@@ -6,9 +6,8 @@ Single-file public domain (or MIT licensed) libraries for C (C99)
 
 The goal of these is to be usable for games programming, and I am trying to build these in the style of: https://github.com/nothings/stb
 
-
- * Minimal unit testing: r2_unit.h            - usable
- * Vector, matrix and quaternion: r2_maths.h  - alpha
+- Minimal unit testing: r2_unit.h - usable
+- Vector, matrix and quaternion: r2_maths.h - alpha
 
 ## Testing
 
@@ -19,7 +18,6 @@ Just run test.sh:
 ```
 
 N.B. If you are on windows, currently, you'll have to write test.bat yourself or import the files into Visual Studio.
-
 
 ## Testing in Web Assembly
 
