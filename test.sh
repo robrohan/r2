@@ -24,7 +24,6 @@ TESTS=./tests/*.c
 #############################
 ${CC} ${CFLAGS} tests.c ${TESTS} ${LIBS} -o ${OUT}
 #############################
-objdump -S --disassemble ${OUT} > ${OUT}.asm
 
 # if [ $? -eq 0 ]
 # then

@@ -575,7 +575,7 @@ static char *test_mat_mul()
 {
     mat3 *k1 = malloc(sizeof(mat3));
     mat3 *k2 = malloc(sizeof(mat3));
-    mat3 *out = malloc(sizeof(mat3));
+    mat3 *out = calloc(sizeof(mat3), 1);
 
     // clang-format off
     static const float k1mat[9] = {

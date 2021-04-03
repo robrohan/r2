@@ -51,16 +51,28 @@ extern "C"
 #define M_PI 3.141592653589
 #endif
 
+    /**
+     * A 2d vector backed by an array. This type
+     * is only used by vec2. You can
+     * access the value using ->a_vec2 or one of
+     * the struct values ->x ->y
+     */
     typedef union u_vec2 {
         float a_vec2[2];
         struct
         {
-            float x, y;
+            float x, y; // -- 8
         };
     } vec2;
 
+    /**
+     * A vector backed by an array. This type
+     * is used by vec4, quat, vec3 and color. You can
+     * access the value using ->a_vec or one of
+     * the struct values ->x ->y ->z ->w
+     */
     typedef union u_vec4 {
-        float a_vec4[4];
+        float a_vec[4];
         struct
         {
             float x; // 4
@@ -68,8 +80,17 @@ extern "C"
             float z; // 4
             float w; // 4 -- 16
         };
-    } vec3, vec4, quat;
+    } vec3, vec4, quat, color;
 
+    /**
+     * 3x3 Column-Major Matrix backed by a flat array.
+     * Access the array with ->a_mat3 or use the format:
+     *   m<row><col>
+     * where row and column are zero based
+     *
+     * e.g. m3->m22 for the 3rd row, 3rd column value
+     * m3->a_mat3 for the array with values in order
+     */
     typedef union u_mat3 {
         float a_mat3[9];
         struct
@@ -82,6 +103,15 @@ extern "C"
         };
     } mat3;
 
+    /**
+     * 4x4 Column-Major Matrix backed by a flat array.
+     * Access the array with ->a_mat4 or use the format:
+     *   m<row><col>
+     * where row and column are zero based
+     *
+     * e.g. m4->m22 for the 3rd row, 3rd column value
+     * m4->a_mat4 for the array with values in order
+     */
     typedef union u_mat4 {
         float a_mat4[16];
         struct
@@ -95,11 +125,37 @@ extern "C"
         };
     } mat4;
 
+    /**
+     * Returns true if a and b are within EPSILON
+     * of each other
+     */
     bool r2_equals(float a, float b);
     float deg_to_rad(float d);
+    /**
+     * Generic Matrix Multiply
+     * Raw multiply of any-size matrix against any-size (as long as the rows of the
+     * first one is the same size as the column of the second one).
+     *
+     * (NOTE: This function calls calloc)
+     *
+     * `out` must be the right size of the answer and must be initialized to 0
+     *
+     * r1,c1 = rows and column size of m1
+     * r2,c2 = rows and column size of m2
+     */
     void mat_mul(float *m1, float *m2, unsigned char r1, unsigned char c1, unsigned char r2, unsigned char c2,
                  float *out);
+    /**
+     * Multiply two 3x3 matrix output to out
+     * if R2_MAT_MUL_LUDICROUS_SPEED is off, this will call
+     * calloc (default is on).
+     */
     void mat3_mul(mat3 *m1, mat3 *m2, mat3 *out);
+    /**
+     * Multiply two 4x4 matrix output to out
+     * if R2_MAT_MUL_LUDICROUS_SPEED is off, this will call
+     * calloc (default is on).
+     */
     void mat4_mul(mat4 *m1, mat4 *m2, mat4 *out);
     void mat4_transform(vec4 *p, mat4 *mat, vec4 *out);
     void mat4_set(mat4 *m, float *arry);
@@ -832,17 +888,7 @@ extern "C"
 #endif
     }
 
-    ///////////////////////////////////////////////////////////////
     // Generic Matrix Multiply
-    /**
-     * Raw multiply of any-size matrix against any-size (as long as the rows of the
-     * first one is the same size as the column of the second one).
-     *
-     * `out` must be the right size of the answer and must be initialized to 0
-     *
-     * r1,c1 = rows and column size of m1
-     * r2,c2 = rows and column size of m2
-     */
     void mat_mul(float *m1, float *m2, unsigned char r1, unsigned char c1, unsigned char r2, unsigned char c2,
                  float *out)
     {

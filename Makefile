@@ -2,15 +2,19 @@
 
 run: test check
 
-test_wasm:
+# Should run something like
+# `source ~/Projects/spikes/emsdk/emsdk_env.sh` 
+# first to setup environment
+test_wasm: clean
 	mkdir -p bin
 	CC=emcc OUT=./bin/run_tests.html \
 	CFLAGS='-std=c99 -Wall -Werror -Wno-unused -v -Os -funroll-loops -fopenmp' \
 	./test.sh
 
-test:
+test: clean
 	mkdir -p bin
 	CC=gcc OUT=./bin/run_tests ./test.sh
+	objdump -S --disassemble ./bin/run_tests > ./bin/run_tests.asm
 	./bin/run_tests
 
 perf:
