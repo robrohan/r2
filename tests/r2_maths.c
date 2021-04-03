@@ -426,11 +426,13 @@ static char *test_mat4_mul2()
 {
     mat4 *k1 = malloc(sizeof(mat4));
     mat4 *k2 = malloc(sizeof(mat4));
-    mat4 *out = malloc(sizeof(mat4));
+    // NOTE: must be zeroed
+    mat4 *out = calloc(sizeof(mat4), 1);
 
+    // M1 = [.9, .82, .1, 3; .39, 4, 1, .22; .20, 3, 0, 1; 0, 3, 1, .9];
     static const float k1mat[16] = {.9, .82, .1, 3, .39, 4, 1, .22, .20, 3, 0, 1, 0, 3, 1, .9};
     memcpy(k1->a_mat4, k1mat, sizeof(k1mat));
-
+    // M2 = [3, 48, 21, 3; .32, .45, .22, .3; 3, 0, .4, .4; .312, .2, 3, 2];
     static const float k1mat2[16] = {3, 48, 21, 3, .32, .45, .22, .3, 3, 0, .4, .4, .312, .2, 3, 2};
     memcpy(k2->a_mat4, k1mat2, sizeof(k1mat2));
 
@@ -445,13 +447,13 @@ static char *test_mat4_mul2()
     // clang-format on
 
 #ifdef BUILD_64
+    // clang-format off
     r2_assert("mat4 mul 2 is wrong",
-              r2_equals(out->m00, 4.198400) && r2_equals(out->m10, 44.168995) && r2_equals(out->m20, 28.120401) &&
-                  r2_equals(out->m30, 8.986000) && r2_equals(out->m01, 5.518640) && r2_equals(out->m11, 20.563999) &&
-                  r2_equals(out->m21, 10.129999) && r2_equals(out->m31, 3.21000) && r2_equals(out->m02, 1.87200) &&
-                  r2_equals(out->m12, 11.150001) && r2_equals(out->m22, 7.86000) && r2_equals(out->m32, 3.500000) &&
-                  r2_equals(out->m03, 4.240800) && r2_equals(out->m13, 1.530000) && r2_equals(out->m23, 3.76000) &&
-                  r2_equals(out->m33, 3.10000));
+        r2_equals(out->m00, 4.198400) && r2_equals(out->m10, 44.168995) && r2_equals(out->m20, 28.120401) && r2_equals(out->m30, 8.986000) 
+     && r2_equals(out->m01, 5.518640) && r2_equals(out->m11, 20.563999) && r2_equals(out->m21, 10.129999) && r2_equals(out->m31, 3.21000) 
+     && r2_equals(out->m02, 1.87200)  && r2_equals(out->m12, 11.150001) && r2_equals(out->m22, 7.86000)   && r2_equals(out->m32, 3.500000) 
+     && r2_equals(out->m03, 4.240800) && r2_equals(out->m13, 1.530000)  && r2_equals(out->m23, 3.76000)   &&  r2_equals(out->m33, 3.10000));
+    // clang-format on
 #elif EMSCRIPTEN
     // 4.198400 44.168995 28.120401 8.986000
     // 5.518640 20.563999 10.129999 3.210000

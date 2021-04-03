@@ -36,6 +36,13 @@ extern "C"
 #include <stdio.h>
 #include <stdlib.h>
 
+// If on, this uses custom mat3 and mat4 multiplication
+// code instead of the geneirc mat_mul function. In testing
+// this makes the code run consistently fast, whereas without
+// it you can get a sometimes faster multiply, but the speed
+// is inconsistent.
+#define R2_MAT_MUL_LUDICROUS_SPEED 1
+
 #ifndef EPSILON
 #define EPSILON 0.000000954
 #endif
@@ -737,6 +744,9 @@ extern "C"
     // Multiply two 4x4 matrix output to out
     void mat4_mul(mat4 *m1, mat4 *m2, mat4 *out)
     {
+#if !R2_MAT_MUL_LUDICROUS_SPEED
+        mat_mul(m1->a_mat4, m2->a_mat4, 4, 4, 4, 4, out->a_mat4);
+#else
         // unrolling the loops makes this function faster
         // so if you're keen you can use the -funroll-loops gcc flag.
         // I am too lazy to unroll this by hand at the moment; PRs welcome
@@ -748,7 +758,7 @@ extern "C"
         float row[4];
         float col[4];
 
-// #pragma omp parallel for simd collapse(2)
+        // #pragma omp parallel for simd collapse(2)
 #pragma omp simd collapse(2)
         for (i = 0; i < 16; i += 4)
         {
@@ -775,11 +785,15 @@ extern "C"
                 // clang-format on
             }
         }
+#endif
     }
 
     // Multiply two 3x3 matrix output to out
     void mat3_mul(mat3 *m1, mat3 *m2, mat3 *out)
     {
+#if !R2_MAT_MUL_LUDICROUS_SPEED
+        mat_mul(m1->a_mat3, m2->a_mat3, 3, 3, 3, 3, out->a_mat3);
+#else
         // unrolling the loops makes this function faster
         // so if you're keen you can use the -funroll-loops gcc flag.
         // I am too lazy to unroll this by hand at the moment; PRs welcome
@@ -815,6 +829,7 @@ extern "C"
                 // clang-format on
             }
         }
+#endif
     }
 
     ///////////////////////////////////////////////////////////////
@@ -837,8 +852,8 @@ extern "C"
             return;
         }
 
-        float *row = (float *)malloc(sizeof(float) * r1);
-        float *col = (float *)malloc(sizeof(float) * c2);
+        float *row = (float *)calloc(sizeof(float), r1);
+        float *col = (float *)calloc(sizeof(float), c2);
 
         unsigned char i, r, j, c;
         // Loop over each row of the first matrix
@@ -849,8 +864,8 @@ extern "C"
             {
                 row[r] = m1[r + i * c1];
             }
-            // Loop over the columns to use when multiplying
-            // against the row loaded above
+// Loop over the columns to use when multiplying
+// against the row loaded above
 #pragma omp simd collapse(2)
             for (j = 0; j < c2; j++)
             {
