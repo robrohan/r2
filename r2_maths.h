@@ -158,6 +158,7 @@ extern "C"
     void mat4_set(mat4 *m, float *arry);
     void mat4_identity(mat4 *m);
     void mat4_perspective(float fov, float aspect, float z_near, float z_far, mat4 *out);
+    void mat4_lookat(vec4 *pos, vec4 *target, vec4 *up, mat4 *out);
 
     /**
      * Multiply two 3x3 matrix output to out
@@ -895,6 +896,31 @@ extern "C"
         out->m31 = 0.;
         out->m32 = z_near * z_far * 2 * z_range;
         out->m33 = 0.;
+    }
+
+    // target and up should be normalized
+    void mat4_lookat(vec4 *pos, vec4 *target, vec4 *up, mat4 *out)
+    {
+        /**
+         *  [fur]          *  [pos]
+         *  rx  ux  fx  0     1  0  0  -px
+         *  ry  uy  fy  0  *  0  1  0  -py
+         *  rz  uz  fz  0     0  0  1  -pz
+         *  0   0   0   1     0  0  0   1
+         */
+        vec4 right = {.x = 0, .y = 0, .z = 0, .w = 0};
+        vec3_cross(target, up, &right);
+        mat4_identity(out);
+
+        vec4 *u = up;
+        vec4 *f = target;
+        vec4 *r = &right;
+        // clang-format off
+           out->m00 = r->x; out->m10 = u->x; out->m20 = f->x; out->m30 = -pos->x;
+           out->m01 = r->y; out->m11 = u->y; out->m21 = f->y; out->m31 = -pos->y;
+           out->m02 = r->z; out->m12 = u->z; out->m22 = f->z; out->m32 = -pos->z;
+           out->m03 = 0;    out->m13 = 0;    out->m23 = 0;    out->m33 = 1;
+        // clang-format on
     }
 
     ///////////////////////////////////////////////////////////////
