@@ -389,6 +389,24 @@ static char *test_mat4_transform()
     return 0;
 }
 
+static char *test_mat4_identity()
+{
+    mat4 *out = calloc(sizeof(mat4), 1);
+
+    mat4_identity(out);
+
+    // clang-format off
+    r2_assert("mat4 identity is wrong",
+        r2_equals(out->m00, 1.) && r2_equals(out->m10, 0.) && r2_equals(out->m20, 0.) && r2_equals(out->m30, 0.) && 
+        r2_equals(out->m01, 0.) && r2_equals(out->m11, 1.) && r2_equals(out->m21, 0.) && r2_equals(out->m31, 0.) && 
+        r2_equals(out->m02, 0.) && r2_equals(out->m12, 0.) && r2_equals(out->m22, 1.) && r2_equals(out->m32, 0.) &&
+        r2_equals(out->m03, 0.) && r2_equals(out->m13, 0.) && r2_equals(out->m23, 0.) && r2_equals(out->m33, 1.));
+    // clang-format on
+
+    free(out);
+    return 0;
+}
+
 static char *test_mat4_mul()
 {
     mat4 *k1 = malloc(sizeof(mat4));
@@ -571,6 +589,20 @@ static char *test_mat3_mul()
     return 0;
 }
 
+static char *test_mat3_identity()
+{
+    mat3 *out = calloc(sizeof(mat3), 1);
+    mat3_identity(out);
+    // clang-format off
+    r2_assert("mat3 identity is wrong",
+        r2_equals(out->m00, 1.) && r2_equals(out->m10, 0.) && r2_equals(out->m20, 0.) && 
+        r2_equals(out->m01, 0.) && r2_equals(out->m11, 1.) && r2_equals(out->m21, 0.) && 
+        r2_equals(out->m02, 0.) && r2_equals(out->m12, 0.) && r2_equals(out->m22, 1.));
+    // clang-format on
+    free(out);
+    return 0;
+}
+
 static char *test_mat_mul()
 {
     mat3 *k1 = malloc(sizeof(mat3));
@@ -658,13 +690,19 @@ static char *r2_maths_test()
     r2_run_test(test_quat_mul_vec3_y_180x);
     r2_run_test(test_quat_mat4);
 
-    // mat
+    // mat4
     r2_run_test(test_mat4_size);
     r2_run_test(test_mat4_transform);
+    r2_run_test(test_mat4_identity);
     r2_run_test(test_mat4_mul);
     r2_run_test(test_mat4_mul2);
     r2_run_test(test_mat4_mul_speed);
+
+    // mat3
     r2_run_test(test_mat3_mul);
+    r2_run_test(test_mat3_identity);
+
+    // generic mat
     r2_run_test(test_mat_mul);
 
     return 0;

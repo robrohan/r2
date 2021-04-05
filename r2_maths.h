@@ -136,6 +136,8 @@ extern "C"
      * Raw multiply of any-size matrix against any-size (as long as the rows of the
      * first one is the same size as the column of the second one).
      *
+     * You probably want to use mat4_mul or mat3_mul for 4x4 and 3x3
+     *
      * (NOTE: This function calls calloc)
      *
      * `out` must be the right size of the answer and must be initialized to 0
@@ -145,12 +147,7 @@ extern "C"
      */
     void mat_mul(float *m1, float *m2, unsigned char r1, unsigned char c1, unsigned char r2, unsigned char c2,
                  float *out);
-    /**
-     * Multiply two 3x3 matrix output to out
-     * if R2_MAT_MUL_LUDICROUS_SPEED is off, this will call
-     * calloc (default is on).
-     */
-    void mat3_mul(mat3 *m1, mat3 *m2, mat3 *out);
+
     /**
      * Multiply two 4x4 matrix output to out
      * if R2_MAT_MUL_LUDICROUS_SPEED is off, this will call
@@ -159,6 +156,16 @@ extern "C"
     void mat4_mul(mat4 *m1, mat4 *m2, mat4 *out);
     void mat4_transform(vec4 *p, mat4 *mat, vec4 *out);
     void mat4_set(mat4 *m, float *arry);
+    void mat4_identity(mat4 *m);
+
+    /**
+     * Multiply two 3x3 matrix output to out
+     * if R2_MAT_MUL_LUDICROUS_SPEED is off, this will call
+     * calloc (default is on).
+     */
+    void mat3_mul(mat3 *m1, mat3 *m2, mat3 *out);
+    void mat3_identity(mat3 *m);
+
     void quat_mat4(quat *q, mat4 *out);
     void quat_mul_vec3(quat *q, vec3 *v, vec3 *out);
     void quat_normalize(quat *q, quat *out);
@@ -173,6 +180,7 @@ extern "C"
     void quat_add(quat *q1, quat *q2, quat *out);
     void quat_identity(quat *q);
     void quat_zero(quat *q);
+
     void vec4_to_array(vec4 *v, float *out);
     void vec4_normalize(vec4 *v, vec4 *out);
     float vec4_dist(vec4 *v1, vec4 *v2);
@@ -190,6 +198,7 @@ extern "C"
     void vec4_set(vec4 *v, float *ary);
     bool vec4_equals(vec4 *v1, vec4 *v2);
     void vec4_zero(vec4 *out);
+
     void vec3_zero(vec3 *out);
     bool vec3_equals(vec3 *v1, vec3 *v2);
     void vec3_set(vec3 *v, float x, float y, float z);
@@ -208,6 +217,7 @@ extern "C"
     float vec3_dist(vec3 *v1, vec3 *v2);
     void vec3_to_array(vec3 *v, float *out);
     void vec3_normalize(vec3 *v, vec3 *out);
+
     void vec2_zero(vec2 *out);
     bool vec2_equals(vec2 *v1, vec2 *v2);
     void vec2_set(vec3 *v, float x, float y);
@@ -764,6 +774,14 @@ extern "C"
     ///////////////////////////////////////////////////////////////
     // Mat4
 
+    void mat4_identity(mat4 *m)
+    {
+        m->m00 = 1.;
+        m->m11 = 1.;
+        m->m22 = 1.;
+        m->m33 = 1.;
+    }
+
     // Fills an mat4 with an array. It expects an array of values
     // that are given in sets of 4s one *row* at a time.
     void mat4_set(mat4 *m, float *arry)
@@ -844,6 +862,16 @@ extern "C"
 #endif
     }
 
+    ///////////////////////////////////////////////////////////////
+    // Mat3
+
+    void mat3_identity(mat3 *m)
+    {
+        m->m00 = 1.;
+        m->m11 = 1.;
+        m->m22 = 1.;
+    }
+
     // Multiply two 3x3 matrix output to out
     void mat3_mul(mat3 *m1, mat3 *m2, mat3 *out)
     {
@@ -888,7 +916,9 @@ extern "C"
 #endif
     }
 
+    ///////////////////////////////////////////////////////////////
     // Generic Matrix Multiply
+
     void mat_mul(float *m1, float *m2, unsigned char r1, unsigned char c1, unsigned char r2, unsigned char c2,
                  float *out)
     {
