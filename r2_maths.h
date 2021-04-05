@@ -157,6 +157,7 @@ extern "C"
     void mat4_transform(vec4 *p, mat4 *mat, vec4 *out);
     void mat4_set(mat4 *m, float *arry);
     void mat4_identity(mat4 *m);
+    void mat4_perspective(float fov, float aspect, float z_near, float z_far, mat4 *out);
 
     /**
      * Multiply two 3x3 matrix output to out
@@ -860,6 +861,40 @@ extern "C"
             }
         }
 #endif
+    }
+
+    // Create a matrix for opengl perspective projection
+    void mat4_perspective(float fov, float aspect, float z_near, float z_far, mat4 *out)
+    {
+        /***
+         *   n/r       0         0           0
+         *   0        n/t        0           0
+         *   0         0    -(f+n)/f-n    -2fn/f-n
+         *   0         0        -1           0
+         */
+
+        float tan_half_fov = tan(M_PI * .5 - .5 * fov);
+        float z_range = 1 / (z_near - z_far);
+
+        out->m00 = 1. / (tan_half_fov * aspect);
+        out->m01 = 0.;
+        out->m02 = 0.;
+        out->m03 = 0.;
+
+        out->m10 = 0.;
+        out->m11 = 1. / tan_half_fov;
+        out->m12 = 0.;
+        out->m13 = 0.;
+
+        out->m20 = 0.;
+        out->m21 = 0.;
+        out->m22 = (z_far + z_near) * z_range;
+        out->m23 = -1.;
+
+        out->m30 = 0.;
+        out->m31 = 0.;
+        out->m32 = z_near * z_far * 2 * z_range;
+        out->m33 = 0.;
     }
 
     ///////////////////////////////////////////////////////////////
