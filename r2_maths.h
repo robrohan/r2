@@ -83,7 +83,7 @@ extern "C"
     } vec3, vec4, quat, color;
 
     /**
-     * 3x3 Column-Major Matrix backed by a flat array.
+     * 3x3 Matrix backed by a flat array.
      * Access the array with ->a_mat3 or use the format:
      *   m<row><col>
      * where row and column are zero based
@@ -104,7 +104,7 @@ extern "C"
     } mat3;
 
     /**
-     * 4x4 Column-Major Matrix backed by a flat array.
+     * 4x4 Matrix backed by a flat array.
      * Access the array with ->a_mat4 or use the format:
      *   m<row><col>
      * where row and column are zero based
@@ -157,7 +157,10 @@ extern "C"
     void mat4_transform(const vec4 *p, const mat4 *mat, vec4 *out);
     void mat4_set(const float *arry, mat4 *m);
     void mat4_identity(mat4 *m);
+    // Create a matrix for opengl perspective projection (set transpose to true)
     void mat4_perspective(float fov, float aspect, float z_near, float z_far, mat4 *out);
+    // Useful for view matrix for opengl (set transpose to true)
+    // target and up should be normalized
     void mat4_lookat(const vec4 *pos, const vec4 *target, const vec4 *up, mat4 *out);
 
     /**
@@ -846,8 +849,7 @@ extern "C"
 #endif
     }
 
-    // Create a matrix for opengl perspective projection
-    void mat4_perspective(float fov, float aspect, float z_near, float z_far, mat4 *out)
+    void mat4_perspective(float fov, float aspect, float near, float far, mat4 *out)
     {
         /***
          *   n/r       0         0           0
@@ -855,32 +857,20 @@ extern "C"
          *   0         0    -(f+n)/f-n    -2fn/f-n
          *   0         0        -1           0
          */
+        float range = tan(fov / 2) * near;
+        float Sx = (2 * near) / (range * aspect + range * aspect);
+        float Sy = near / range;
+        float Sz = -(far + near) / (far - near);
+        float Pz = -(2 * far * near) / (far - near);
 
-        float tan_half_fov = tan(M_PI * .5 - .5 * fov);
-        float z_range = 1 / (z_near - z_far);
-
-        out->m00 = 1. / (tan_half_fov * aspect);
-        out->m01 = 0.;
-        out->m02 = 0.;
-        out->m03 = 0.;
-
-        out->m10 = 0.;
-        out->m11 = 1. / tan_half_fov;
-        out->m12 = 0.;
-        out->m13 = 0.;
-
-        out->m20 = 0.;
-        out->m21 = 0.;
-        out->m22 = (z_far + z_near) * z_range;
-        out->m23 = -1.;
-
-        out->m30 = 0.;
-        out->m31 = 0.;
-        out->m32 = z_near * z_far * 2 * z_range;
-        out->m33 = 0.;
+        // clang-format off
+        out->m00 = Sx; out->m10 = 0;  out->m20 = 0;  out->m30 = 0;
+        out->m01 = 0;  out->m11 = Sy; out->m21 = 0;  out->m31 = 0;
+        out->m02 = 0;  out->m12 = 0;  out->m22 = Sz; out->m32 = Pz;
+        out->m03 = 0;  out->m13 = 0;  out->m23 = -1; out->m33 = 0;
+        // clang-format on
     }
 
-    // target and up should be normalized
     void mat4_lookat(const vec4 *pos, const vec4 *target, const vec4 *up, mat4 *out)
     {
         /**
@@ -898,10 +888,10 @@ extern "C"
         const vec4 *f = target;
         const vec4 *r = &right;
         // clang-format off
-           out->m00 = r->x; out->m10 = u->x; out->m20 = f->x; out->m30 = -pos->x;
-           out->m01 = r->y; out->m11 = u->y; out->m21 = f->y; out->m31 = -pos->y;
-           out->m02 = r->z; out->m12 = u->z; out->m22 = f->z; out->m32 = -pos->z;
-           out->m03 = 0;    out->m13 = 0;    out->m23 = 0;    out->m33 = 1;
+        out->m00 =  r->x; out->m10 =  r->y; out->m20 = r->z; out->m30 = -pos->x;
+        out->m01 =  u->x; out->m11 =  u->y; out->m21 = u->z; out->m31 = -pos->y;
+        out->m02 = -f->x; out->m12 = -f->y; out->m22 = f->z; out->m32 = -pos->z;
+        out->m03 = 0;    out->m13 = 0;    out->m23 = 0;    out->m33 = 1;
         // clang-format on
     }
 
