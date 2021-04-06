@@ -238,6 +238,21 @@ static char *test_quat_normalize()
     return 0;
 }
 
+static char *test_quat_conj()
+{
+    quat q1 = {.x = .5f, .y = .3f, .z = .2f, .w = .1f};
+    quat out = {.x = 0., .y = 0., .z = 0., .w = 0.};
+    quat_conj(&q1, &out);
+
+    // clang-format off
+    r2_assert("quat conj is wrong", 
+        r2_equals(out.w, .1) && r2_equals(out.x, -.5) &&
+        r2_equals(out.y, -.3) && r2_equals(out.z, -.2));
+    // clang-format on
+
+    return 0;
+}
+
 static char *test_quat_mul_quat()
 {
     vec3 v1 = {.x = 0.f, .y = M_PI / 2, .z = 0.f};
@@ -376,6 +391,19 @@ static char *test_mat4_transform()
     free(kern);
     free(p);
     free(r);
+    return 0;
+}
+
+static char *test_mat4_lookat()
+{
+    mat4 *view = calloc(sizeof(mat4), 1);
+
+    vec4 pos = {.x = 0, .y = 0, .z = 10};
+    vec4 target = {.x = 0, .y = 0, .z = -1};
+    vec4 up = {.x = 0, .y = 1, .z = 0};
+
+    mat4_lookat(&pos, &target, &up, view);
+    // printf("%s", mat4_tos(view));
     return 0;
 }
 
@@ -555,15 +583,10 @@ static char *test_mat3_mul()
 
     memcpy(k2->a_mat3, k1mat2, sizeof(k1mat2));
 
-    printf("Matrix Mul 3x3 run...\n");
+    // printf("Matrix Mul 3x3 run...\n");
     mat3_mul(k1, k2, out);
-
-    // clang-format off
-    printf("%f %f %f\n%f %f %f\n%f %f %f\n",
-       out->m00, out->m10, out->m20,
-       out->m01, out->m11, out->m21,
-       out->m02, out->m12, out->m22);
-    // clang-format on
+    // leak
+    // printf("%s", mat3_tos(out));
 
     // -1.836970198, 1, 300,
     // -2, -3.67394039, 300,
@@ -620,15 +643,10 @@ static char *test_mat_mul()
     static const float zero[9] = {0, 0, 0, 0, 0, 0, 0, 0, 0};
     memcpy(out->a_mat3, zero, sizeof(float) * 9);
 
-    printf("Matrix Generic Mul 3x3 run...\n");
+    // printf("Matrix Generic Mul 3x3 run...\n");
     mat_mul(k1->a_mat3, k2->a_mat3, 3, 3, 3, 3, out->a_mat3);
-
-    // clang-format off
-    printf("%f %f %f\n%f %f %f\n%f %f %f\n",
-       out->m00, out->m10, out->m20,
-       out->m01, out->m11, out->m21,
-       out->m02, out->m12, out->m22);
-    // clang-format on
+    // leak
+    // printf("%s", mat3_tos(out));
 
     // -1.836970198, 1, 300,
     // -2, -3.67394039, 300,
@@ -673,6 +691,7 @@ static char *r2_maths_test()
     r2_run_test(test_quat_from_euler);
     r2_run_test(test_quat_length);
     r2_run_test(test_quat_normalize);
+    r2_run_test(test_quat_conj);
     r2_run_test(test_quat_mul_quat);
     r2_run_test(test_quat_mul_vec3_x_90z);
     r2_run_test(test_quat_mul_vec3_y_90x);
@@ -682,6 +701,7 @@ static char *r2_maths_test()
     // mat4
     r2_run_test(test_mat4_size);
     r2_run_test(test_mat4_transform);
+    r2_run_test(test_mat4_lookat);
     r2_run_test(test_mat4_identity);
     r2_run_test(test_mat4_mul);
     r2_run_test(test_mat4_mul2);

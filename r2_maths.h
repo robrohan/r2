@@ -150,18 +150,28 @@ extern "C"
 
     /**
      * Multiply two 4x4 matrix output to out
-     * if R2_MAT_MUL_LUDICROUS_SPEED is off, this will call
-     * calloc (default is on).
+     * if R2_MAT_MUL_LUDICROUS_SPEED is on (the default) this will
+     * do a specfic 4x4 multiply function.
+     *
+     * If R2_MAT_MUL_LUDICROUS_SPEED is off it will call the generic
+     * multiply and use calloc.
      */
     void mat4_mul(const mat4 *m1, const mat4 *m2, mat4 *out);
     void mat4_transform(const vec4 *p, const mat4 *mat, vec4 *out);
+    /**
+     * Fills an mat4 with an array. It expects an array of values
+     * that are given in sets of 4s one *row* at a time.
+     */
     void mat4_set(const float *arry, mat4 *m);
     void mat4_identity(mat4 *m);
-    // Create a matrix for opengl perspective projection (set transpose to true)
+    /** Create a matrix for opengl perspective projection (set transpose to true) */
     void mat4_perspective(float fov, float aspect, float z_near, float z_far, mat4 *out);
-    // Useful for view matrix for opengl (set transpose to true)
-    // target and up should be normalized
+    /**
+     * Useful for view matrix for opengl (set transpose to true)
+     * target and up should be normalized
+     */
     void mat4_lookat(const vec4 *pos, const vec4 *target, const vec4 *up, mat4 *out);
+    char *mat4_tos(const mat4 *m);
 
     /**
      * Multiply two 3x3 matrix output to out
@@ -170,10 +180,12 @@ extern "C"
      */
     void mat3_mul(const mat3 *m1, const mat3 *m2, mat3 *out);
     void mat3_identity(mat3 *m);
+    char *mat3_tos(const mat3 *m);
 
     // void quat_mat4(const quat *q, mat4 *out);
     void quat_mul_vec3(const quat *q, const vec3 *v, vec3 *out);
     void quat_normalize(const quat *q, quat *out);
+    /** Conjigate a quaternion (make negative) */
     void quat_conj(const quat *q, quat *out);
     void quat_mul_quat(const quat *q1, const quat *q2, quat *out);
     void quat_from_euler(const vec3 *r, quat *q);
@@ -185,6 +197,8 @@ extern "C"
     void quat_add(const quat *q1, const quat *q2, quat *out);
     void quat_identity(quat *q);
     void quat_zero(quat *q);
+    /** To string a quat (also see vec4_tos) - you need to free */
+    char *quat_tos(const quat *q);
 
     void vec4_normalize(const vec4 *v, vec4 *out);
     float vec4_dist(const vec4 *v1, const vec4 *v2);
@@ -202,6 +216,11 @@ extern "C"
     void vec4_set(const float *ary, vec4 *v);
     bool vec4_equals(const vec4 *v1, const vec4 *v2);
     void vec4_zero(vec4 *out);
+    /**
+     * To string a vec4 - you need to free
+     * Will also work for quat, color, and vec3
+     */
+    char *vec4_tos(const vec4 *q);
 
     void vec3_zero(vec3 *out);
     bool vec3_equals(const vec3 *v1, const vec3 *v2);
@@ -599,6 +618,13 @@ extern "C"
         }
     }
 
+    char *vec4_tos(const quat *q)
+    {
+        char *out = calloc(sizeof(char), 60);
+        snprintf(out, 50, "(%f, %f, %f, %f)\n", q->x, q->y, q->z, q->w);
+        return out;
+    }
+
     ///////////////////////////////////////////////////////////////
     // Quat
     // http://www.tobynorris.com/work/prog/csharp/quatview/help/orientations_and_quaternions.htm
@@ -709,6 +735,13 @@ extern "C"
         out->z = -q->z;
     }
 
+    char *quat_tos(const quat *q)
+    {
+        char *out = calloc(sizeof(char), 100);
+        snprintf(out, 100, "[%f + %fi + %fj + %fk]\n", q->w, q->x, q->y, q->z);
+        return out;
+    }
+
     void quat_normalize(const quat *q, quat *out)
     {
         return vec4_normalize(q, out);
@@ -716,8 +749,8 @@ extern "C"
 
     void quat_mul_vec3(const quat *q, const vec3 *v, vec3 *out)
     {
-        vec3 work; // = [ 0., 0., 0., 0. ];
-        quat inv;  // = [ 0., 0., 0., 0. ];
+        vec3 work = {.x = 0., .y = 0., .z = 0.};
+        quat inv = {.x = 0., .y = 0., .z = 0., .w = 0.};
 
         quat_conj(q, &inv);
         quat_mul_quat(q, v, &work);
@@ -769,8 +802,6 @@ extern "C"
         // clang-format on
     }
 
-    // Fills an mat4 with an array. It expects an array of values
-    // that are given in sets of 4s one *row* at a time.
     void mat4_set(const float *arry, mat4 *m)
     {
         m->m00 = arry[0];
@@ -802,7 +833,6 @@ extern "C"
         out->w = (mat->m30 * p->x) + (mat->m31 * p->y) + (mat->m32 * p->z) + (mat->m33 * p->w);
     }
 
-    // Multiply two 4x4 matrix output to out
     void mat4_mul(const mat4 *m1, const mat4 *m2, mat4 *out)
     {
 #if !R2_MAT_MUL_LUDICROUS_SPEED
@@ -895,6 +925,20 @@ extern "C"
         // clang-format on
     }
 
+    char *mat4_tos(const mat4 *m)
+    {
+        char *out = calloc(sizeof(char), 300);
+        // clang-format off
+        snprintf(out, 300, "[\n %f, %f, %f, %f \n %f, %f, %f, %f \n %f, %f, %f, %f \n %f, %f, %f, %f \n]\n", 
+            m->m00, m->m10, m->m20, m->m30,
+            m->m01, m->m11, m->m21, m->m31,
+            m->m02, m->m12, m->m22, m->m32,
+            m->m03, m->m13, m->m23, m->m33
+        );
+        // clang-format on
+        return out;
+    }
+
     ///////////////////////////////////////////////////////////////
     // Mat3
 
@@ -949,6 +993,19 @@ extern "C"
             }
         }
 #endif
+    }
+
+    char *mat3_tos(const mat3 *m)
+    {
+        char *out = calloc(sizeof(char), 300);
+        // clang-format off
+        snprintf(out, 300, "[\n %f, %f, %f \n %f, %f, %f \n %f, %f, %f \n]\n", 
+            m->m00, m->m10, m->m20,
+            m->m01, m->m11, m->m21,
+            m->m02, m->m12, m->m22
+        );
+        // clang-format on
+        return out;
     }
 
     ///////////////////////////////////////////////////////////////
