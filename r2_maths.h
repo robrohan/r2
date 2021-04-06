@@ -145,98 +145,96 @@ extern "C"
      * r1,c1 = rows and column size of m1
      * r2,c2 = rows and column size of m2
      */
-    void mat_mul(float *m1, float *m2, unsigned char r1, unsigned char c1, unsigned char r2, unsigned char c2,
-                 float *out);
+    void mat_mul(const float *m1, const float *m2, unsigned char r1, unsigned char c1, unsigned char r2,
+                 unsigned char c2, float *out);
 
     /**
      * Multiply two 4x4 matrix output to out
      * if R2_MAT_MUL_LUDICROUS_SPEED is off, this will call
      * calloc (default is on).
      */
-    void mat4_mul(mat4 *m1, mat4 *m2, mat4 *out);
-    void mat4_transform(vec4 *p, mat4 *mat, vec4 *out);
-    void mat4_set(mat4 *m, float *arry);
+    void mat4_mul(const mat4 *m1, const mat4 *m2, mat4 *out);
+    void mat4_transform(const vec4 *p, const mat4 *mat, vec4 *out);
+    void mat4_set(const float *arry, mat4 *m);
     void mat4_identity(mat4 *m);
     void mat4_perspective(float fov, float aspect, float z_near, float z_far, mat4 *out);
-    void mat4_lookat(vec4 *pos, vec4 *target, vec4 *up, mat4 *out);
+    void mat4_lookat(const vec4 *pos, const vec4 *target, const vec4 *up, mat4 *out);
 
     /**
      * Multiply two 3x3 matrix output to out
      * if R2_MAT_MUL_LUDICROUS_SPEED is off, this will call
      * calloc (default is on).
      */
-    void mat3_mul(mat3 *m1, mat3 *m2, mat3 *out);
+    void mat3_mul(const mat3 *m1, const mat3 *m2, mat3 *out);
     void mat3_identity(mat3 *m);
 
-    void quat_mat4(quat *q, mat4 *out);
-    void quat_mul_vec3(quat *q, vec3 *v, vec3 *out);
-    void quat_normalize(quat *q, quat *out);
-    void quat_conj(quat *q, quat *out);
-    void quat_mul_quat(quat *q1, quat *q2, quat *out);
-    void quat_from_euler(vec3 *r, quat *q);
-    void quat_rot2q(vec3 *axis, float theta, quat *out);
-    float quat_magnitude(quat *q);
-    float quat_length(quat *q);
-    float quat_dot(quat *q1, quat *q2);
-    void quat_sub(quat *q1, quat *q2, quat *out);
-    void quat_add(quat *q1, quat *q2, quat *out);
+    // void quat_mat4(const quat *q, mat4 *out);
+    void quat_mul_vec3(const quat *q, const vec3 *v, vec3 *out);
+    void quat_normalize(const quat *q, quat *out);
+    void quat_conj(const quat *q, quat *out);
+    void quat_mul_quat(const quat *q1, const quat *q2, quat *out);
+    void quat_from_euler(const vec3 *r, quat *q);
+    void quat_rot2q(const vec3 *axis, float theta, quat *out);
+    float quat_magnitude(const quat *q);
+    float quat_length(const quat *q);
+    float quat_dot(const quat *q1, const quat *q2);
+    void quat_sub(const quat *q1, const quat *q2, quat *out);
+    void quat_add(const quat *q1, const quat *q2, quat *out);
     void quat_identity(quat *q);
     void quat_zero(quat *q);
 
-    void vec4_to_array(vec4 *v, float *out);
-    void vec4_normalize(vec4 *v, vec4 *out);
-    float vec4_dist(vec4 *v1, vec4 *v2);
-    float vec4_dist_sqrd(vec4 *v1, vec4 *v2);
-    float vec4_length(vec4 *v);
-    float vec4_dot(vec4 *v1, vec4 *v2);
-    void vec4_sqrt(vec4 *v, vec4 *out);
-    void vec4_abs(vec4 *v, vec4 *out);
-    void vec4_pow(vec4 *v, float exp, vec4 *out);
-    void vec4_mul_vec4(vec4 *v1, vec4 *v2, vec4 *out);
-    void vec4_mul(vec4 *v, float fac, vec4 *out);
-    void vec4_div(vec4 *v, float fac, vec4 *out);
-    void vec4_sub(vec4 *v1, vec4 *v2, vec4 *out);
-    void vec4_add(vec4 *v1, vec4 *v2, vec4 *out);
-    void vec4_set(vec4 *v, float *ary);
-    bool vec4_equals(vec4 *v1, vec4 *v2);
+    void vec4_normalize(const vec4 *v, vec4 *out);
+    float vec4_dist(const vec4 *v1, const vec4 *v2);
+    float vec4_dist_sqrd(const vec4 *v1, const vec4 *v2);
+    float vec4_length(const vec4 *v);
+    float vec4_dot(const vec4 *v1, const vec4 *v2);
+    void vec4_sqrt(const vec4 *v, vec4 *out);
+    void vec4_abs(const vec4 *v, vec4 *out);
+    void vec4_pow(const vec4 *v, float exp, vec4 *out);
+    void vec4_mul_vec4(const vec4 *v1, const vec4 *v2, vec4 *out);
+    void vec4_mul(const vec4 *v, float fac, vec4 *out);
+    void vec4_div(const vec4 *v, float fac, vec4 *out);
+    void vec4_sub(const vec4 *v1, const vec4 *v2, vec4 *out);
+    void vec4_add(const vec4 *v1, const vec4 *v2, vec4 *out);
+    void vec4_set(const float *ary, vec4 *v);
+    bool vec4_equals(const vec4 *v1, const vec4 *v2);
     void vec4_zero(vec4 *out);
 
     void vec3_zero(vec3 *out);
-    bool vec3_equals(vec3 *v1, vec3 *v2);
-    void vec3_set(vec3 *v, float x, float y, float z);
-    void vec3_add(vec3 *v1, vec3 *v2, vec3 *out);
-    void vec3_sub(vec3 *v1, vec3 *v2, vec3 *out);
-    void vec3_div(vec3 *v, float fac, vec3 *out);
-    void vec3_div_vec3(vec3 *v1, vec3 *v2, vec3 *out);
-    void vec3_mul(vec3 *v, float fac, vec3 *out);
-    void vec3_mul_vec3(vec3 *v1, vec3 *v2, vec3 *out);
-    void vec3_pow(vec3 *v, float exp, vec3 *out);
-    float vec3_dot(vec3 *v1, vec3 *v2);
-    void vec3_cross(vec3 *v1, vec3 *v2, vec3 *out);
-    float vec3_length_sqrd(vec3 *v);
-    float vec3_length(vec3 *v);
-    float vec3_dist_sqrd(vec3 *v1, vec3 *v2);
-    float vec3_dist(vec3 *v1, vec3 *v2);
-    void vec3_to_array(vec3 *v, float *out);
-    void vec3_normalize(vec3 *v, vec3 *out);
+    bool vec3_equals(const vec3 *v1, const vec3 *v2);
+    void vec3_set(float x, float y, float z, vec3 *v);
+    void vec3_add(const vec3 *v1, const vec3 *v2, vec3 *out);
+    void vec3_sub(const vec3 *v1, const vec3 *v2, vec3 *out);
+    void vec3_div(const vec3 *v, float fac, vec3 *out);
+    void vec3_div_vec3(const vec3 *v1, const vec3 *v2, vec3 *out);
+    void vec3_mul(const vec3 *v, float fac, vec3 *out);
+    void vec3_mul_vec3(const vec3 *v1, const vec3 *v2, vec3 *out);
+    void vec3_pow(const vec3 *v, float exp, vec3 *out);
+    void vec3_cross(const vec3 *v1, const vec3 *v2, vec3 *out);
+    float vec3_dot(const vec3 *v1, const vec3 *v2);
+    float vec3_length_sqrd(const vec3 *v);
+    float vec3_length(const vec3 *v);
+    float vec3_dist_sqrd(const vec3 *v1, const vec3 *v2);
+    float vec3_dist(const vec3 *v1, const vec3 *v2);
+    void vec3_normalize(const vec3 *v, vec3 *out);
 
     void vec2_zero(vec2 *out);
-    bool vec2_equals(vec2 *v1, vec2 *v2);
-    void vec2_set(vec3 *v, float x, float y);
-    void vec2_add(vec2 *v1, vec2 *v2, vec2 *out);
-    void vec2_sub(vec2 *v1, vec2 *v2, vec2 *out);
-    void vec2_div(vec2 *v, float fac, vec2 *out);
-    void vec2_div_vec2(vec2 *v1, vec2 *v2, vec2 *out);
-    void vec2_mul(vec2 *v, float fac, vec2 *out);
-    void vec2_mul_vec2(vec2 *v1, vec2 *v2, vec2 *out);
-    void vec2_pow(vec2 *v, float exp, vec2 *out);
-    float vec2_dot(vec2 *v1, vec2 *v2);
-    float vec2_length_sqrd(vec2 *v);
-    float vec2_length(vec2 *v);
-    float vec2_dist_sqrd(vec2 *v1, vec2 *v2);
-    float vec2_dist(vec2 *v1, vec2 *v2);
-    void vec2_normalize(vec2 *v, vec2 *out);
-    void vec2_to_array(vec2 *v, float *out);
+    bool vec2_equals(const vec2 *v1, const vec2 *v2);
+    void vec2_set(float x, float y, vec2 *v);
+    void vec2_add(const vec2 *v1, const vec2 *v2, vec2 *out);
+    void vec2_sub(const vec2 *v1, const vec2 *v2, vec2 *out);
+    void vec2_div(const vec2 *v, float fac, vec2 *out);
+    void vec2_div_vec2(const vec2 *v1, const vec2 *v2, vec2 *out);
+    void vec2_mul(const vec2 *v, float fac, vec2 *out);
+    void vec2_mul_vec2(const vec2 *v1, const vec2 *v2, vec2 *out);
+    void vec2_pow(const vec2 *v, float exp, vec2 *out);
+    float vec2_dot(const vec2 *v1, const vec2 *v2);
+    float vec2_length_sqrd(const vec2 *v);
+    float vec2_length(const vec2 *v);
+    float vec2_dist_sqrd(const vec2 *v1, const vec2 *v2);
+    float vec2_dist(const vec2 *v1, const vec2 *v2);
+    void vec2_normalize(const vec2 *v, vec2 *out);
+    void vec2_to_array(const vec2 *v, float *out);
 
 #ifdef R2_MATHS_IMPLEMENTATION
 
@@ -263,66 +261,66 @@ extern "C"
         out->y = 0.;
     }
 
-    bool vec2_equals(vec2 *v1, vec2 *v2)
+    bool vec2_equals(const vec2 *v1, const vec2 *v2)
     {
         return r2_equals(v1->x, v2->x) && r2_equals(v1->y, v2->y);
     }
 
-    void vec2_set(vec3 *v, float x, float y)
+    void vec2_set(float x, float y, vec2 *v)
     {
         v->x = x;
         v->y = y;
     }
 
-    void vec2_add(vec2 *v1, vec2 *v2, vec2 *out)
+    void vec2_add(const vec2 *v1, const vec2 *v2, vec2 *out)
     {
         out->x = v1->x + v2->x;
         out->y = v1->y + v2->y;
     }
 
-    void vec2_sub(vec2 *v1, vec2 *v2, vec2 *out)
+    void vec2_sub(const vec2 *v1, const vec2 *v2, vec2 *out)
     {
         out->x = v1->x - v2->x;
         out->y = v1->y - v2->y;
     }
 
-    void vec2_div(vec2 *v, float fac, vec2 *out)
+    void vec2_div(const vec2 *v, float fac, vec2 *out)
     {
         float d = 1 / ((fac == 0) ? 1 : fac);
         out->x = v->x * d;
         out->y = v->y * d;
     }
 
-    void vec2_div_vec2(vec2 *v1, vec2 *v2, vec2 *out)
+    void vec2_div_vec2(const vec2 *v1, const vec2 *v2, vec2 *out)
     {
         out->x = v1->x / ((v2->x == 0) ? 1 : v2->x);
         out->y = v1->y / ((v2->y == 0) ? 1 : v2->y);
     }
 
-    void vec2_mul(vec2 *v, float fac, vec2 *out)
+    void vec2_mul(const vec2 *v, float fac, vec2 *out)
     {
         out->x = v->x * fac;
         out->y = v->y * fac;
     }
 
-    void vec2_mul_vec2(vec2 *v1, vec2 *v2, vec2 *out)
+    void vec2_mul_vec2(const vec2 *v1, const vec2 *v2, vec2 *out)
     {
         out->x = v1->x * v2->x;
         out->y = v1->y * v2->y;
     }
 
-    void vec2_pow(vec2 *v, float exp, vec2 *out)
+    void vec2_pow(const vec2 *v, float exp, vec2 *out)
     {
         out->x = pow(v->x, exp);
         out->y = pow(v->y, exp);
     }
 
-    float vec2_dot(vec2 *v1, vec2 *v2)
+    float vec2_dot(const vec2 *v1, const vec2 *v2)
     {
         return (v1->x * v2->x) + (v1->y * v2->y);
     }
 
-    float vec2_length_sqrd(vec2 *v)
+    float vec2_length_sqrd(const vec2 *v)
     {
         float length = 0.0;
         length += v->x * v->x;
@@ -330,30 +328,29 @@ extern "C"
         return length;
     }
 
-    float vec2_length(vec2 *v)
+    float vec2_length(const vec2 *v)
     {
         return sqrt(vec2_length_sqrd(v));
     }
 
-    float vec2_dist_sqrd(vec2 *v1, vec2 *v2)
+    float vec2_dist_sqrd(const vec2 *v1, const vec2 *v2)
     {
         return (v1->x - v2->x) * (v1->x - v2->x) + (v1->y - v2->y) * (v1->y - v2->y);
     }
 
-    float vec2_dist(vec2 *v1, vec2 *v2)
+    float vec2_dist(const vec2 *v1, const vec2 *v2)
     {
         return sqrt(vec2_dist_sqrd(v1, v2));
     }
 
-    void vec2_normalize(vec2 *v, vec2 *out)
+    void vec2_normalize(const vec2 *v, vec2 *out)
     {
         float len = vec2_length(v);
         vec2_div(v, len, out);
     }
 
-    void vec2_to_array(vec2 *v, float *out)
+    void vec2_to_array(const vec2 *v, float *out)
     {
-        // not dangerous at all
         out[0] = v->x;
         out[1] = v->y;
     }
@@ -368,33 +365,33 @@ extern "C"
         out->z = 0.;
     }
 
-    bool vec3_equals(vec3 *v1, vec3 *v2)
+    bool vec3_equals(const vec3 *v1, const vec3 *v2)
     {
         return r2_equals(v1->x, v2->x) && r2_equals(v1->y, v2->y) && r2_equals(v1->z, v2->z);
     }
 
-    void vec3_set(vec3 *v, float x, float y, float z)
+    void vec3_set(float x, float y, float z, vec3 *v)
     {
         v->x = x;
         v->y = y;
         v->z = z;
     }
 
-    void vec3_add(vec3 *v1, vec3 *v2, vec3 *out)
+    void vec3_add(const vec3 *v1, const vec3 *v2, vec3 *out)
     {
         out->x = v1->x + v2->x;
         out->y = v1->y + v2->y;
         out->z = v1->z + v2->z;
     }
 
-    void vec3_sub(vec3 *v1, vec3 *v2, vec3 *out)
+    void vec3_sub(const vec3 *v1, const vec3 *v2, vec3 *out)
     {
         out->x = v1->x - v2->x;
         out->y = v1->y - v2->y;
         out->z = v1->z - v2->z;
     }
 
-    void vec3_div(vec3 *v, float fac, vec3 *out)
+    void vec3_div(const vec3 *v, float fac, vec3 *out)
     {
         float d = 1 / ((fac == 0) ? 1 : fac);
         out->x = v->x * d;
@@ -402,77 +399,69 @@ extern "C"
         out->z = v->z * d;
     }
 
-    void vec3_div_vec3(vec3 *v1, vec3 *v2, vec3 *out)
+    void vec3_div_vec3(const vec3 *v1, const vec3 *v2, vec3 *out)
     {
         out->x = v1->x / ((v2->x == 0) ? 1 : v2->x);
         out->y = v1->y / ((v2->y == 0) ? 1 : v2->y);
         out->z = v1->z / ((v2->z == 0) ? 1 : v2->z);
     }
 
-    void vec3_mul(vec3 *v, float fac, vec3 *out)
+    void vec3_mul(const vec3 *v, float fac, vec3 *out)
     {
         out->x = v->x * fac;
         out->y = v->y * fac;
         out->z = v->z * fac;
     }
 
-    void vec3_mul_vec3(vec3 *v1, vec3 *v2, vec3 *out)
+    void vec3_mul_vec3(const vec3 *v1, const vec3 *v2, vec3 *out)
     {
         out->x = v1->x * v2->x;
         out->y = v1->y * v2->y;
         out->z = v1->z * v2->z;
     }
 
-    void vec3_pow(vec3 *v, float exp, vec3 *out)
+    void vec3_pow(const vec3 *v, float exp, vec3 *out)
     {
         out->x = pow(v->x, exp);
         out->y = pow(v->y, exp);
         out->z = pow(v->z, exp);
     }
 
-    float vec3_dot(vec3 *v1, vec3 *v2)
+    float vec3_dot(const vec3 *v1, const vec3 *v2)
     {
         return (v1->x * v2->x) + (v1->y * v2->y) + (v1->z * v2->z);
     }
 
-    void vec3_cross(vec3 *v1, vec3 *v2, vec3 *out)
+    void vec3_cross(const vec3 *v1, const vec3 *v2, vec3 *out)
     {
         out->x = (v1->y * v2->z) - (v1->z * v2->y);
         out->y = (v1->z * v2->x) - (v1->x * v2->z);
         out->z = (v1->x * v2->y) - (v1->y * v2->x);
     }
 
-    float vec3_length_sqrd(vec3 *v)
+    float vec3_length_sqrd(const vec3 *v)
     {
         float length = v->x * v->x + v->y * v->y + v->z * v->z;
         return length;
     }
 
-    float vec3_length(vec3 *v)
+    float vec3_length(const vec3 *v)
     {
         return sqrt(vec3_length_sqrd(v));
     }
 
-    float vec3_dist_sqrd(vec3 *v1, vec3 *v2)
+    float vec3_dist_sqrd(const vec3 *v1, const vec3 *v2)
     {
         return (v1->x - v2->x) * (v1->x - v2->x) + (v1->y - v2->y) * (v1->y - v2->y) +
                (v1->z - v2->z) * (v1->z - v2->z);
     }
 
-    float vec3_dist(vec3 *v1, vec3 *v2)
+    float vec3_dist(const vec3 *v1, const vec3 *v2)
     {
         return sqrt(vec3_dist_sqrd(v1, v2));
     }
 
-    void vec3_to_array(vec3 *v, float *out)
-    {
-        // this is fine.
-        out[0] = v->x;
-        out[1] = v->y;
-        out[2] = v->z;
-    }
-
-    void vec3_normalize(vec3 *v, vec3 *out)
+    void vec3_normalize(const vec3 *v, vec3 *out)
     {
         float len = vec3_length(v);
         if (len == 0.0)
@@ -489,15 +478,15 @@ extern "C"
         out->x = 0.;
         out->y = 0.;
         out->z = 0.;
-        out->w = 0.;
+        out->w = 1.;
     }
 
-    bool vec4_equals(vec4 *v1, vec4 *v2)
+    bool vec4_equals(const vec4 *v1, const vec4 *v2)
     {
         return r2_equals(v1->x, v2->x) && r2_equals(v1->y, v2->y) && r2_equals(v1->z, v2->z) && r2_equals(v1->w, v2->w);
     }
 
-    void vec4_set(vec4 *v, float *ary)
+    void vec4_set(const float *ary, vec4 *v)
     {
         // what could possibly go wrong?
         v->x = ary[0];
@@ -506,7 +495,7 @@ extern "C"
         v->w = ary[3];
     }
 
-    void vec4_add(vec4 *v1, vec4 *v2, vec4 *out)
+    void vec4_add(const vec4 *v1, const vec4 *v2, vec4 *out)
     {
         out->x = v1->x + v2->x;
         out->y = v1->y + v2->y;
@@ -514,7 +503,7 @@ extern "C"
         out->w = v1->w + v2->w;
     }
 
-    void vec4_sub(vec4 *v1, vec4 *v2, vec4 *out)
+    void vec4_sub(const vec4 *v1, const vec4 *v2, vec4 *out)
     {
         out->x = v1->x - v2->x;
         out->y = v1->y - v2->y;
@@ -522,7 +511,7 @@ extern "C"
         out->w = v1->w - v2->w;
     }
 
-    void vec4_div(vec4 *v, float fac, vec4 *out)
+    void vec4_div(const vec4 *v, float fac, vec4 *out)
     {
         float d = 1 / ((fac == 0) ? 1 : fac);
         out->x = v->x * d;
@@ -531,7 +520,7 @@ extern "C"
         out->w = v->w * d;
     }
 
-    void vec4_mul(vec4 *v, float fac, vec4 *out)
+    void vec4_mul(const vec4 *v, float fac, vec4 *out)
     {
         out->x = v->x * fac;
         out->y = v->y * fac;
@@ -539,7 +528,7 @@ extern "C"
         out->w = v->w * fac;
     }
 
-    void vec4_mul_vec4(vec4 *v1, vec4 *v2, vec4 *out)
+    void vec4_mul_vec4(const vec4 *v1, const vec4 *v2, vec4 *out)
     {
         out->x = v1->x * v2->x;
         out->y = v1->y * v2->y;
@@ -547,7 +536,7 @@ extern "C"
         out->w = v1->w * v2->w;
     }
 
-    void vec4_pow(vec4 *v, float exp, vec4 *out)
+    void vec4_pow(const vec4 *v, float exp, vec4 *out)
     {
         out->x = pow(v->x, exp);
         out->y = pow(v->y, exp);
@@ -555,7 +544,7 @@ extern "C"
         out->w = pow(v->w, exp);
     }
 
-    void vec4_abs(vec4 *v, vec4 *out)
+    void vec4_abs(const vec4 *v, vec4 *out)
     {
         out->x = fabs(v->x);
         out->y = fabs(v->y);
@@ -563,7 +552,7 @@ extern "C"
         out->w = fabs(v->w);
     }
 
-    void vec4_sqrt(vec4 *v, vec4 *out)
+    void vec4_sqrt(const vec4 *v, vec4 *out)
     {
         out->x = sqrt(v->x);
         out->y = sqrt(v->y);
@@ -571,28 +560,28 @@ extern "C"
         out->w = sqrt(v->w);
     }
 
-    float vec4_dot(vec4 *v1, vec4 *v2)
+    float vec4_dot(const vec4 *v1, const vec4 *v2)
     {
         return (v1->x * v2->x) + (v1->y * v2->y) + (v1->z * v2->z) + (v1->w * v2->w);
     }
 
-    float vec4_length(vec4 *v)
+    float vec4_length(const vec4 *v)
     {
         return sqrtf(v->x * v->x + v->y * v->y + v->z * v->z + v->w * v->w);
     }
 
-    float vec4_dist_sqrd(vec4 *v1, vec4 *v2)
+    float vec4_dist_sqrd(const vec4 *v1, const vec4 *v2)
     {
         return (v1->x - v2->x) * (v1->x - v2->x) + (v1->y - v2->y) * (v1->y - v2->y) +
                (v1->y - v2->z) * (v1->y - v2->z) + (v1->y - v2->w) * (v1->y - v2->w);
     }
 
-    float vec4_dist(vec4 *v1, vec4 *v2)
+    float vec4_dist(const vec4 *v1, const vec4 *v2)
     {
         return sqrt(vec4_dist_sqrd(v1, v2));
     }
 
-    void vec4_normalize(vec4 *v, vec4 *out)
+    void vec4_normalize(const vec4 *v, vec4 *out)
     {
         float mag = vec4_length(v);
         if (mag < EPSILON)
@@ -605,15 +594,6 @@ extern "C"
             out->z = v->z * d;
             out->w = v->w * d;
         }
-    }
-
-    void vec4_to_array(vec4 *v, float *out)
-    {
-        // you break it, you buy it.
-        out[0] = v->x;
-        out[1] = v->y;
-        out[2] = v->z;
-        out[3] = v->w;
     }
 
     ///////////////////////////////////////////////////////////////
@@ -633,34 +613,34 @@ extern "C"
         q->x = 0.;
         q->y = 0.;
         q->z = 0.;
-        q->w = 1.;
+        q->w = 0.;
     }
 
-    void quat_add(quat *q1, quat *q2, quat *out)
+    void quat_add(const quat *q1, const quat *q2, quat *out)
     {
         vec4_add(q1, q2, out);
     }
 
-    void quat_sub(quat *q1, quat *q2, quat *out)
+    void quat_sub(const quat *q1, const quat *q2, quat *out)
     {
         vec4_sub(q1, q2, out);
     }
 
-    float quat_dot(quat *q1, quat *q2)
+    float quat_dot(const quat *q1, const quat *q2)
     {
         return vec4_dot(q1, q2);
     }
 
-    float quat_length(quat *q)
+    float quat_length(const quat *q)
     {
         return vec4_length(q);
     }
-    float quat_magnitude(quat *q)
+    float quat_magnitude(const quat *q)
     {
         return quat_length(q);
     }
 
-    void quat_rot2q(vec3 *axis, float theta, quat *out)
+    void quat_rot2q(const vec3 *axis, float theta, quat *out)
     {
         vec4_mul(axis, sinf(theta * .5), out);
         float d = cosf(theta * .5);
@@ -668,7 +648,7 @@ extern "C"
     }
 
     // Given a set of euler angles (in radians) create a quaterion
-    void quat_from_euler(vec3 *r, quat *q)
+    void quat_from_euler(const vec3 *r, quat *q)
     {
         float roll = r->x;
         float pitch = r->y;
@@ -692,7 +672,7 @@ extern "C"
         q->z = cr * cp * sy - sr * sp * cy; // k
     }
 
-    void quat_mul_quat(quat *q1, quat *q2, quat *out)
+    void quat_mul_quat(const quat *q1, const quat *q2, quat *out)
     {
         // i^2 = j^2 = k^2 = ijk = -1
 
@@ -718,7 +698,7 @@ extern "C"
         out->z = a * h + b * g - c * f + d * e;
     }
 
-    void quat_conj(quat *q, quat *out)
+    void quat_conj(const quat *q, quat *out)
     {
         out->w = q->w;
         out->x = -q->x;
@@ -726,12 +706,12 @@ extern "C"
         out->z = -q->z;
     }
 
-    void quat_normalize(quat *q, quat *out)
+    void quat_normalize(const quat *q, quat *out)
     {
         return vec4_normalize(q, out);
     }
 
-    void quat_mul_vec3(quat *q, vec3 *v, vec3 *out)
+    void quat_mul_vec3(const quat *q, const vec3 *v, vec3 *out)
     {
         vec3 work; // = [ 0., 0., 0., 0. ];
         quat inv;  // = [ 0., 0., 0., 0. ];
@@ -741,52 +721,54 @@ extern "C"
         quat_mul_quat(&work, &inv, out);
     }
 
-    void quat_mat4(quat *q, mat4 *out)
-    {
-        float a = q->w;
-        float b = q->x;
-        float c = q->y;
-        float d = q->z;
+    // void quat_mat4(const quat *q, mat4 *out)
+    // {
+    //     float a = q->w;
+    //     float b = q->x;
+    //     float c = q->y;
+    //     float d = q->z;
 
-        // a -b -c -d
-        // b  a -d  c
-        // c  d  a -b
-        // d -c  b  a
-        out->m00 = a;
-        out->m01 = b;
-        out->m02 = c;
-        out->m03 = d;
+    //     // a -b -c -d
+    //     // b  a -d  c
+    //     // c  d  a -b
+    //     // d -c  b  a
+    //     out->m00 = a;
+    //     out->m01 = b;
+    //     out->m02 = c;
+    //     out->m03 = d;
 
-        out->m10 = -b;
-        out->m11 = a;
-        out->m12 = d;
-        out->m13 = -c;
+    //     out->m10 = -b;
+    //     out->m11 = a;
+    //     out->m12 = d;
+    //     out->m13 = -c;
 
-        out->m20 = -c;
-        out->m21 = -d;
-        out->m22 = a;
-        out->m23 = b;
+    //     out->m20 = -c;
+    //     out->m21 = -d;
+    //     out->m22 = a;
+    //     out->m23 = b;
 
-        out->m30 = -d;
-        out->m31 = c;
-        out->m32 = -b;
-        out->m33 = a;
-    }
+    //     out->m30 = -d;
+    //     out->m31 = c;
+    //     out->m32 = -b;
+    //     out->m33 = a;
+    // }
 
     ///////////////////////////////////////////////////////////////
     // Mat4
 
     void mat4_identity(mat4 *m)
     {
-        m->m00 = 1.;
-        m->m11 = 1.;
-        m->m22 = 1.;
-        m->m33 = 1.;
+        // clang-format off
+        m->m00 = 1.; m->m10 = 0.; m->m20 = 0.; m->m30 = 0.;
+        m->m01 = 0.; m->m11 = 1.; m->m21 = 0.; m->m31 = 0.;
+        m->m02 = 0.; m->m12 = 0.; m->m22 = 1.; m->m32 = 0.;
+        m->m03 = 0.; m->m13 = 0.; m->m23 = 0.; m->m33 = 1.;
+        // clang-format on
     }
 
     // Fills an mat4 with an array. It expects an array of values
     // that are given in sets of 4s one *row* at a time.
-    void mat4_set(mat4 *m, float *arry)
+    void mat4_set(const float *arry, mat4 *m)
     {
         m->m00 = arry[0];
         m->m01 = arry[4];
@@ -809,7 +791,7 @@ extern "C"
         m->m33 = arry[15];
     }
 
-    void mat4_transform(vec4 *p, mat4 *mat, vec4 *out)
+    void mat4_transform(const vec4 *p, const mat4 *mat, vec4 *out)
     {
         out->x = (mat->m00 * p->x) + (mat->m01 * p->y) + (mat->m02 * p->z) + (mat->m03 * p->w);
         out->y = (mat->m10 * p->x) + (mat->m11 * p->y) + (mat->m12 * p->z) + (mat->m13 * p->w);
@@ -818,7 +800,7 @@ extern "C"
     }
 
     // Multiply two 4x4 matrix output to out
-    void mat4_mul(mat4 *m1, mat4 *m2, mat4 *out)
+    void mat4_mul(const mat4 *m1, const mat4 *m2, mat4 *out)
     {
 #if !R2_MAT_MUL_LUDICROUS_SPEED
         mat_mul(m1->a_mat4, m2->a_mat4, 4, 4, 4, 4, out->a_mat4);
@@ -899,7 +881,7 @@ extern "C"
     }
 
     // target and up should be normalized
-    void mat4_lookat(vec4 *pos, vec4 *target, vec4 *up, mat4 *out)
+    void mat4_lookat(const vec4 *pos, const vec4 *target, const vec4 *up, mat4 *out)
     {
         /**
          *  [fur]          *  [pos]
@@ -912,9 +894,9 @@ extern "C"
         vec3_cross(target, up, &right);
         mat4_identity(out);
 
-        vec4 *u = up;
-        vec4 *f = target;
-        vec4 *r = &right;
+        const vec4 *u = up;
+        const vec4 *f = target;
+        const vec4 *r = &right;
         // clang-format off
            out->m00 = r->x; out->m10 = u->x; out->m20 = f->x; out->m30 = -pos->x;
            out->m01 = r->y; out->m11 = u->y; out->m21 = f->y; out->m31 = -pos->y;
@@ -928,13 +910,15 @@ extern "C"
 
     void mat3_identity(mat3 *m)
     {
-        m->m00 = 1.;
-        m->m11 = 1.;
-        m->m22 = 1.;
+        // clang-format off
+        m->m00 = 1.; m->m10 = 0.; m->m20 = 0.;
+        m->m01 = 0.; m->m11 = 1.; m->m21 = 0.;
+        m->m02 = 0.; m->m12 = 0.; m->m22 = 1.;
+        // clang-format on
     }
 
     // Multiply two 3x3 matrix output to out
-    void mat3_mul(mat3 *m1, mat3 *m2, mat3 *out)
+    void mat3_mul(const mat3 *m1, const mat3 *m2, mat3 *out)
     {
 #if !R2_MAT_MUL_LUDICROUS_SPEED
         mat_mul(m1->a_mat3, m2->a_mat3, 3, 3, 3, 3, out->a_mat3);
@@ -980,8 +964,8 @@ extern "C"
     ///////////////////////////////////////////////////////////////
     // Generic Matrix Multiply
 
-    void mat_mul(float *m1, float *m2, unsigned char r1, unsigned char c1, unsigned char r2, unsigned char c2,
-                 float *out)
+    void mat_mul(const float *m1, const float *m2, unsigned char r1, unsigned char c1, unsigned char r2,
+                 unsigned char c2, float *out)
     {
         if (c1 != r2)
         {
