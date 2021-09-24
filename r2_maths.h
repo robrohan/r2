@@ -171,6 +171,7 @@ extern "C"
      * target and up should be normalized
      */
     void mat4_lookat(const vec4 *pos, const vec4 *target, const vec4 *up, mat4 *out);
+    void mat4_transpose(const mat4 *m1, mat4 *m2);
     char *mat4_tos(const mat4 *m);
 
     /**
@@ -937,6 +938,36 @@ extern "C"
         );
         // clang-format on
         return out;
+    }
+    
+    void mat4_transpose(const mat4 *m1, mat4 *m2)
+    {
+        const float a = m1->m00;
+        const float b = m1->m10;
+        const float c = m1->m20;
+        const float d = m1->m30;
+
+        const float e = m1->m01;
+        const float f = m1->m11;
+        const float g = m1->m21;
+        const float h = m1->m31;
+
+        const float i = m1->m02;
+        const float j = m1->m12;
+        const float k = m1->m22;
+        const float l = m1->m32;
+
+        const float m = m1->m03;
+        const float n = m1->m13;
+        const float o = m1->m23;
+        const float p = m1->m33;
+
+        // clang-format off
+        m2->m00 = a; m2->m10 = e; m2->m20 = i; m2->m30 = m;
+        m2->m01 = b; m2->m11 = f; m2->m21 = j; m2->m31 = n;
+        m2->m02 = c; m2->m12 = g; m2->m22 = k; m2->m32 = o;
+        m2->m03 = d; m2->m13 = h; m2->m23 = l; m2->m33 = p;
+        // clang-format on
     }
 
     ///////////////////////////////////////////////////////////////
