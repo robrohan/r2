@@ -1,6 +1,6 @@
 .PHONY: all test clean build
 
-run: test check
+run: test test_clang check
 
 # Should run something like
 # `source ~/Projects/spikes/emsdk/emsdk_env.sh` 
@@ -13,7 +13,17 @@ test_wasm: clean
 
 test: clean
 	mkdir -p bin
-	CC=gcc OUT=./bin/run_tests ./test.sh
+	CC=gcc OUT=./bin/run_tests \
+	CFLAGS='-std=c99 -Wall -Werror -Wno-unused -g3 -v -O3 -funroll-loops -msse3 -fopenmp' \
+	./test.sh
+	objdump -S --disassemble ./bin/run_tests > ./bin/run_tests.asm
+	./bin/run_tests
+
+test_clang: clean
+	mkdir -p bin
+	CC=clang OUT=./bin/run_tests \
+	CFLAGS='-std=c99 -Wall -Werror -Wno-unused -g3 -v -O3 -funroll-loops -msse3' \
+	./test.sh
 	objdump -S --disassemble ./bin/run_tests > ./bin/run_tests.asm
 	./bin/run_tests
 

@@ -346,21 +346,27 @@ static char *test_quat_mul_vec3_y_180x()
     return 0;
 }
 
-// static char *test_quat_mat4()
-// {
-//     quat *q = malloc(sizeof(quat));
-//     quat_identity(q);
+static char *test_quat_mat4()
+{
+    quat *q = malloc(sizeof(quat));
+    quat_identity(q);
 
-//     mat4 *result = malloc(sizeof(mat4));
-//     quat_mat4(q, result);
+    mat4 *result = malloc(sizeof(mat4));
+    quat_mat4(q, result);
 
-//     r2_assert("quat mat4 is wrong", r2_equals(result->m00, 1.) && r2_equals(result->m11, 1.) &&
-//                                         r2_equals(result->m22, 1.) && r2_equals(result->m33, 1.));
+    r2_assert("quat mat4 is wrong", 
+        // clang-format off
+    	r2_equals(result->m00, 1.) && 
+    	r2_equals(result->m11, 1.) &&
+        r2_equals(result->m22, 1.) && 
+        r2_equals(result->m33, 1.)
+        // clang-format on
+    );
 
-//     free(q);
-//     free(result);
-//     return 0;
-// }
+    free(q);
+    free(result);
+    return 0;
+}
 
 static char *test_mat4_size()
 {
@@ -696,7 +702,7 @@ static char *r2_maths_test()
     r2_run_test(test_quat_mul_vec3_x_90z);
     r2_run_test(test_quat_mul_vec3_y_90x);
     r2_run_test(test_quat_mul_vec3_y_180x);
-    // r2_run_test(test_quat_mat4);
+    r2_run_test(test_quat_mat4);
 
     // mat4
     r2_run_test(test_mat4_size);

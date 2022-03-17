@@ -183,7 +183,7 @@ extern "C"
     void mat3_identity(mat3 *m);
     char *mat3_tos(const mat3 *m);
 
-    // void quat_mat4(const quat *q, mat4 *out);
+    void quat_mat4(const quat *q, mat4 *out);
     void quat_mul_vec3(const quat *q, const vec3 *v, vec3 *out);
     void quat_normalize(const quat *q, quat *out);
     /** Conjigate a quaternion (make negative) */
@@ -509,9 +509,8 @@ extern "C"
         return r2_equals(v1->x, v2->x) && r2_equals(v1->y, v2->y) && r2_equals(v1->z, v2->z) && r2_equals(v1->w, v2->w);
     }
 
-    void vec4_set(const float *ary, vec4 *v)
+    void vec4_set(const float ary[4], vec4 *v)
     {
-        // what could possibly go wrong?
         v->x = ary[0];
         v->y = ary[1];
         v->z = ary[2];
@@ -643,7 +642,7 @@ extern "C"
         q->x = 0.;
         q->y = 0.;
         q->z = 0.;
-        q->w = 0.;
+        q->w = 1.;
     }
 
     void quat_add(const quat *q1, const quat *q2, quat *out)
@@ -704,7 +703,7 @@ extern "C"
 
     void quat_mul_quat(const quat *q1, const quat *q2, quat *out)
     {
-        // i^2 = j^2 = k^2 = ijk = -1
+        // i² = j² = k² = ijk = -1
 
         // q1 = a+bi+cj+dk
         float a = q1->w;
@@ -758,37 +757,37 @@ extern "C"
         quat_mul_quat(&work, &inv, out);
     }
 
-    // void quat_mat4(const quat *q, mat4 *out)
-    // {
-    //     float a = q->w;
-    //     float b = q->x;
-    //     float c = q->y;
-    //     float d = q->z;
+    void quat_mat4(const quat *q, mat4 *out)
+    {
+         float a = q->w;
+         float b = q->x;
+         float c = q->y;
+         float d = q->z;
 
-    //     // a -b -c -d
-    //     // b  a -d  c
-    //     // c  d  a -b
-    //     // d -c  b  a
-    //     out->m00 = a;
-    //     out->m01 = b;
-    //     out->m02 = c;
-    //     out->m03 = d;
+         // a -b -c -d
+         // b  a -d  c
+         // c  d  a -b
+         // d -c  b  a
+         out->m00 = a;
+         out->m01 = b;
+         out->m02 = c;
+         out->m03 = d;
 
-    //     out->m10 = -b;
-    //     out->m11 = a;
-    //     out->m12 = d;
-    //     out->m13 = -c;
+	     out->m10 = -b;
+         out->m11 = a;
+         out->m12 = d;
+         out->m13 = -c;
 
-    //     out->m20 = -c;
-    //     out->m21 = -d;
-    //     out->m22 = a;
-    //     out->m23 = b;
+         out->m20 = -c;
+         out->m21 = -d;
+         out->m22 = a;
+         out->m23 = b;
 
-    //     out->m30 = -d;
-    //     out->m31 = c;
-    //     out->m32 = -b;
-    //     out->m33 = a;
-    // }
+         out->m30 = -d;
+         out->m31 = c;
+         out->m32 = -b;
+         out->m33 = a;
+    }
 
     ///////////////////////////////////////////////////////////////
     // Mat4
@@ -841,7 +840,6 @@ extern "C"
 #else
         // unrolling the loops makes this function faster
         // so if you're keen you can use the -funroll-loops gcc flag.
-        // I am too lazy to unroll this by hand at the moment; PRs welcome
         //
         //  10 runs of 10000 multiplies (average time in seconds):
         //  -funroll-all-loops  -funroll-loops   looping
@@ -883,10 +881,10 @@ extern "C"
     void mat4_perspective(float fov, float aspect, float near, float far, mat4 *out)
     {
         /***
-         *   n/r       0         0           0
-         *   0        n/t        0           0
-         *   0         0    -(f+n)/f-n    -2fn/f-n
-         *   0         0        -1           0
+         *   ⌈ n/r       0         0           0     ⌉
+         *   | 0        n/t        0           0     |
+         *   | 0         0    -(f+n)/f-n    -2fn/f-n |
+         *   ⌊ 0         0        -1           0     ⌋
          */
         float range = tan(fov / 2) * near;
         float Sx = (2 * near) / (range * aspect + range * aspect);
@@ -905,11 +903,12 @@ extern "C"
     void mat4_lookat(const vec4 *pos, const vec4 *target, const vec4 *up, mat4 *out)
     {
         /**
-         *  [fur]          *  [pos]
-         *  rx  ux  fx  0     1  0  0  -px
-         *  ry  uy  fy  0  *  0  1  0  -py
-         *  rz  uz  fz  0     0  0  1  -pz
-         *  0   0   0   1     0  0  0   1
+         *  [fur]             ∙  [pos]
+         *  
+         *  ⌈ rx  ux  fx  0 ⌉    ⌈ 1  0  0  -px ⌉
+         *  | ry  uy  fy  0 | ∙  | 0  1  0  -py |
+         *  | rz  uz  fz  0 |    | 0  0  1  -pz |
+         *  ⌊ 0   0   0   1 ⌋    ⌊ 0  0  0   1  ⌋
          */
         vec4 right = {.x = 0, .y = 0, .z = 0, .w = 0};
         vec3_cross(target, up, &right);
@@ -939,7 +938,7 @@ extern "C"
         // clang-format on
         return out;
     }
-    
+
     void mat4_transpose(const mat4 *m1, mat4 *m2)
     {
         const float a = m1->m00;
