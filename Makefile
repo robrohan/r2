@@ -16,7 +16,7 @@ test: clean
 	CC=gcc OUT=./bin/run_tests \
 	CFLAGS='-std=c99 -Wall -Werror -Wno-unused -g3 -v -O3 -funroll-loops -msse3 -fopenmp' \
 	./test.sh
-	objdump -S --disassemble ./bin/run_tests > ./bin/run_tests.asm
+#	objdump -S --disassemble ./bin/run_tests > ./bin/run_tests.asm
 	./bin/run_tests
 
 test_clang: clean
@@ -24,7 +24,7 @@ test_clang: clean
 	CC=clang OUT=./bin/run_tests \
 	CFLAGS='-std=c99 -Wall -Werror -Wno-unused -g3 -v -O3 -funroll-loops -msse3' \
 	./test.sh
-	objdump -S --disassemble ./bin/run_tests > ./bin/run_tests.asm
+#	objdump -S --disassemble ./bin/run_tests > ./bin/run_tests.asm
 	./bin/run_tests
 
 perf:

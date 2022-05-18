@@ -214,7 +214,7 @@ extern "C"
     void vec4_div(const vec4 *v, float fac, vec4 *out);
     void vec4_sub(const vec4 *v1, const vec4 *v2, vec4 *out);
     void vec4_add(const vec4 *v1, const vec4 *v2, vec4 *out);
-    void vec4_set(const float *ary, vec4 *v);
+    void vec4_set(const float ary[4], vec4 *v);
     bool vec4_equals(const vec4 *v1, const vec4 *v2);
     void vec4_zero(vec4 *out);
     /**
