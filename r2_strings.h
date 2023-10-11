@@ -12,35 +12,147 @@ extern "C"
 {
 #endif
 
-#include <stdio.h>
-// #include <stdint.h>
+#include <stdint.h>
+#include <string.h>
 
-// #define sizeof(x)    (size)sizeof(x)
-// #define alignof(x)   (size)_Alignof(x)
-#define countof(a)   (sizeof(a) / sizeof(*(a)))
-#define lengthof(s)  (countof(s) - 1)
-// #define assert(c)  while (!(c)) __builtin_unreachable()
+    typedef uint32_t rune;
+    typedef struct s8
+    {
+        char *data;
+        unsigned int size;
+        unsigned int len;
+    } s8;
 
-#define S(s) (s8){(unsigned char *)s, lengthof(s)}
-typedef struct s8 {
-    unsigned char *data;
-    unsigned int len;
-} s8;
-
-// static s8 s8span(unsigned char *, unsigned char *);
-// static int s8equals(s8, s8);
-// static unsigned int s8compare(s8, s8);
-// static long long s8hash(s8);
-// static s8 s8trim(s8);
-// static s8   s8clone(s8, arena *);
+    /**
+     * Using the first char of a utf8 char, get the length
+     * lengths are in the number of bytes.
+     * For example:
+     *  1110xxxxx would return 3
+     */
+    int utf8_len(const char ch);
+    /**
+     * Given a set of chars (max 4) turn that into a rune. Meaning,
+     * look at the first bits of the chars and figure out if they are
+     * continuation chars or starter chars and make a rune out of it
+     * (if valid).
+     */
+    rune to_rune(const char chr[4]);
+    /**
+     * Given an array of chars, create a utf8 array of runes.
+     * In other words, given an array of bytes that might have
+     * utf8 chars in it, return an array of integers that can
+     * be used for display.
+     *
+     * Returns the new array length as it might be different from
+     * the initial src_size.
+     */
+    int str_to_utf8(const char *str, int src_size);
+    /**
+     * Create a utf8 string struct from a char array (has size and 
+     * utf8 string length properties)
+     */
+    s8 S(char *);
 
 /* implementation */
 #ifdef R2_STRINGS_IMPLEMENTATION
 
-// ...
+    typedef struct
+    {
+        char mask;       /* char data will be bitwise AND with this */
+        char lead;       /* start bytes of current char in utf-8 encoded character */
+        uint32_t beg;    /* beginning of codepoint range */
+        uint32_t end;    /* end of codepoint range */
+        int bits_stored; /* the number of bits from the codepoint that fits in char */
+    } utf_t;
+
+    utf_t *utf[] = {
+        // clang-format off
+        /*             mask        lead        beg      end       bits */
+        [0] = &(utf_t){0b00111111, 0b10000000, 0,       0,        6},
+        [1] = &(utf_t){0b01111111, 0b00000000, 0000,    0177,     7},
+        [2] = &(utf_t){0b00011111, 0b11000000, 0200,    03777,    5},
+        [3] = &(utf_t){0b00001111, 0b11100000, 04000,   0177777,  4},
+        [4] = &(utf_t){0b00000111, 0b11110000, 0200000, 04177777, 3},
+        &(utf_t){0},
+        // clang-format on
+    };
+
+    s8 S(char *s)
+    {
+        if (s == NULL) return (s8){"", 0, 0};
+        return (s8){
+            s, 
+            strlen(s), 
+            str_to_utf8(s, strlen(s)) 
+        };
+    }
+
+    int utf8_len(const char ch)
+    {
+        int len = 0;
+        for (utf_t **u = utf; *u; ++u)
+        {
+            if ((ch & ~(*u)->mask) == (*u)->lead)
+            {
+                break;
+            }
+            ++len;
+        }
+        return len;
+    }
+
+    rune to_rune(const char chr[4])
+    {
+        int bytes = utf8_len(*chr);
+        int shift = utf[0]->bits_stored * (bytes - 1);
+        rune codep = (*chr++ & utf[bytes]->mask) << shift;
+        for (int i = 1; i < bytes; ++i, ++chr)
+        {
+            shift -= utf[0]->bits_stored;
+            codep |= ((char)*chr & utf[0]->mask) << shift;
+        }
+        return codep;
+    }
+
+    int str_to_utf8(const char *str, int src_size)
+    {
+        char tmp[5] = {0};
+        int srci = 0;
+        int len = 0;
+        for (int i = 0; i < src_size; i++)
+        {
+            if (str[srci] == 0)
+                break;
+
+            // look at the first char to see if the bytes
+            // say this rune is more than one byte
+            int plen = utf8_len(str[srci]);
+            if (plen > 1)
+            {
+                // turn multibyte into a single int
+                for (int c = 0; c < plen; c++)
+                {
+                    tmp[c] = str[srci + c];
+                }
+                rune r = to_rune(tmp);
+                // dest[len] = r;
+                len++;
+            }
+            else
+            {
+                // it's just one byte
+                // dest[len] = str[srci];
+                len++;
+            }
+            // move the source pointer based on
+            // the number of utf8 bytes.
+            srci += plen;
+        }
+        return len;
+    }
 
 #endif
-/* implementation */
+    /* implementation */
 
 #ifdef __cplusplus
 }
