@@ -1,4 +1,4 @@
-/* r2_maths - v0.0 - public domain vector, matrix and quaterion library
+/* r2_maths - v0.0 - public domain vector, matrix and quaternion library
     no warranty implied; use at your own risk
 
     Built in the style of: https://github.com/nothings/stb
@@ -37,7 +37,7 @@ extern "C"
 #include <stdlib.h>
 
 // If on, this uses custom mat3 and mat4 multiplication
-// code instead of the geneirc mat_mul function. In testing
+// code instead of the generic mat_mul function. In testing
 // this makes the code run consistently fast, whereas without
 // it you can get a sometimes faster multiply, but the speed
 // is inconsistent.
@@ -151,7 +151,7 @@ extern "C"
     /**
      * Multiply two 4x4 matrix output to out
      * if R2_MAT_MUL_LUDICROUS_SPEED is on (the default) this will
-     * do a specfic 4x4 multiply function.
+     * do a specific 4x4 multiply function.
      *
      * If R2_MAT_MUL_LUDICROUS_SPEED is off it will call the generic
      * multiply and use calloc.
@@ -186,7 +186,7 @@ extern "C"
     void quat_mat4(const quat *q, mat4 *out);
     void quat_mul_vec3(const quat *q, const vec3 *v, vec3 *out);
     void quat_normalize(const quat *q, quat *out);
-    /** Conjigate a quaternion (make negative) */
+    /** Conjugate a quaternion (make negative) */
     void quat_conj(const quat *q, quat *out);
     void quat_mul_quat(const quat *q1, const quat *q2, quat *out);
     void quat_from_euler(const vec3 *r, quat *q);
@@ -676,7 +676,7 @@ extern "C"
         out->w = d;
     }
 
-    // Given a set of euler angles (in radians) create a quaterion
+    // Given a set of euler angles (in radians) create a quaternion
     void quat_from_euler(const vec3 *r, quat *q)
     {
         float roll = r->x;
