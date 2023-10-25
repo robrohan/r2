@@ -16,10 +16,16 @@ extern "C"
 #include <string.h>
 
     typedef uint32_t rune;
+
     typedef struct s8
     {
+        // The string data a raw bytes
         char *data;
+        // The integer representation of the bytes as utf8
+        uint32_t *rune;
+        // The size of the string (in bytes)
         unsigned int size;
+        // The length of the string (in runes)
         unsigned int len;
     } s8;
 
@@ -35,6 +41,8 @@ extern "C"
      * look at the first bits of the chars and figure out if they are
      * continuation chars or starter chars and make a rune out of it
      * (if valid).
+     * A rune may or may not be visible "variation selector-16" or
+     * "joiner" for example.
      */
     rune to_rune(const char chr[4]);
     /**
@@ -46,12 +54,17 @@ extern "C"
      * Returns the new array length as it might be different from
      * the initial src_size.
      */
-    int str_to_utf8(const char *str, int src_size);
+    int str_to_utf8(const char *str, int src_size, rune *dest);
     /**
-     * Create a utf8 string struct from a char array (has size and 
-     * utf8 string length properties)
+     * Create a utf8 string struct from a char array (has size and
+     * utf8 string length properties).
+     * use free_S when done with the string.
      */
     s8 S(char *);
+    /**
+     * Free an allocated S
+     */
+    void free_S(s8 s);
 
 /* implementation */
 #ifdef R2_STRINGS_IMPLEMENTATION
@@ -79,12 +92,27 @@ extern "C"
 
     s8 S(char *s)
     {
-        if (s == NULL) return (s8){"", 0, 0};
-        return (s8){
-            s, 
-            strlen(s), 
-            str_to_utf8(s, strlen(s)) 
-        };
+        if (s == NULL)
+            return (s8){"", NULL, 0, 0};
+
+        // string length in bytes
+        size_t l = strlen(s);
+        // string as an array of integers
+        rune *i = calloc(l, sizeof(rune));
+        if (!i)
+        {
+            printf("mem failure, exiting \n");
+            exit(EXIT_FAILURE);
+        }
+
+        size_t u8l = str_to_utf8(s, l, i);
+
+        return (s8){s, i, l, u8l};
+    }
+
+    void free_S(s8 s)
+    {
+        free(s.rune);
     }
 
     int utf8_len(const char ch)
@@ -114,7 +142,7 @@ extern "C"
         return codep;
     }
 
-    int str_to_utf8(const char *str, int src_size)
+    int str_to_utf8(const char *str, int src_size, rune *dest)
     {
         char tmp[5] = {0};
         int srci = 0;
@@ -135,13 +163,13 @@ extern "C"
                     tmp[c] = str[srci + c];
                 }
                 rune r = to_rune(tmp);
-                // dest[len] = r;
+                dest[len] = r;
                 len++;
             }
             else
             {
                 // it's just one byte
-                // dest[len] = str[srci];
+                dest[len] = str[srci];
                 len++;
             }
             // move the source pointer based on
