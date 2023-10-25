@@ -1,8 +1,26 @@
-/*
-    char - 8 bits
-    short - 16 bits
-    int - 32 bits
-    long long - 64 bits
+/* r2_strings - v0.0 - public domain very basic, utf8 string library
+    no warranty implied; use at your own risk
+
+    Built in the style of: https://github.com/nothings/stb
+
+    This is written with game development in mind.
+
+    Do this:
+       #define R2_STRINGS_IMPLEMENTATION
+    before you include this file in *one* C or C++ file 
+    to create the implementation.
+
+    // i.e. it should look like this:
+    #include ...
+    #include ...
+    #include ...
+    #define R2_STRINGS_IMPLEMENTATION
+    #include "r2_strings.h"
+
+    You can then include without the define to just use the types
+
+LICENSE
+    See end of file for license information.
 */
 #ifndef R2_STRINGS
 #define R2_STRINGS
@@ -17,12 +35,24 @@ extern "C"
 
     typedef uint32_t rune;
 
+    /**
+     * This represents a string of char bytes that can be 
+     * represented by UTF-8. When you create this struct
+     * by doing `s8 str = S("👋World")` the resulting struct
+     * has both the raw byte data and a parsed array of "runes"
+     * aka single UTF8 code points.
+     * *Note*: not all runes are printable, and some runes are
+     * modifiers (like joiner sequences). So take care when 
+     * displaying runes in, say a terminal. Displaying 3 runes
+     * might not always take 3 text spaces, it might only take 
+     * 1 for example.
+     */
     typedef struct s8
     {
         // The string data a raw bytes
         char *data;
         // The integer representation of the bytes as utf8
-        uint32_t *rune;
+        rune *rune;
         // The size of the string (in bytes)
         unsigned int size;
         // The length of the string (in runes)
@@ -30,39 +60,15 @@ extern "C"
     } s8;
 
     /**
-     * Using the first char of a utf8 char, get the length
-     * lengths are in the number of bytes.
-     * For example:
-     *  1110xxxxx would return 3
-     */
-    int utf8_len(const char ch);
-    /**
-     * Given a set of chars (max 4) turn that into a rune. Meaning,
-     * look at the first bits of the chars and figure out if they are
-     * continuation chars or starter chars and make a rune out of it
-     * (if valid).
-     * A rune may or may not be visible "variation selector-16" or
-     * "joiner" for example.
-     */
-    rune to_rune(const char chr[4]);
-    /**
-     * Given an array of chars, create a utf8 array of runes.
-     * In other words, given an array of bytes that might have
-     * utf8 chars in it, return an array of integers that can
-     * be used for display.
-     *
-     * Returns the new array length as it might be different from
-     * the initial src_size.
-     */
-    int str_to_utf8(const char *str, int src_size, rune *dest);
-    /**
      * Create a utf8 string struct from a char array (has size and
      * utf8 string length properties).
-     * use free_S when done with the string.
+     * 
+     * Note: use free_S() when done with the string.
      */
     s8 S(char *);
+
     /**
-     * Free an allocated S
+     * Frees an allocated S
      */
     void free_S(s8 s);
 
@@ -86,35 +92,16 @@ extern "C"
         [2] = &(utf_t){0b00011111, 0b11000000, 0200,    03777,    5},
         [3] = &(utf_t){0b00001111, 0b11100000, 04000,   0177777,  4},
         [4] = &(utf_t){0b00000111, 0b11110000, 0200000, 04177777, 3},
-        &(utf_t){0},
+              &(utf_t){0},
         // clang-format on
     };
 
-    s8 S(char *s)
-    {
-        if (s == NULL)
-            return (s8){"", NULL, 0, 0};
-
-        // string length in bytes
-        size_t l = strlen(s);
-        // string as an array of integers
-        rune *i = calloc(l, sizeof(rune));
-        if (!i)
-        {
-            printf("mem failure, exiting \n");
-            exit(EXIT_FAILURE);
-        }
-
-        size_t u8l = str_to_utf8(s, l, i);
-
-        return (s8){s, i, l, u8l};
-    }
-
-    void free_S(s8 s)
-    {
-        free(s.rune);
-    }
-
+    /**
+     * Using the first char of a utf8 char, get the length
+     * lengths are in the number of bytes.
+     * For example:
+     *  1110xxxxx would return 3
+     */
     int utf8_len(const char ch)
     {
         int len = 0;
@@ -133,15 +120,24 @@ extern "C"
     {
         int bytes = utf8_len(*chr);
         int shift = utf[0]->bits_stored * (bytes - 1);
-        rune codep = (*chr++ & utf[bytes]->mask) << shift;
+        rune cp = (*chr++ & utf[bytes]->mask) << shift;
         for (int i = 1; i < bytes; ++i, ++chr)
         {
             shift -= utf[0]->bits_stored;
-            codep |= ((char)*chr & utf[0]->mask) << shift;
+            cp |= ((char)*chr & utf[0]->mask) << shift;
         }
-        return codep;
+        return cp;
     }
 
+    /**
+     * Given an array of chars, create a utf8 array of runes.
+     * In other words, given an array of bytes that might have
+     * utf8 chars in it, return an array of integers that can
+     * be used for display.
+     *
+     * Returns the new array length as it might be different from
+     * the initial src_size.
+     */
     int str_to_utf8(const char *str, int src_size, rune *dest)
     {
         char tmp[5] = {0};
@@ -177,6 +173,29 @@ extern "C"
             srci += plen;
         }
         return len;
+    }
+
+    s8 S(char *s)
+    {
+        if (s == NULL)
+            return (s8){"", NULL, 0, 0};
+
+        // string length in bytes
+        size_t l = strlen(s);
+        // string as an array of integers
+        rune *i = calloc(l, sizeof(rune));
+        if (!i)
+        {
+            printf("mem failure, exiting \n");
+            exit(EXIT_FAILURE);
+        }
+        size_t u8l = str_to_utf8(s, l, i);
+        return (s8){s, i, l, u8l};
+    }
+
+    void free_S(s8 s)
+    {
+        free(s.rune);
     }
 
 #endif
