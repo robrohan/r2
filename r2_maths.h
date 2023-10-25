@@ -7,7 +7,8 @@
 
     Do this:
        #define R2_MATHS_IMPLEMENTATION
-    before you include this file in *one* C or C++ file to create the implementation.
+    before you include this file in *one* C or C++ file 
+    to create the implementation.
 
     // i.e. it should look like this:
     #include ...
@@ -17,6 +18,8 @@
     #include "r2_maths.h"
 
     Add: to cflags -funroll-loops -fopenmp
+
+    You can then include without the define to just use the types
 
 LICENSE
     See end of file for license information.
