@@ -1,10 +1,12 @@
 #include "../r2_maths.h"
-#include "../r2_unit.h"
+
 #include <limits.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+
+#include "../r2_unit.h"
 
 #if (__WORDSIZE == 64)
 #define BUILD_64 1
@@ -354,14 +356,14 @@ static char *test_quat_mat4()
     mat4 *result = malloc(sizeof(mat4));
     quat_mat4(q, result);
 
-    r2_assert("quat mat4 is wrong", 
-        // clang-format off
+    // clang-format off
+    r2_assert("quat mat4 is wrong",
     	r2_equals(result->m00, 1.) && 
     	r2_equals(result->m11, 1.) &&
         r2_equals(result->m22, 1.) && 
         r2_equals(result->m33, 1.)
-        // clang-format on
     );
+    // clang-format on
 
     free(q);
     free(result);
