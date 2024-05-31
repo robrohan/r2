@@ -488,9 +488,9 @@ extern "C"
     {
         float len = vec3_length(v);
         if (len == 0.0)
-            return vec3_zero(out);
+            vec3_zero(out);
         else
-            return vec3_div(v, len, out);
+            vec3_div(v, len, out);
     }
 
     ///////////////////////////////////////////////////////////////
@@ -607,7 +607,7 @@ extern "C"
     {
         float mag = vec4_length(v);
         if (mag < EPSILON)
-            return vec4_zero(out);
+            vec4_zero(out);
         else
         {
             float d = 1 / mag;
@@ -744,7 +744,7 @@ extern "C"
 
     void quat_normalize(const quat *q, quat *out)
     {
-        return vec4_normalize(q, out);
+        vec4_normalize(q, out);
     }
 
     void quat_mul_vec3(const quat *q, const vec3 *v, vec3 *out)

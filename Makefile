@@ -1,5 +1,14 @@
 .PHONY: all test clean build
 
+
+C_ERRS += -Wall -Wextra -Wpedantic \
+		-Wformat=2 -Wno-unused-parameter -Wshadow \
+		-Wwrite-strings -Wstrict-prototypes -Wold-style-definition \
+		-Wredundant-decls -Wnested-externs -Wmissing-include-dirs \
+		-Wno-unused
+
+
+
 run: test test_clang check
 
 # Should run something like
@@ -14,7 +23,7 @@ test_wasm: clean
 test: clean
 	mkdir -p bin
 	CC=gcc OUT=./bin/run_tests \
-	CFLAGS='-std=c99 -Wall -Werror -Wno-unused -g3 -v -O3 -funroll-loops -msse3 -fopenmp' \
+	CFLAGS='-std=c11 $(C_ERRS) -g3 -v -O3 -funroll-loops -msse3 -fopenmp' \
 	./test.sh
 #	objdump -S --disassemble ./bin/run_tests > ./bin/run_tests.asm
 	./bin/run_tests
@@ -22,7 +31,7 @@ test: clean
 test_clang: clean
 	mkdir -p bin
 	CC=clang OUT=./bin/run_tests \
-	CFLAGS='-std=c99 -Wall -Werror -Wno-unused -g3 -v -O3 -funroll-loops -msse3' \
+	CFLAGS='-std=c11 $(C_ERRS) -g3 -v -O3 -funroll-loops -msse3' \
 	./test.sh
 #	objdump -S --disassemble ./bin/run_tests > ./bin/run_tests.asm
 	./bin/run_tests

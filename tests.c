@@ -18,7 +18,7 @@
 ///////////////////////////////////////////////
 // Add suites here...
 // Defined in the tests files above
-char *(*s[1])(void) = {r2_maths_test};
+const char *(*s[1])(void) = {r2_maths_test};
 ///////////////////////////////////////////////
 
 //
@@ -26,13 +26,13 @@ char *(*s[1])(void) = {r2_maths_test};
 //
 int r2_tests_run = 0;
 
-static char *all_tests()
+static const char *all_tests(void)
 {
     int c = sizeof s / sizeof(s)[0];
 
     for (int x = 0; x < c; x++)
     {
-        char *error = (*s[x])();
+        const char *error = (*s[x])();
         if (error != 0)
         {
             return error;
@@ -55,7 +55,7 @@ static void test_debug(const char *str)
 
 int main(int argc, char **argv)
 {
-    char *result = all_tests();
+    const char *result = all_tests();
     test_debug("\n");
     if (result != 0)
     {

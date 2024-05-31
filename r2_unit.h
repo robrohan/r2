@@ -13,20 +13,22 @@ LICENSE
 #ifndef R2_UNIT
 #define R2_UNIT
 
+// clang-format off
 #define r2_assert(message, test)                                                                                       \
     do                                                                                                                 \
     {                                                                                                                  \
         if (!(test))                                                                                                   \
-            return message;                                                                                            \
+            return (const char*)message;                                                                               \
     } while (0)
 #define r2_run_test(test)                                                                                              \
     do                                                                                                                 \
     {                                                                                                                  \
-        char *message = test();                                                                                        \
+        const char *message = test();                                                                                  \
         r2_tests_run++;                                                                                                \
         if (message)                                                                                                   \
             return message;                                                                                            \
     } while (0)
+// clang-format on
 
 extern int r2_tests_run;
 

@@ -1,6 +1,6 @@
 # ℝ² C99 Vector and Matrix Library
 
-Single-file public domain (or MIT licensed) libraries for C (C99)
+Single-file public domain (or MIT licensed) libraries for C (C11)
 
 ![C/C++ CI](https://github.com/robrohan/r2/workflows/C/C++%20CI/badge.svg?branch=master)
 
@@ -17,7 +17,7 @@ Current Libraries:
 
 1. Clone this library as a git submodule into a target project:
 
-```sh
+```bash
 $ cd my_project
 $ mkdir vendor
 $ cd vendor

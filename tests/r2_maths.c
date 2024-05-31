@@ -12,7 +12,7 @@
 #define BUILD_64 1
 #endif
 
-static char *test_vec2_add()
+static const char *test_vec2_add(void)
 {
     vec2 v1 = {.x = 10, .y = 10};
     vec2 v2 = {.x = 10.f, .y = 10.f};
@@ -23,7 +23,7 @@ static char *test_vec2_add()
     return 0;
 }
 
-static char *test_vec2_sub()
+static const char *test_vec2_sub(void)
 {
     vec2 v1 = {.x = 10.f, .y = 10.f};
     vec2 v2 = {.x = 10.f, .y = 10.f};
@@ -34,7 +34,7 @@ static char *test_vec2_sub()
     return 0;
 }
 
-static char *test_vec2_div()
+static const char *test_vec2_div(void)
 {
     vec2 v1 = {.x = 10.f, .y = 10.f};
     vec2 *v3 = malloc(sizeof(vec2));
@@ -44,7 +44,7 @@ static char *test_vec2_div()
     return 0;
 }
 
-static char *test_vec2_div_zero()
+static const char *test_vec2_div_zero(void)
 {
     vec2 v1 = {.x = 10.f, .y = 10.f};
     vec2 *v3 = calloc(1, sizeof(vec2));
@@ -54,7 +54,7 @@ static char *test_vec2_div_zero()
     return 0;
 }
 
-static char *test_vec2_div_vec2()
+static const char *test_vec2_div_vec2(void)
 {
     vec2 v1 = {.x = 10.f, .y = 10.f};
     vec2 v2 = {.x = 5.f, .y = 2.f};
@@ -65,7 +65,7 @@ static char *test_vec2_div_vec2()
     return 0;
 }
 
-static char *test_vec2_div_vec2_zero()
+static const char *test_vec2_div_vec2_zero(void)
 {
     vec2 v1 = {.x = 10.f, .y = 10.f};
     vec2 v2 = {.x = 0.f, .y = 0.f};
@@ -76,7 +76,7 @@ static char *test_vec2_div_vec2_zero()
     return 0;
 }
 
-static char *test_vec2_dot()
+static const char *test_vec2_dot(void)
 {
     vec2 v1 = {.x = 3.f, .y = 3.f};
     vec2 v2 = {.x = -3.f, .y = -3.f};
@@ -85,7 +85,7 @@ static char *test_vec2_dot()
     return 0;
 }
 
-static char *test_vec3_add()
+static const char *test_vec3_add(void)
 {
     vec3 v1 = {.x = 3.f, .y = 3.f, .z = 3.f};
     vec3 v2 = {.x = -3.f, .y = -3.f, .z = -3.f};
@@ -96,7 +96,7 @@ static char *test_vec3_add()
     return 0;
 }
 
-static char *test_vec3_mul_clobber()
+static const char *test_vec3_mul_clobber(void)
 {
     vec3 v1 = {.x = 3.f, .y = 3.f, .z = 3.f};
     vec3_mul(&v1, 3, &v1);
@@ -104,7 +104,7 @@ static char *test_vec3_mul_clobber()
     return 0;
 }
 
-static char *test_vec3_cross()
+static const char *test_vec3_cross(void)
 {
     vec3 v1 = {.x = 3.f, .y = 3.f, .z = 3.f};
     vec3 v2 = {.x = -30.f, .y = 30.f, .z = -30.f};
@@ -115,7 +115,7 @@ static char *test_vec3_cross()
     return 0;
 }
 
-static char *test_vec3_equal()
+static const char *test_vec3_equal(void)
 {
     vec3 v1 = {.x = 3.f, .y = 3.f, .z = 3.f};
     vec3 v2 = {.x = -30.f, .y = 30.f, .z = -30.f};
@@ -123,7 +123,7 @@ static char *test_vec3_equal()
     return 0;
 }
 
-static char *test_vec3_normalize()
+static const char *test_vec3_normalize(void)
 {
     vec3 v1 = {.x = 10.f, .y = 0.f, .z = 0.f};
     vec4 *out = malloc(sizeof(vec3));
@@ -134,7 +134,7 @@ static char *test_vec3_normalize()
 }
 
 // Magnitude, Length...
-static char *test_vec3_length()
+static const char *test_vec3_length(void)
 {
     vec3 v1 = {.x = 10.f, .y = 0.f, .z = 0.f};
     float l = vec3_length(&v1);
@@ -142,7 +142,7 @@ static char *test_vec3_length()
     return 0;
 }
 
-static char *test_vec4_div()
+static const char *test_vec4_div(void)
 {
     vec3 v1 = {.x = 10.f, .y = 10.f, .z = 12.f, .w = 12.f};
     vec4 *out = malloc(sizeof(vec4));
@@ -152,7 +152,7 @@ static char *test_vec4_div()
     return 0;
 }
 
-static char *test_vec4_normalize()
+static const char *test_vec4_normalize(void)
 {
     vec4 v1 = {.x = 1.f, .y = 2.f, .z = 3.f, .w = 4.f};
     vec4 *out = malloc(sizeof(vec4));
@@ -166,7 +166,7 @@ static char *test_vec4_normalize()
     return 0;
 }
 
-static char *test_vec4_cross()
+static const char *test_vec4_cross(void)
 {
     vec4 v1 = {.x = 1.f, .y = 1.f, .z = 0.f, .w = 0.f};
     vec4 v2 = {.x = 0.f, .y = 1.f, .z = 1.f, .w = 0.f};
@@ -181,7 +181,7 @@ static char *test_vec4_cross()
     return 0;
 }
 
-static char *test_quat_rot2q()
+static const char *test_quat_rot2q(void)
 {
     quat *out = malloc(sizeof(quat));
 
@@ -203,7 +203,7 @@ static char *test_quat_rot2q()
     return 0;
 }
 
-static char *test_quat_from_euler()
+static const char *test_quat_from_euler(void)
 {
     vec3 v1 = {.x = M_PI / 2., .y = 0.f, .z = 0.f};
     quat *out = malloc(sizeof(quat));
@@ -221,7 +221,7 @@ static char *test_quat_from_euler()
     return 0;
 }
 
-static char *test_quat_length()
+static const char *test_quat_length(void)
 {
     quat q1 = {.x = 0.000000, .y = 0.850904, .z = 0.000000, .w = 0.525322};
     float actual = quat_length(&q1);
@@ -229,7 +229,7 @@ static char *test_quat_length()
     return 0;
 }
 
-static char *test_quat_normalize()
+static const char *test_quat_normalize(void)
 {
     quat q1 = {.x = .5f, .y = .3f, .z = .2f, .w = .1f};
     quat *out = malloc(sizeof(quat));
@@ -240,7 +240,7 @@ static char *test_quat_normalize()
     return 0;
 }
 
-static char *test_quat_conj()
+static const char *test_quat_conj(void)
 {
     quat q1 = {.x = .5f, .y = .3f, .z = .2f, .w = .1f};
     quat out = {.x = 0., .y = 0., .z = 0., .w = 0.};
@@ -255,7 +255,7 @@ static char *test_quat_conj()
     return 0;
 }
 
-static char *test_quat_mul_quat()
+static const char *test_quat_mul_quat(void)
 {
     vec3 v1 = {.x = 0.f, .y = M_PI / 2, .z = 0.f};
     quat *q1 = malloc(sizeof(quat));
@@ -277,7 +277,7 @@ static char *test_quat_mul_quat()
     return 0;
 }
 
-static char *test_quat_mul_vec3_x_90z()
+static const char *test_quat_mul_vec3_x_90z(void)
 {
     // Rotate the X point 90 deg about the Z axis
     //  y
@@ -302,7 +302,7 @@ static char *test_quat_mul_vec3_x_90z()
     return 0;
 }
 
-static char *test_quat_mul_vec3_y_90x()
+static const char *test_quat_mul_vec3_y_90x(void)
 {
     // Rotate the Y point 90 deg about the X axis
     //   1
@@ -329,7 +329,7 @@ static char *test_quat_mul_vec3_y_90x()
     return 0;
 }
 
-static char *test_quat_mul_vec3_y_180x()
+static const char *test_quat_mul_vec3_y_180x(void)
 {
     vec3 v1 = {.x = M_PI, .y = 0.f, .z = 0.f};
     quat *q = malloc(sizeof(quat));
@@ -348,7 +348,7 @@ static char *test_quat_mul_vec3_y_180x()
     return 0;
 }
 
-static char *test_quat_mat4()
+static const char *test_quat_mat4(void)
 {
     quat *q = malloc(sizeof(quat));
     quat_identity(q);
@@ -370,7 +370,7 @@ static char *test_quat_mat4()
     return 0;
 }
 
-static char *test_mat4_size()
+static const char *test_mat4_size(void)
 {
     r2_assert("mat4 padding is wrong", sizeof(mat4) == 64);
     r2_assert("mat3 padding is wrong", sizeof(mat3) == 36);
@@ -379,7 +379,7 @@ static char *test_mat4_size()
     return 0;
 }
 
-static char *test_mat4_transform()
+static const char *test_mat4_transform(void)
 {
     mat4 *kern = malloc(sizeof(mat4));
     vec4 *p = malloc(sizeof(vec4));
@@ -402,7 +402,7 @@ static char *test_mat4_transform()
     return 0;
 }
 
-static char *test_mat4_lookat()
+static const char *test_mat4_lookat(void)
 {
     mat4 *view = calloc(sizeof(mat4), 1);
 
@@ -415,7 +415,7 @@ static char *test_mat4_lookat()
     return 0;
 }
 
-static char *test_mat4_identity()
+static const char *test_mat4_identity(void)
 {
     mat4 *out = calloc(sizeof(mat4), 1);
 
@@ -433,7 +433,7 @@ static char *test_mat4_identity()
     return 0;
 }
 
-static char *test_mat4_mul()
+static const char *test_mat4_mul(void)
 {
     mat4 *k1 = malloc(sizeof(mat4));
     mat4 *k2 = malloc(sizeof(mat4));
@@ -466,7 +466,7 @@ static char *test_mat4_mul()
     return 0;
 }
 
-static char *test_mat4_mul2()
+static const char *test_mat4_mul2(void)
 {
     mat4 *k1 = malloc(sizeof(mat4));
     mat4 *k2 = malloc(sizeof(mat4));
@@ -526,7 +526,7 @@ static char *test_mat4_mul2()
     return 0;
 }
 
-static char *test_mat4_mul_speed()
+static const char *test_mat4_mul_speed(void)
 {
     time_t ti;
     mat4 *k1 = malloc(sizeof(mat4));
@@ -566,7 +566,7 @@ static char *test_mat4_mul_speed()
     return 0;
 }
 
-static char *test_mat3_mul()
+static const char *test_mat3_mul(void)
 {
     mat3 *k1 = malloc(sizeof(mat3));
     mat3 *k2 = malloc(sizeof(mat3));
@@ -610,7 +610,7 @@ static char *test_mat3_mul()
     return 0;
 }
 
-static char *test_mat3_identity()
+static const char *test_mat3_identity(void)
 {
     mat3 *out = calloc(sizeof(mat3), 1);
     mat3_identity(out);
@@ -624,7 +624,7 @@ static char *test_mat3_identity()
     return 0;
 }
 
-static char *test_mat_mul()
+static const char *test_mat_mul(void)
 {
     mat3 *k1 = malloc(sizeof(mat3));
     mat3 *k2 = malloc(sizeof(mat3));
@@ -670,7 +670,7 @@ static char *test_mat_mul()
     return 0;
 }
 
-static char *r2_maths_test()
+static const char *r2_maths_test(void)
 {
     // v2
     r2_run_test(test_vec2_add);
