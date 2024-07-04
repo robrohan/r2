@@ -10,7 +10,7 @@
 #define BUILD_64 1
 #endif
 
-static char *test_create_string()
+static const char *test_create_string(void)
 {
     s8 str = S("This is a test");
     r2_assert("string length is wrong", (str.len == 14));
@@ -19,7 +19,7 @@ static char *test_create_string()
     return 0;
 }
 
-static char *test_create_string_blank()
+static const char *test_create_string_blank(void)
 {
     s8 str = S("");
     r2_assert("string length is wrong", (str.len == 0));
@@ -28,7 +28,7 @@ static char *test_create_string_blank()
     return 0;
 }
 
-static char *test_create_string_null()
+static const char *test_create_string_null(void)
 {
     char *str1 = (char *)malloc(sizeof(char *) * 10);
     s8 str = S(str1);
@@ -39,7 +39,7 @@ static char *test_create_string_null()
     return 0;
 }
 
-static char *test_create_utf8_string()
+static const char *test_create_utf8_string(void)
 {
     s8 str = S("👋👏他是我的😺");
     r2_assert("utf8 string length is wrong", (str.len == 7));
@@ -52,11 +52,11 @@ static char *test_create_utf8_string()
     return 0;
 }
 
-static char *test_print_utf8_string()
+static const char *test_print_utf8_string(void)
 {
     s8 str = S("👋😺👏🏳️‍🌈👨‍👩‍👦");
     setlocale(LC_ALL, "");
-    for (int i = 0; i < str.len; i++)
+    for (unsigned int i = 0; i < str.len; i++)
     {
         printf("%lc", (wint_t)str.rune[i]);
     }
@@ -67,7 +67,7 @@ static char *test_print_utf8_string()
 
 /// Joiner Tests ///
 
-static char *test_create_utf8_string_mod()
+static const char *test_create_utf8_string_mod(void)
 {
     /* An Emoji Modifier Sequence is created automatically when a
     modifier character is inserted after a supported base emoji
@@ -113,7 +113,7 @@ static char *test_create_utf8_string_mod()
     return 0;
 }
 
-static char *test_create_utf8_string_mod2()
+static const char *test_create_utf8_string_mod2(void)
 {
     /*
      Waving white flag has 2 code points!
@@ -137,7 +137,7 @@ static char *test_create_utf8_string_mod2()
 
 ////////////////////////////////////////////
 
-static char *r2_strings_test()
+static const char *r2_strings_test(void)
 {
     r2_run_test(test_create_string);
     r2_run_test(test_create_utf8_string);

@@ -13,16 +13,16 @@
 
 ///////////////////////////////////////////////
 // ADD TESTS HERE
-// This is crazy town :-o
 // List C includes here and conventionally call the
 // function <whatever>_test() in the all tests() method
 ///////////////////////////////////////////////
 #include "tests/r2_maths.c"
 #include "tests/r2_strings.c"
+#include "tests/r2_termui.c"
 ///////////////////////////////////////////////
 // Add suites here...
 // Defined in the tests files above
-char *(*s[2])(void) = {r2_maths_test, r2_strings_test};
+const char *(*s[3])(void) = {r2_termui_test, r2_maths_test, r2_strings_test};
 ///////////////////////////////////////////////
 
 //
@@ -66,6 +66,7 @@ int main(int argc, char **argv)
         char f[100];
         snprintf(f, 100, "FAIL: %s", result);
         test_error(f);
+        return 0;
     }
     else
     {

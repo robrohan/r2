@@ -56,7 +56,7 @@ extern "C"
         // The size of the string (in bytes)
         unsigned int size;
         // The length of the string (in runes)
-        unsigned int len;
+        unsigned long len;
     } s8;
 
     /**
@@ -65,7 +65,7 @@ extern "C"
      * 
      * Note: use free_S() when done with the string.
      */
-    s8 S(char *);
+    s8 S(const char *);
 
     /**
      * Frees an allocated S
@@ -87,11 +87,11 @@ extern "C"
     utf_t *utf[] = {
         // clang-format off
         /*             mask        lead        beg      end       bits */
-        [0] = &(utf_t){0b00111111, 0b10000000, 0,       0,        6},
-        [1] = &(utf_t){0b01111111, 0b00000000, 0000,    0177,     7},
-        [2] = &(utf_t){0b00011111, 0b11000000, 0200,    03777,    5},
-        [3] = &(utf_t){0b00001111, 0b11100000, 04000,   0177777,  4},
-        [4] = &(utf_t){0b00000111, 0b11110000, 0200000, 04177777, 3},
+        [0] = &(utf_t){(char)0x3F, (char)0x80, 0,       0,        6},
+        [1] = &(utf_t){(char)0x7F, (char)0x00, 0,       0x7F,     7},
+        [2] = &(utf_t){(char)0x1F, (char)0xC0, 0x80,    0x7FF,    5},
+        [3] = &(utf_t){(char)0x0F, (char)0xE0, 0x800,   0xFFFF,   4},
+        [4] = &(utf_t){(char)0x07, (char)0xF0, 0x10000, 0x10FFFF, 3},
               &(utf_t){0},
         // clang-format on
     };
@@ -138,7 +138,7 @@ extern "C"
      * Returns the new array length as it might be different from
      * the initial src_size.
      */
-    int str_to_utf8(const char *str, int src_size, rune *dest)
+    unsigned long str_to_utf8(const char *str, int src_size, rune *dest)
     {
         char tmp[5] = {0};
         int srci = 0;
@@ -175,13 +175,13 @@ extern "C"
         return len;
     }
 
-    s8 S(char *s)
+    s8 S(const char *s)
     {
         if (s == NULL)
-            return (s8){"", NULL, 0, 0};
+            return (s8){(char *)"", NULL, 0, 0};
 
         // string length in bytes
-        size_t l = strlen(s);
+        unsigned long l = strlen(s);
         // string as an array of integers
         rune *i = calloc(l, sizeof(rune));
         if (!i)
@@ -189,8 +189,8 @@ extern "C"
             printf("mem failure, exiting \n");
             exit(EXIT_FAILURE);
         }
-        size_t u8l = str_to_utf8(s, l, i);
-        return (s8){s, i, l, u8l};
+        unsigned long u8l = str_to_utf8(s, l, i);
+        return (s8){(char *)s, i, l, u8l};
     }
 
     void free_S(s8 s)
