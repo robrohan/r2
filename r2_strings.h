@@ -1,6 +1,13 @@
 /* r2_strings - v0.0 - public domain very basic, utf8 string library
     no warranty implied; use at your own risk
 
+    !!NOTE!! this code was **heavily** influenced by the code here:
+    https://rosettacode.org/wiki/UTF-8_encode_and_decode#C
+    It's hard to find a license on that site for the code, but the whole site
+    is release under the "GNU Free Documentation License 1.2" which is 
+    unclear if that applies to just learning from the code. For my part
+    the license below applies, but *use at your own risk*.
+
     Built in the style of: https://github.com/nothings/stb
 
     This is written with game development in mind.
