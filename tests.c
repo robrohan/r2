@@ -8,6 +8,9 @@
 #define R2_MATHS_IMPLEMENTATION
 #include "r2_maths.h"
 
+#define R2_STRINGS_IMPLEMENTATION
+#include "r2_strings.h"
+
 ///////////////////////////////////////////////
 // ADD TESTS HERE
 // This is crazy town :-o
@@ -15,10 +18,11 @@
 // function <whatever>_test() in the all tests() method
 ///////////////////////////////////////////////
 #include "tests/r2_maths.c"
+#include "tests/r2_strings.c"
 ///////////////////////////////////////////////
 // Add suites here...
 // Defined in the tests files above
-const char *(*s[1])(void) = {r2_maths_test};
+char *(*s[2])(void) = {r2_maths_test, r2_strings_test};
 ///////////////////////////////////////////////
 
 //
