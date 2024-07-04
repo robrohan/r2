@@ -2,7 +2,7 @@
 
 Single-file public domain headers (or MIT licensed) libraries for C (C99)
 
-![C/C++ CI](https://github.com/robrohan/r2/workflows/C/C++%20CI/badge.svg?branch=main)
+![C/C++ CI](https://github.com/robrohan/r2/workflows/C/C++%20CI/badge.svg)
 
 The main goal of these libraries is to be fast, and usable for games programming - with a 
 sprinkle of machine learning and general maths.
