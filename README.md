@@ -12,7 +12,7 @@ This library is in the style of: https://github.com/nothings/stb
 Current Libraries:
 
 - Vector, matrix and quaternion: [r2_maths.h](./r2_maths.h)
-- UTF-8 String library: [r2_string.h](./r2_string.h)
+- UTF-8 String library: [r2_strings.h](./r2_strings.h)
 - Simple ncurses like library thing: [r2_termui.h](./r2_termui.h)
 - Minimal unit testing: [r2_unit.h](./r2_unit.h)
 
@@ -20,6 +20,12 @@ Current Libraries:
 
 Copy any of the header files you want to use into your code base. See the header files for
 instructions (mostly you just include them).
+
+Example:
+
+```bash
+curl https://raw.githubusercontent.com/robrohan/r2/main/r2_termui.h > ./src/r2_termui.h
+```
 
 ## Using the Vector, Quaternion, and Matrix Functions
 
