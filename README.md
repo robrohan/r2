@@ -11,10 +11,10 @@ This library is in the style of: https://github.com/nothings/stb
 
 Current Libraries:
 
-- Vector, matrix and quaternion: [r2_maths.h](./src/r2_maths.h)
-- UTF-8 String library: [r2_string.h](./src/r2_string.h)
-- Simple ncurses like library thing: [r2_termui.h](./src/r2_termui.h)
-- Minimal unit testing: [r2_unit.h](./src/r2_unit.h)
+- Vector, matrix and quaternion: [r2_maths.h](./r2_maths.h)
+- UTF-8 String library: [r2_string.h](./r2_string.h)
+- Simple ncurses like library thing: [r2_termui.h](./r2_termui.h)
+- Minimal unit testing: [r2_unit.h](./r2_unit.h)
 
 ## Installation
 
