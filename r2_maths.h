@@ -7,7 +7,7 @@
 
     Do this:
        #define R2_MATHS_IMPLEMENTATION
-    before you include this file in *one* C or C++ file 
+    before you include this file in *one* C or C++ file
     to create the implementation.
 
     // i.e. it should look like this:
@@ -64,7 +64,8 @@ extern "C"
         float a_vec2[2];
         struct
         {
-            float x, y; // -- 8
+            float x;
+            float y; // -- 8
         };
     } vec2;
 
@@ -762,34 +763,34 @@ extern "C"
 
     void quat_mat4(const quat *q, mat4 *out)
     {
-         float a = q->w;
-         float b = q->x;
-         float c = q->y;
-         float d = q->z;
+        float a = q->w;
+        float b = q->x;
+        float c = q->y;
+        float d = q->z;
 
-         // a -b -c -d
-         // b  a -d  c
-         // c  d  a -b
-         // d -c  b  a
-         out->m00 = a;
-         out->m01 = b;
-         out->m02 = c;
-         out->m03 = d;
+        // a -b -c -d
+        // b  a -d  c
+        // c  d  a -b
+        // d -c  b  a
+        out->m00 = a;
+        out->m01 = b;
+        out->m02 = c;
+        out->m03 = d;
 
-	     out->m10 = -b;
-         out->m11 = a;
-         out->m12 = d;
-         out->m13 = -c;
+        out->m10 = -b;
+        out->m11 = a;
+        out->m12 = d;
+        out->m13 = -c;
 
-         out->m20 = -c;
-         out->m21 = -d;
-         out->m22 = a;
-         out->m23 = b;
+        out->m20 = -c;
+        out->m21 = -d;
+        out->m22 = a;
+        out->m23 = b;
 
-         out->m30 = -d;
-         out->m31 = c;
-         out->m32 = -b;
-         out->m33 = a;
+        out->m30 = -d;
+        out->m31 = c;
+        out->m32 = -b;
+        out->m33 = a;
     }
 
     ///////////////////////////////////////////////////////////////
@@ -907,7 +908,7 @@ extern "C"
     {
         /**
          *  [fur]             ∙  [pos]
-         *  
+         *
          *  ⌈ rx  ux  fx  0 ⌉    ⌈ 1  0  0  -px ⌉
          *  | ry  uy  fy  0 | ∙  | 0  1  0  -py |
          *  | rz  uz  fz  0 |    | 0  0  1  -pz |
@@ -1049,7 +1050,7 @@ extern "C"
     {
         if (c1 != r2)
         {
-            // Error ("column size of m1 must match row size of m2");
+            perror("column size of m1 must match row size of m2");
             return;
         }
 
