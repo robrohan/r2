@@ -39,7 +39,7 @@ extern "C"
 #define R2_WINDOW_NO_ERROR 1
 #include <stdio.h>
 
-    struct Window
+    struct Window;
 
     int open_window(int width, int height, const char *name);
 
