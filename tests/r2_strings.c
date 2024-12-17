@@ -30,7 +30,7 @@ static const char *test_create_string_blank(void)
 
 static const char *test_create_string_null(void)
 {
-    char *str1 = (char *)malloc(sizeof(char *) * 10);
+    const char *str1 = "";
     s8 str = S(str1);
 
     r2_assert("null string length is wrong", (str.len == 0));

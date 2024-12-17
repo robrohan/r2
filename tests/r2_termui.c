@@ -7,7 +7,7 @@ static const char *test_simple_test(void)
 {
     printf("\n\n\n\n\n\n\n\n\n\n\n\n\n\n");
     sleep(1);
-    // printf(ESC_ERASE_SCREEN);
+    printf(ESC_ERASE_SCREEN);
     printf(ESC_CURSOR_POS, 10, 10);
     unsigned int pixel_color = 34; // blue
     printf(ESC_SET_ATTRIBUTE_MODE_1, pixel_color);
@@ -16,6 +16,8 @@ static const char *test_simple_test(void)
     printf("\n\n\n");
     printf(ESC_SHOW_CURSOR);
     sleep(1);
+    printf(ESC_ERASE_SCREEN);
+    printf(ESC_CURSOR_POS, 0, 0);
     r2_assert("display things", 1 == 1);
     return 0;
 }
