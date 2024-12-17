@@ -17,7 +17,7 @@ run: test test_clang check
 test_wasm: clean
 	mkdir -p bin
 	CC=emcc OUT=./bin/run_tests.html \
-	CFLAGS='-std=c99 -Wall -Werror -Wno-unused -v -Os -funroll-loops -fopenmp' \
+	CFLAGS='-std=c99 -Wall -Werror -Wno-unused -v -Os' \
 	./test.sh
 
 test: clean

@@ -1,11 +1,11 @@
-# ℝ² Simple, C99 Vector, Matrix, UTF8 String, and Terminal Library
+# ℝ² Some Simple, C99 Vector, Matrix, UTF8 String, and Terminal Libraries
 
 Single-file public domain headers (or MIT licensed) libraries for C (C99)
 
 ![C/C++ CI](https://github.com/robrohan/r2/workflows/C/C++%20CI/badge.svg)
 
-The main goal of these libraries is to be fast, and usable for games programming - with a 
-sprinkle of machine learning and general maths.
+The main goal of these libraries is to be fast, and usable for games 
+programming - with a sprinkle of machine learning and general maths.
 
 This library is in the style of: https://github.com/nothings/stb
 
@@ -18,8 +18,8 @@ Current Libraries:
 
 ## Installation
 
-Copy any of the header files you want to use into your code base. See the header files for
-instructions (mostly you just include them).
+Copy any of the header files you want to use into your code base. See the 
+header files for instructions (mostly you just include them).
 
 Example:
 
@@ -39,7 +39,8 @@ $ git submodule add https://github.com/robrohan/r2.git
 ```
 
 2. Then the vendor directory to your compiler flags: `-I./vendor`
-3. In the _main_ part of your application (only once), import the library with the implementation flag:
+3. In the _main_ part of your application (only once), import the library with 
+the implementation flag:
 
 ```c
 ...
@@ -58,16 +59,15 @@ $ git submodule add https://github.com/robrohan/r2.git
 # include <string.h>
 ```
 
-5. Go for gold. See `tests/r2_maths.c` for some example usages, or look at `r2_maths.h` for reference.
+5. Go for gold. See `tests/r2_maths.c` for some example usages, or look at 
+`r2_maths.h` for reference.
 
 ```c
   vec3 v1 = {.x = 3.f, .y = 3.f, .z = 3.f};
   vec3 v2 = {.x = -30.f, .y = 30.f, .z = -30.f};
-  vec4 *out = calloc(sizeof(vec4), 1);
-  vec3_cross(&v1, &v2, out);
+  vec4 out = {0};
+  vec3_cross(&v1, &v2, &out);
 ```
-
-## Getting Started / Running
 
 ### Testing
 
@@ -75,25 +75,26 @@ $ git submodule add https://github.com/robrohan/r2.git
 make test
 ```
 
-_Note_: If you are on windows, currently, you'll have to write something like a `test.bat` yourself (or 
-some magic to import the files into Visual Studio). You can use `test.sh` as a template.
+_Note_: If you are on windows, currently, you'll have to write something like 
+a `test.bat` yourself (or some magic to import the files into Visual Studio). 
+You can use `test.sh` as a template.
 
 ### Testing in Web Assembly
 
 To compile and run the code in web assembly, first make sure you have 
-[emscripten setup](https://emscripten.org/docs/getting_started/downloads.html), working, and the `emcc` 
-environment variables setup:
+[emscripten setup](https://emscripten.org/docs/getting_started/downloads.html), 
+working, and the `emcc` environment variables setup:
 
 ```sh
 source ~/Projects/spikes/emsdk/emsdk_env.sh
 ```
 
-Then just run `make test_wasm` or if you wish run `test.sh` passing in the `emcc` compiler and output 
-to `html`:
+Then just run `make test_wasm` passing in the `emcc` compiler and output to `html`:
 
-```sh
-CC=emcc OUT=run_tests.html ./test.sh
+```bash
+make test_wasm
 ```
 
-You can then use run some sort of http server within the main directory 
-([busboy](https://github.com/robrohan/busboy) for example), and then load the HTML page in your browser.
+You can then use run some sort of http server against the `bin` directory. For
+example ([busboy](https://github.com/robrohan/busboy)), or python. Then load 
+the HTML page in a browser.
