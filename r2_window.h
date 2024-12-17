@@ -39,6 +39,8 @@ extern "C"
 #define R2_WINDOW_NO_ERROR 1
 #include <stdio.h>
 
+    struct Window
+
     int open_window(int width, int height, const char *name);
 
 /* == Unix (X11) =============================== */
@@ -63,6 +65,9 @@ extern "C"
 #if defined(_WIN32) || defined(__CYGWIN__)
 #endif
 /* == Windows ================================== */
+
+
+
 
 /* headers */
 
@@ -166,22 +171,22 @@ extern "C"
         XIfEvent(dpy, &event, wait_for_notify, (char *)win);
         XSelectInput(dpy, win, KeyPressMask | StructureNotifyMask | ExposureMask);
 
-        while (1)
-        {
-            if (XPending(dpy) > 0)
-            {
-                XNextEvent(dpy, &xev);
-                switch (xev.type)
-                {
-                case KeyPress: {
-                    XLookupString((XKeyEvent *)&xev, buf, 80, &keysym, &status);
-                    // switch(keysym) {
-                    printf("%ld %s\n", keysym, buf);
-                    // }
-                }
-                }
-            }
-        }
+        // while (1)
+        // {
+        //     if (XPending(dpy) > 0)
+        //     {
+        //         XNextEvent(dpy, &xev);
+        //         switch (xev.type)
+        //         {
+        //         case KeyPress: {
+        //             XLookupString((XKeyEvent *)&xev, buf, 80, &keysym, &status);
+        //             // switch(keysym) {
+        //             printf("%ld %s\n", keysym, buf);
+        //             // }
+        //         }
+        //         }
+        //     }
+        // }
 
         return R2_WINDOW_NO_ERROR;
     }
