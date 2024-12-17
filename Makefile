@@ -28,10 +28,13 @@ test: clean
 #	objdump -S --disassemble ./bin/run_tests > ./bin/run_tests.asm
 	./bin/run_tests
 
+
 test_clang: clean
+#	sudo apt-get install libomp-dev
 	mkdir -p bin
 	CC=clang OUT=./bin/run_tests \
-	CFLAGS='-std=c99 $(C_ERRS) -g3 -v -O3 -funroll-loops -msse3' \
+	CFLAGS='-std=c99 $(C_ERRS) -g3 -v -O3 -funroll-loops -msse3 -fopenmp' \
+	LIBS='-lm -lomp' \
 	./test.sh
 #	objdump -S --disassemble ./bin/run_tests > ./bin/run_tests.asm
 	./bin/run_tests

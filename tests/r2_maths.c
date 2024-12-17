@@ -616,14 +616,10 @@ static const char *test_mat_mul(void)
     // printf("Matrix Generic Mul 3x3 run...\n");
     mat_mul(k1.a_mat3, k2.a_mat3, 3, 3, 3, 3, out.a_mat3);
 
-    // leak
-    char *m = mat3_tos(&out);
-    printf("%s", m);
-    free(m);
+    // char *m = mat3_tos(&out);
+    // printf("%s", m);
+    // free(m);
 
-    // -1.836970198, 1, 300,
-    // -2, -3.67394039, 300,
-    // 0, 0, 1
     // clang-format off
     r2_assert("mat3 mul is wrong", 
         r2_equals(out.m00, -1.836970) && r2_equals(out.m10, 1.)        && r2_equals(out.m20, 300.) && 
