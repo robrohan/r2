@@ -1,3 +1,4 @@
+#define R2_MATHS_IMPLEMENTATION
 #include "../r2_maths.h"
 
 #include <limits.h>
