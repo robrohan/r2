@@ -189,6 +189,7 @@ extern "C"
     static void vec4_normalize(const vec4 *v, vec4 *out);
     static float vec4_dist(const vec4 *v1, const vec4 *v2);
     static float vec4_dist_sqrd(const vec4 *v1, const vec4 *v2);
+    static float vec4_length_sqrd(const vec4 *v);
     static float vec4_length(const vec4 *v);
     static float vec4_dot(const vec4 *v1, const vec4 *v2);
     static void vec4_sqrt(const vec4 *v, vec4 *out);
@@ -344,7 +345,9 @@ extern "C"
 
     static float vec2_dist_sqrd(const vec2 *v1, const vec2 *v2)
     {
-        return (v1->x - v2->x) * (v1->x - v2->x) + (v1->y - v2->y) * (v1->y - v2->y);
+        vec2 d = {0};
+        vec2_sub(v1, v2, &d);
+        return vec2_length_sqrd(&d);
     }
 
     static float vec2_dist(const vec2 *v1, const vec2 *v2)
@@ -466,8 +469,9 @@ extern "C"
 
     static float vec3_dist_sqrd(const vec3 *v1, const vec3 *v2)
     {
-        return (v1->x - v2->x) * (v1->x - v2->x) + (v1->y - v2->y) * (v1->y - v2->y) +
-               (v1->z - v2->z) * (v1->z - v2->z);
+        vec3 d = {0};
+        vec3_sub(v1, v2, &d);
+        return vec3_length_sqrd(&d);
     }
 
     static float vec3_dist(const vec3 *v1, const vec3 *v2)
@@ -492,7 +496,7 @@ extern "C"
         out->x = 0.;
         out->y = 0.;
         out->z = 0.;
-        out->w = 1.;
+        out->w = 0.;
     }
 
     static bool vec4_equals(const vec4 *v1, const vec4 *v2)
@@ -578,15 +582,21 @@ extern "C"
         return (v1->x * v2->x) + (v1->y * v2->y) + (v1->z * v2->z) + (v1->w * v2->w);
     }
 
+    static float vec4_length_sqrd(const vec4 *v)
+    {
+        return v->x * v->x + v->y * v->y + v->z * v->z + v->w * v->w;
+    }
+
     static float vec4_length(const vec4 *v)
     {
-        return sqrtf(v->x * v->x + v->y * v->y + v->z * v->z + v->w * v->w);
+        return sqrtf(vec4_length_sqrd(v));
     }
 
     static float vec4_dist_sqrd(const vec4 *v1, const vec4 *v2)
     {
-        return (v1->x - v2->x) * (v1->x - v2->x) + (v1->y - v2->y) * (v1->y - v2->y) +
-               (v1->z - v2->z) * (v1->z - v2->z) + (v1->w - v2->w) * (v1->w - v2->w);
+        vec4 d = {0};
+        vec4_sub(v1, v2, &d);
+        return vec4_length_sqrd(&d);
     }
 
     static float vec4_dist(const vec4 *v1, const vec4 *v2)

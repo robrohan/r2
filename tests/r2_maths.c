@@ -147,10 +147,18 @@ static const char *test_vec4_normalize(void)
     vec4_normalize(&v1, &out);
     // Octave: 0.18257   0.36515   0.54772   0.73030
     // clang-format off
-    r2_assert("vec4 normalize is wrong", 
+    r2_assert("vec4 normalize is wrong",
         r2_equals(out.x, .182574) && r2_equals(out.y, 0.365148) &&
         r2_equals(out.z, 0.547723) && r2_equals(out.w, 0.730297));
     // clang-format on
+
+    // Normalizing a zero vector should give (0,0,0,0), not (0,0,0,1)
+    vec4 zero = {.x = 0.f, .y = 0.f, .z = 0.f, .w = 0.f};
+    vec4 zero_out = {0};
+    vec4_normalize(&zero, &zero_out);
+    r2_assert("vec4 normalize zero is wrong",
+              r2_equals(zero_out.x, 0.f) && r2_equals(zero_out.y, 0.f) &&
+              r2_equals(zero_out.z, 0.f) && r2_equals(zero_out.w, 0.f));
     return 0;
 }
 
