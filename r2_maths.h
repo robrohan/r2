@@ -39,12 +39,6 @@ extern "C"
 #include <stdio.h>
 #include <stdlib.h>
 
-// If on, this uses custom mat3 and mat4 multiplication
-// code instead of the generic mat_mul function. In testing
-// this makes the code run consistently fast, whereas without
-// it you can get a sometimes faster multiply, but the speed
-// is inconsistent.
-#define R2_MAT_MUL_LUDICROUS_SPEED 1
 
 #ifndef EPSILON
 #define EPSILON 0.000000954
@@ -142,9 +136,7 @@ extern "C"
      *
      * You probably want to use mat4_mul or mat3_mul for 4x4 and 3x3
      *
-     * (NOTE: This function calls calloc)
-     *
-     * `out` must be the right size of the answer and must be initialized to 0
+     * `out` must be the right size of the answer
      *
      * r1,c1 = rows and column size of m1
      * r2,c2 = rows and column size of m2
@@ -152,14 +144,7 @@ extern "C"
     static void mat_mul(const float *m1, const float *m2, unsigned char r1, unsigned char c1, unsigned char r2,
                  unsigned char c2, float *out);
 
-    /**
-     * Multiply two 4x4 matrix output to out
-     * if R2_MAT_MUL_LUDICROUS_SPEED is on (the default) this will
-     * do a specific 4x4 multiply function.
-     *
-     * If R2_MAT_MUL_LUDICROUS_SPEED is off it will call the generic
-     * multiply and use calloc.
-     */
+    /** Multiply two 4x4 matrices, result into out */
     static void mat4_mul(const mat4 *m1, const mat4 *m2, mat4 *out);
     static void mat4_transform(const vec4 *p, const mat4 *mat, vec4 *out);
     /**
@@ -178,11 +163,7 @@ extern "C"
     static void mat4_transpose(const mat4 *m1, mat4 *m2);
     static char *mat4_tos(const mat4 *m);
 
-    /**
-     * Multiply two 3x3 matrix output to out
-     * if R2_MAT_MUL_LUDICROUS_SPEED is off, this will call
-     * calloc (default is on).
-     */
+    /** Multiply two 3x3 matrices, result into out */
     static void mat3_mul(const mat3 *m1, const mat3 *m2, mat3 *out);
     static void mat3_identity(mat3 *m);
     static char *mat3_tos(const mat3 *m);
@@ -271,7 +252,7 @@ extern "C"
 
     static bool r2_equals(float a, float b)
     {
-        return fabs(a - b) < EPSILON;
+        return fabsf(a - b) < EPSILON;
     }
 
     static float __g_pi_deg = M_PI / 180.f;
@@ -339,8 +320,8 @@ extern "C"
 
     static void vec2_pow(const vec2 *v, float exp, vec2 *out)
     {
-        out->x = pow(v->x, exp);
-        out->y = pow(v->y, exp);
+        out->x = powf(v->x, exp);
+        out->y = powf(v->y, exp);
     }
 
     static float vec2_dot(const vec2 *v1, const vec2 *v2)
@@ -358,7 +339,7 @@ extern "C"
 
     static float vec2_length(const vec2 *v)
     {
-        return sqrt(vec2_length_sqrd(v));
+        return sqrtf(vec2_length_sqrd(v));
     }
 
     static float vec2_dist_sqrd(const vec2 *v1, const vec2 *v2)
@@ -368,7 +349,7 @@ extern "C"
 
     static float vec2_dist(const vec2 *v1, const vec2 *v2)
     {
-        return sqrt(vec2_dist_sqrd(v1, v2));
+        return sqrtf(vec2_dist_sqrd(v1, v2));
     }
 
     static void vec2_normalize(const vec2 *v, vec2 *out)
@@ -455,9 +436,9 @@ extern "C"
 
     static void vec3_pow(const vec3 *v, float exp, vec3 *out)
     {
-        out->x = pow(v->x, exp);
-        out->y = pow(v->y, exp);
-        out->z = pow(v->z, exp);
+        out->x = powf(v->x, exp);
+        out->y = powf(v->y, exp);
+        out->z = powf(v->z, exp);
     }
 
     static float vec3_dot(const vec3 *v1, const vec3 *v2)
@@ -480,7 +461,7 @@ extern "C"
 
     static float vec3_length(const vec3 *v)
     {
-        return sqrt(vec3_length_sqrd(v));
+        return sqrtf(vec3_length_sqrd(v));
     }
 
     static float vec3_dist_sqrd(const vec3 *v1, const vec3 *v2)
@@ -491,7 +472,7 @@ extern "C"
 
     static float vec3_dist(const vec3 *v1, const vec3 *v2)
     {
-        return sqrt(vec3_dist_sqrd(v1, v2));
+        return sqrtf(vec3_dist_sqrd(v1, v2));
     }
 
     static void vec3_normalize(const vec3 *v, vec3 *out)
@@ -570,18 +551,18 @@ extern "C"
 
     static void vec4_pow(const vec4 *v, float exp, vec4 *out)
     {
-        out->x = pow(v->x, exp);
-        out->y = pow(v->y, exp);
-        out->z = pow(v->z, exp);
-        out->w = pow(v->w, exp);
+        out->x = powf(v->x, exp);
+        out->y = powf(v->y, exp);
+        out->z = powf(v->z, exp);
+        out->w = powf(v->w, exp);
     }
 
     static void vec4_abs(const vec4 *v, vec4 *out)
     {
-        out->x = fabs(v->x);
-        out->y = fabs(v->y);
-        out->z = fabs(v->z);
-        out->w = fabs(v->w);
+        out->x = fabsf(v->x);
+        out->y = fabsf(v->y);
+        out->z = fabsf(v->z);
+        out->w = fabsf(v->w);
     }
 
     static void vec4_sqrt(const vec4 *v, vec4 *out)
@@ -605,12 +586,12 @@ extern "C"
     static float vec4_dist_sqrd(const vec4 *v1, const vec4 *v2)
     {
         return (v1->x - v2->x) * (v1->x - v2->x) + (v1->y - v2->y) * (v1->y - v2->y) +
-               (v1->y - v2->z) * (v1->y - v2->z) + (v1->y - v2->w) * (v1->y - v2->w);
+               (v1->z - v2->z) * (v1->z - v2->z) + (v1->w - v2->w) * (v1->w - v2->w);
     }
 
     static float vec4_dist(const vec4 *v1, const vec4 *v2)
     {
-        return sqrt(vec4_dist_sqrd(v1, v2));
+        return sqrtf(vec4_dist_sqrd(v1, v2));
     }
 
     static void vec4_normalize(const vec4 *v, vec4 *out)

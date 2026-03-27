@@ -166,6 +166,48 @@ static const char *test_vec4_cross(void)
     return 0;
 }
 
+static const char *test_vec4_dist_sqrd(void)
+{
+    // Identical points: distance should be zero
+    vec4 v1 = {.x = 1.f, .y = 2.f, .z = 3.f, .w = 4.f};
+    vec4 v2 = {.x = 1.f, .y = 2.f, .z = 3.f, .w = 4.f};
+    r2_assert("vec4 dist sqrd same point is wrong", r2_equals(vec4_dist_sqrd(&v1, &v2), 0.f));
+
+    // Axis-aligned: only x differs by 3, so dist_sqrd = 9
+    vec4 v3 = {.x = 0.f, .y = 0.f, .z = 0.f, .w = 0.f};
+    vec4 v4 = {.x = 3.f, .y = 0.f, .z = 0.f, .w = 0.f};
+    r2_assert("vec4 dist sqrd x-axis is wrong", r2_equals(vec4_dist_sqrd(&v3, &v4), 9.f));
+
+    // Only z differs — this is what the old bug broke (used v1->y instead of v1->z)
+    vec4 v5 = {.x = 0.f, .y = 0.f, .z = 0.f, .w = 0.f};
+    vec4 v6 = {.x = 0.f, .y = 0.f, .z = 4.f, .w = 0.f};
+    r2_assert("vec4 dist sqrd z-axis is wrong", r2_equals(vec4_dist_sqrd(&v5, &v6), 16.f));
+
+    // Only w differs — same bug would have masked this too
+    vec4 v7 = {.x = 0.f, .y = 0.f, .z = 0.f, .w = 0.f};
+    vec4 v8 = {.x = 0.f, .y = 0.f, .z = 0.f, .w = 5.f};
+    r2_assert("vec4 dist sqrd w-axis is wrong", r2_equals(vec4_dist_sqrd(&v7, &v8), 25.f));
+
+    // All components: 1²+2²+3²+4² = 1+4+9+16 = 30
+    vec4 v9  = {.x = 0.f, .y = 0.f, .z = 0.f, .w = 0.f};
+    vec4 v10 = {.x = 1.f, .y = 2.f, .z = 3.f, .w = 4.f};
+    r2_assert("vec4 dist sqrd all components is wrong", r2_equals(vec4_dist_sqrd(&v9, &v10), 30.f));
+    return 0;
+}
+
+static const char *test_vec4_dist(void)
+{
+    // Distance from origin to (3,4,0,0) = 5 (3-4-5 triangle)
+    vec4 origin = {.x = 0.f, .y = 0.f, .z = 0.f, .w = 0.f};
+    vec4 v      = {.x = 3.f, .y = 4.f, .z = 0.f, .w = 0.f};
+    r2_assert("vec4 dist is wrong", r2_equals(vec4_dist(&origin, &v), 5.f));
+
+    // Distance from point to itself is zero
+    vec4 p = {.x = 7.f, .y = 3.f, .z = 1.f, .w = 2.f};
+    r2_assert("vec4 dist same point is wrong", r2_equals(vec4_dist(&p, &p), 0.f));
+    return 0;
+}
+
 static const char *test_quat_rot2q(void)
 {
     quat out = {0};
@@ -799,6 +841,8 @@ static const char *r2_maths_test(void)
     r2_run_test(test_vec4_div);
     r2_run_test(test_vec4_normalize);
     r2_run_test(test_vec4_cross);
+    r2_run_test(test_vec4_dist_sqrd);
+    r2_run_test(test_vec4_dist);
 
     // quat
     r2_run_test(test_quat_rot2q);
