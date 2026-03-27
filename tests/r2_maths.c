@@ -9,9 +9,6 @@
 
 #include "../r2_unit.h"
 
-#if (__WORDSIZE == 64)
-#define BUILD_64 1
-#endif
 
 static const char *test_vec2_add(void)
 {
@@ -454,43 +451,18 @@ static const char *test_mat4_mul2(void)
 
     mat4_mul(&k1, &k2, &out);
 
+    // Expected values are the exact mathematical results for these inputs.
+    // A slightly wider epsilon is used here because accumulated float rounding
+    // differs by a few ULPs across platforms (x86+SSE3, ARM64, wasm, etc).
     // clang-format off
-    // printf("%f %f %f %f\n%f %f %f %f\n%f %f %f %f\n%f %f %f %f\n",
-    //    out->m00, out->m10, out->m20, out->m30,
-    //    out->m01, out->m11, out->m21, out->m31,
-    //    out->m02, out->m12, out->m22, out->m32,
-    //    out->m03, out->m13, out->m23, out->m33);
+#define M2_EQ(a, b) (fabsf((a) - (b)) < 0.0001f)
+    r2_assert("mat4 mul 2 is wrong",
+        M2_EQ(out.m00, 4.1984f)  && M2_EQ(out.m10, 44.169f)  && M2_EQ(out.m20, 28.1204f) && M2_EQ(out.m30, 8.986f)
+     && M2_EQ(out.m01, 5.51864f) && M2_EQ(out.m11, 20.564f)  && M2_EQ(out.m21, 10.13f)   && M2_EQ(out.m31, 3.21f)
+     && M2_EQ(out.m02, 1.872f)   && M2_EQ(out.m12, 11.15f)   && M2_EQ(out.m22, 7.86f)    && M2_EQ(out.m32, 3.5f)
+     && M2_EQ(out.m03, 4.2408f)  && M2_EQ(out.m13, 1.53f)    && M2_EQ(out.m23, 3.76f)    && M2_EQ(out.m33, 3.1f));
+#undef M2_EQ
     // clang-format on
-
-#ifdef BUILD_64
-    // clang-format off
-    r2_assert("mat4 mul 2 is wrong",
-        r2_equals(out.m00, 4.198400) && r2_equals(out.m10, 44.168995) && r2_equals(out.m20, 28.120401) && r2_equals(out.m30, 8.986000) 
-     && r2_equals(out.m01, 5.518640) && r2_equals(out.m11, 20.563999) && r2_equals(out.m21, 10.129999) && r2_equals(out.m31, 3.21000) 
-     && r2_equals(out.m02, 1.87200)  && r2_equals(out.m12, 11.150001) && r2_equals(out.m22, 7.86000)   && r2_equals(out.m32, 3.500000) 
-     && r2_equals(out.m03, 4.240800) && r2_equals(out.m13, 1.530000)  && r2_equals(out.m23, 3.76000)   &&  r2_equals(out.m33, 3.10000));
-    // clang-format on
-#elif EMSCRIPTEN
-    // 4.198400 44.168995 28.120401 8.986000
-    // 5.518640 20.563999 10.129999 3.210000
-    // 1.872000 11.150001 7.860000 3.500000
-    // 4.240800 1.530000 3.760000 3.100000
-    r2_assert("mat4 mul 2 is wrong",
-              r2_equals(out.m00, 4.198400) && r2_equals(out.m10, 44.168995) && r2_equals(out.m20, 28.120401) &&
-                  r2_equals(out.m30, 8.986000) && r2_equals(out.m01, 5.518640) && r2_equals(out.m11, 20.563999) &&
-                  r2_equals(out.m21, 10.129999) && r2_equals(out.m31, 3.21000) && r2_equals(out.m02, 1.87200) &&
-                  r2_equals(out.m12, 11.150001) && r2_equals(out.m22, 7.86000) && r2_equals(out.m32, 3.500000) &&
-                  r2_equals(out.m03, 4.240800) && r2_equals(out.m13, 1.530000) && r2_equals(out.m23, 3.76000) &&
-                  r2_equals(out.m33, 3.10000));
-#else
-    r2_assert("mat4 mul 2 is wrong",
-              r2_equals(out.m00, 4.198400) && r2_equals(out.m10, 44.168999) && r2_equals(out.m20, 28.120399) &&
-                  r2_equals(out.m30, 8.986000) && r2_equals(out.m01, 5.518640) && r2_equals(out.m11, 20.563999) &&
-                  r2_equals(out.m21, 10.13000) && r2_equals(out.m31, 3.21000) && r2_equals(out.m02, 1.87200) &&
-                  r2_equals(out.m12, 11.150001) && r2_equals(out.m22, 7.86000) && r2_equals(out.m32, 3.500000) &&
-                  r2_equals(out.m03, 4.240800) && r2_equals(out.m13, 1.530000) && r2_equals(out.m23, 3.76000) &&
-                  r2_equals(out.m33, 3.10000));
-#endif
     return 0;
 }
 
