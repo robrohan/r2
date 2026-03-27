@@ -1,5 +1,7 @@
 .PHONY: all test clean build
 
+ARCH    := $(shell uname -m)
+OS      := $(shell uname -s)
 
 C_ERRS += -Wall -Wextra -Wpedantic \
 		-Wformat=2 -Wno-unused-parameter -Wshadow \
@@ -7,12 +9,24 @@ C_ERRS += -Wall -Wextra -Wpedantic \
 		-Wredundant-decls -Wnested-externs -Wmissing-include-dirs \
 		-Wno-unused -fms-extensions
 
+# x86-only flags
+ifeq ($(ARCH),x86_64)
+	SIMD_FLAGS  := -msse3
+	OMP_FLAGS   := -fopenmp
+	OMP_LIBS    :=
+endif
 
+# On macOS ARM64 (Apple Silicon), skip SSE3 and OpenMP
+ifeq ($(OS)_$(ARCH),Darwin_arm64)
+	SIMD_FLAGS  :=
+	OMP_FLAGS   :=
+	OMP_LIBS    :=
+endif
 
 run: test test_clang check
 
 # Should run something like
-# `source ~/Projects/spikes/emsdk/emsdk_env.sh` 
+# `source ~/Projects/spikes/emsdk/emsdk_env.sh`
 # first to setup environment
 test_wasm: clean
 	mkdir -p bin
@@ -23,7 +37,7 @@ test_wasm: clean
 test: clean
 	mkdir -p bin
 	CC=gcc OUT=./bin/run_tests \
-	CFLAGS='-std=c99 $(C_ERRS) -g3 -v -O3 -funroll-loops -msse3 -fopenmp' \
+	CFLAGS='-std=c99 $(C_ERRS) -g3 -v -O3 -funroll-loops $(SIMD_FLAGS) $(OMP_FLAGS)' \
 	./test.sh
 #	objdump -S --disassemble ./bin/run_tests > ./bin/run_tests.asm
 	./bin/run_tests
@@ -33,8 +47,8 @@ test_clang: clean
 #	sudo apt-get install libomp-dev
 	mkdir -p bin
 	CC=clang OUT=./bin/run_tests \
-	CFLAGS='-std=c99 $(C_ERRS) -g3 -v -O3 -funroll-loops -msse3 -fopenmp' \
-	LIBS='-lm -lomp' \
+	CFLAGS='-std=c99 $(C_ERRS) -g3 -v -O3 -funroll-loops $(SIMD_FLAGS) $(OMP_FLAGS)' \
+	LIBS='-lm $(OMP_LIBS)' \
 	./test.sh
 #	objdump -S --disassemble ./bin/run_tests > ./bin/run_tests.asm
 	./bin/run_tests
