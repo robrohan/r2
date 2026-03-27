@@ -826,6 +826,176 @@ static const char *test_mat_mul_non_square(void)
     return 0;
 }
 
+static const char *test_vecn_add(void)
+{
+    float a[4] = {1.f, 2.f, 3.f, 4.f};
+    float b[4] = {10.f, 20.f, 30.f, 40.f};
+    float out[4] = {0};
+    vecn_add(a, b, 4, out);
+    r2_assert("vecn_add is wrong",
+        r2_equals(out[0], 11.f) && r2_equals(out[1], 22.f) &&
+        r2_equals(out[2], 33.f) && r2_equals(out[3], 44.f));
+    return 0;
+}
+
+static const char *test_vecn_sub(void)
+{
+    float a[3] = {5.f, 3.f, 1.f};
+    float b[3] = {1.f, 2.f, 3.f};
+    float out[3] = {0};
+    vecn_sub(a, b, 3, out);
+    r2_assert("vecn_sub is wrong",
+        r2_equals(out[0], 4.f) && r2_equals(out[1], 1.f) && r2_equals(out[2], -2.f));
+    return 0;
+}
+
+static const char *test_vecn_mul(void)
+{
+    float a[3] = {1.f, 2.f, 3.f};
+    float out[3] = {0};
+    vecn_mul(a, 3.f, 3, out);
+    r2_assert("vecn_mul is wrong",
+        r2_equals(out[0], 3.f) && r2_equals(out[1], 6.f) && r2_equals(out[2], 9.f));
+    return 0;
+}
+
+static const char *test_vecn_mul_vec(void)
+{
+    float a[3] = {2.f, 3.f, 4.f};
+    float b[3] = {5.f, 6.f, 7.f};
+    float out[3] = {0};
+    vecn_mul_vec(a, b, 3, out);
+    r2_assert("vecn_mul_vec is wrong",
+        r2_equals(out[0], 10.f) && r2_equals(out[1], 18.f) && r2_equals(out[2], 28.f));
+    return 0;
+}
+
+static const char *test_vecn_div(void)
+{
+    float a[4] = {4.f, 8.f, 12.f, 16.f};
+    float out[4] = {0};
+    vecn_div(a, 4.f, 4, out);
+    r2_assert("vecn_div is wrong",
+        r2_equals(out[0], 1.f) && r2_equals(out[1], 2.f) &&
+        r2_equals(out[2], 3.f) && r2_equals(out[3], 4.f));
+    return 0;
+}
+
+static const char *test_vecn_div_zero(void)
+{
+    float a[2] = {6.f, 8.f};
+    float out[2] = {0};
+    vecn_div(a, 0.f, 2, out);
+    r2_assert("vecn_div zero is wrong",
+        r2_equals(out[0], 6.f) && r2_equals(out[1], 8.f));
+    return 0;
+}
+
+static const char *test_vecn_div_vec(void)
+{
+    float a[3] = {6.f, 9.f, 12.f};
+    float b[3] = {2.f, 3.f, 4.f};
+    float out[3] = {0};
+    vecn_div_vec(a, b, 3, out);
+    r2_assert("vecn_div_vec is wrong",
+        r2_equals(out[0], 3.f) && r2_equals(out[1], 3.f) && r2_equals(out[2], 3.f));
+    return 0;
+}
+
+static const char *test_vecn_dot(void)
+{
+    float a[3] = {1.f, 2.f, 3.f};
+    float b[3] = {4.f, 5.f, 6.f};
+    // 1*4 + 2*5 + 3*6 = 4+10+18 = 32
+    r2_assert("vecn_dot is wrong", r2_equals(vecn_dot(a, b, 3), 32.f));
+    return 0;
+}
+
+static const char *test_vecn_length(void)
+{
+    // 3-4-5 right triangle in first two components
+    float a[4] = {3.f, 4.f, 0.f, 0.f};
+    r2_assert("vecn_length 2d is wrong", r2_equals(vecn_length(a, 2), 5.f));
+    r2_assert("vecn_length 4d is wrong", r2_equals(vecn_length(a, 4), 5.f));
+    return 0;
+}
+
+static const char *test_vecn_dist(void)
+{
+    float a[3] = {0.f, 0.f, 0.f};
+    float b[3] = {0.f, 3.f, 4.f};
+    // sqrt(0+9+16) = 5
+    r2_assert("vecn_dist is wrong", r2_equals(vecn_dist(a, b, 3), 5.f));
+    return 0;
+}
+
+static const char *test_vecn_normalize(void)
+{
+    float a[3] = {10.f, 0.f, 0.f};
+    float out[3] = {0};
+    vecn_normalize(a, 3, out);
+    r2_assert("vecn_normalize is wrong",
+        r2_equals(out[0], 1.f) && r2_equals(out[1], 0.f) && r2_equals(out[2], 0.f));
+    return 0;
+}
+
+static const char *test_vecn_normalize_zero(void)
+{
+    float a[4] = {0.f, 0.f, 0.f, 0.f};
+    float out[4] = {9.f, 9.f, 9.f, 9.f};  // pre-fill to check all are zeroed
+    vecn_normalize(a, 4, out);
+    r2_assert("vecn_normalize zero is wrong",
+        r2_equals(out[0], 0.f) && r2_equals(out[1], 0.f) &&
+        r2_equals(out[2], 0.f) && r2_equals(out[3], 0.f));
+    return 0;
+}
+
+static const char *test_vecn_abs(void)
+{
+    float a[4] = {-1.f, 2.f, -3.f, 4.f};
+    float out[4] = {0};
+    vecn_abs(a, 4, out);
+    r2_assert("vecn_abs is wrong",
+        r2_equals(out[0], 1.f) && r2_equals(out[1], 2.f) &&
+        r2_equals(out[2], 3.f) && r2_equals(out[3], 4.f));
+    return 0;
+}
+
+static const char *test_vecn_pow(void)
+{
+    float a[3] = {2.f, 3.f, 4.f};
+    float out[3] = {0};
+    vecn_pow(a, 2.f, 3, out);
+    r2_assert("vecn_pow is wrong",
+        r2_equals(out[0], 4.f) && r2_equals(out[1], 9.f) && r2_equals(out[2], 16.f));
+    return 0;
+}
+
+static const char *test_vecn_sqrt(void)
+{
+    float a[3] = {4.f, 9.f, 16.f};
+    float out[3] = {0};
+    vecn_sqrt(a, 3, out);
+    r2_assert("vecn_sqrt is wrong",
+        r2_equals(out[0], 2.f) && r2_equals(out[1], 3.f) && r2_equals(out[2], 4.f));
+    return 0;
+}
+
+static const char *test_vecn_arbitrary_n(void)
+{
+    // Proves generality beyond vec2/3/4 with n=5
+    float a[5] = {1.f, 2.f, 3.f, 4.f, 5.f};
+    float b[5] = {5.f, 4.f, 3.f, 2.f, 1.f};
+    float out[5] = {0};
+    vecn_add(a, b, 5, out);
+    r2_assert("vecn_add n=5 is wrong",
+        r2_equals(out[0], 6.f) && r2_equals(out[1], 6.f) && r2_equals(out[2], 6.f) &&
+        r2_equals(out[3], 6.f) && r2_equals(out[4], 6.f));
+    // 1*5 + 2*4 + 3*3 + 4*2 + 5*1 = 5+8+9+8+5 = 35
+    r2_assert("vecn_dot n=5 is wrong", r2_equals(vecn_dot(a, b, 5), 35.f));
+    return 0;
+}
+
 static const char *r2_maths_test(void)
 {
     // v2
@@ -886,6 +1056,24 @@ static const char *r2_maths_test(void)
     // generic mat
     r2_run_test(test_mat_mul);
     r2_run_test(test_mat_mul_non_square);
+
+    // vecn
+    r2_run_test(test_vecn_add);
+    r2_run_test(test_vecn_sub);
+    r2_run_test(test_vecn_mul);
+    r2_run_test(test_vecn_mul_vec);
+    r2_run_test(test_vecn_div);
+    r2_run_test(test_vecn_div_zero);
+    r2_run_test(test_vecn_div_vec);
+    r2_run_test(test_vecn_dot);
+    r2_run_test(test_vecn_length);
+    r2_run_test(test_vecn_dist);
+    r2_run_test(test_vecn_normalize);
+    r2_run_test(test_vecn_normalize_zero);
+    r2_run_test(test_vecn_abs);
+    r2_run_test(test_vecn_pow);
+    r2_run_test(test_vecn_sqrt);
+    r2_run_test(test_vecn_arbitrary_n);
 
     return 0;
 }
