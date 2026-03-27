@@ -380,7 +380,7 @@ extern "C"
     static float vec2_edge_cross(const vec2 *a, const vec2 *b, const vec2 *c)
     {
         return (b->x - a->x) * (c->y - a->y) - (b->y - a->y) * (c->x - a->x);
-    };
+    }
 
     static void vec2_to_array(const vec2 *v, float *out)
     {

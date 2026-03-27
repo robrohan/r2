@@ -14,7 +14,7 @@ CC=${CC:-gcc}
 #############################
 
 ## Desktop version
-CFLAGS=${CFLAGS:- -std=c99 -Wall -Werror -Wno-unused -g3 -v -O3 -funroll-loops -msse3 -fopenmp }
+CFLAGS=${CFLAGS:- -std=c11 -Wall -Werror -Wno-unused -g3 -v -O3 -funroll-loops -msse3 -fopenmp }
 
 OUT=${OUT:-run_tests}
 LIBS=${LIBS:- -lm}
