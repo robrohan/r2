@@ -79,22 +79,3 @@ _Note_: If you are on windows, currently, you'll have to write something like
 a `test.bat` yourself (or some magic to import the files into Visual Studio). 
 You can use `test.sh` as a template.
 
-### Testing in Web Assembly
-
-To compile and run the code in web assembly, first make sure you have 
-[emscripten setup](https://emscripten.org/docs/getting_started/downloads.html), 
-working, and the `emcc` environment variables setup:
-
-```sh
-source ~/Projects/spikes/emsdk/emsdk_env.sh
-```
-
-Then just run `make test_wasm` passing in the `emcc` compiler and output to `html`:
-
-```bash
-make test_wasm
-```
-
-You can then use run some sort of http server against the `bin` directory. For
-example ([busboy](https://github.com/robrohan/busboy)), or python. Then load 
-the HTML page in a browser.
