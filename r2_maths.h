@@ -39,12 +39,6 @@ extern "C"
 #include <stdio.h>
 #include <stdlib.h>
 
-// If on, this uses custom mat3 and mat4 multiplication
-// code instead of the generic mat_mul function. In testing
-// this makes the code run consistently fast, whereas without
-// it you can get a sometimes faster multiply, but the speed
-// is inconsistent.
-#define R2_MAT_MUL_LUDICROUS_SPEED 1
 
 #ifndef EPSILON
 #define EPSILON 0.000000954
@@ -142,9 +136,7 @@ extern "C"
      *
      * You probably want to use mat4_mul or mat3_mul for 4x4 and 3x3
      *
-     * (NOTE: This function calls calloc)
-     *
-     * `out` must be the right size of the answer and must be initialized to 0
+     * `out` must be the right size of the answer
      *
      * r1,c1 = rows and column size of m1
      * r2,c2 = rows and column size of m2
@@ -152,14 +144,7 @@ extern "C"
     static void mat_mul(const float *m1, const float *m2, unsigned char r1, unsigned char c1, unsigned char r2,
                  unsigned char c2, float *out);
 
-    /**
-     * Multiply two 4x4 matrix output to out
-     * if R2_MAT_MUL_LUDICROUS_SPEED is on (the default) this will
-     * do a specific 4x4 multiply function.
-     *
-     * If R2_MAT_MUL_LUDICROUS_SPEED is off it will call the generic
-     * multiply and use calloc.
-     */
+    /** Multiply two 4x4 matrices, result into out */
     static void mat4_mul(const mat4 *m1, const mat4 *m2, mat4 *out);
     static void mat4_transform(const vec4 *p, const mat4 *mat, vec4 *out);
     /**
@@ -178,11 +163,7 @@ extern "C"
     static void mat4_transpose(const mat4 *m1, mat4 *m2);
     static char *mat4_tos(const mat4 *m);
 
-    /**
-     * Multiply two 3x3 matrix output to out
-     * if R2_MAT_MUL_LUDICROUS_SPEED is off, this will call
-     * calloc (default is on).
-     */
+    /** Multiply two 3x3 matrices, result into out */
     static void mat3_mul(const mat3 *m1, const mat3 *m2, mat3 *out);
     static void mat3_identity(mat3 *m);
     static char *mat3_tos(const mat3 *m);
@@ -208,6 +189,7 @@ extern "C"
     static void vec4_normalize(const vec4 *v, vec4 *out);
     static float vec4_dist(const vec4 *v1, const vec4 *v2);
     static float vec4_dist_sqrd(const vec4 *v1, const vec4 *v2);
+    static float vec4_length_sqrd(const vec4 *v);
     static float vec4_length(const vec4 *v);
     static float vec4_dot(const vec4 *v1, const vec4 *v2);
     static void vec4_sqrt(const vec4 *v, vec4 *out);
@@ -271,7 +253,7 @@ extern "C"
 
     static bool r2_equals(float a, float b)
     {
-        return fabs(a - b) < EPSILON;
+        return fabsf(a - b) < EPSILON;
     }
 
     static float __g_pi_deg = M_PI / 180.f;
@@ -339,8 +321,8 @@ extern "C"
 
     static void vec2_pow(const vec2 *v, float exp, vec2 *out)
     {
-        out->x = pow(v->x, exp);
-        out->y = pow(v->y, exp);
+        out->x = powf(v->x, exp);
+        out->y = powf(v->y, exp);
     }
 
     static float vec2_dot(const vec2 *v1, const vec2 *v2)
@@ -358,17 +340,19 @@ extern "C"
 
     static float vec2_length(const vec2 *v)
     {
-        return sqrt(vec2_length_sqrd(v));
+        return sqrtf(vec2_length_sqrd(v));
     }
 
     static float vec2_dist_sqrd(const vec2 *v1, const vec2 *v2)
     {
-        return (v1->x - v2->x) * (v1->x - v2->x) + (v1->y - v2->y) * (v1->y - v2->y);
+        vec2 d = {0};
+        vec2_sub(v1, v2, &d);
+        return vec2_length_sqrd(&d);
     }
 
     static float vec2_dist(const vec2 *v1, const vec2 *v2)
     {
-        return sqrt(vec2_dist_sqrd(v1, v2));
+        return sqrtf(vec2_dist_sqrd(v1, v2));
     }
 
     static void vec2_normalize(const vec2 *v, vec2 *out)
@@ -380,7 +364,7 @@ extern "C"
     static float vec2_edge_cross(const vec2 *a, const vec2 *b, const vec2 *c)
     {
         return (b->x - a->x) * (c->y - a->y) - (b->y - a->y) * (c->x - a->x);
-    };
+    }
 
     static void vec2_to_array(const vec2 *v, float *out)
     {
@@ -455,9 +439,9 @@ extern "C"
 
     static void vec3_pow(const vec3 *v, float exp, vec3 *out)
     {
-        out->x = pow(v->x, exp);
-        out->y = pow(v->y, exp);
-        out->z = pow(v->z, exp);
+        out->x = powf(v->x, exp);
+        out->y = powf(v->y, exp);
+        out->z = powf(v->z, exp);
     }
 
     static float vec3_dot(const vec3 *v1, const vec3 *v2)
@@ -480,18 +464,19 @@ extern "C"
 
     static float vec3_length(const vec3 *v)
     {
-        return sqrt(vec3_length_sqrd(v));
+        return sqrtf(vec3_length_sqrd(v));
     }
 
     static float vec3_dist_sqrd(const vec3 *v1, const vec3 *v2)
     {
-        return (v1->x - v2->x) * (v1->x - v2->x) + (v1->y - v2->y) * (v1->y - v2->y) +
-               (v1->z - v2->z) * (v1->z - v2->z);
+        vec3 d = {0};
+        vec3_sub(v1, v2, &d);
+        return vec3_length_sqrd(&d);
     }
 
     static float vec3_dist(const vec3 *v1, const vec3 *v2)
     {
-        return sqrt(vec3_dist_sqrd(v1, v2));
+        return sqrtf(vec3_dist_sqrd(v1, v2));
     }
 
     static void vec3_normalize(const vec3 *v, vec3 *out)
@@ -511,7 +496,7 @@ extern "C"
         out->x = 0.;
         out->y = 0.;
         out->z = 0.;
-        out->w = 1.;
+        out->w = 0.;
     }
 
     static bool vec4_equals(const vec4 *v1, const vec4 *v2)
@@ -570,18 +555,18 @@ extern "C"
 
     static void vec4_pow(const vec4 *v, float exp, vec4 *out)
     {
-        out->x = pow(v->x, exp);
-        out->y = pow(v->y, exp);
-        out->z = pow(v->z, exp);
-        out->w = pow(v->w, exp);
+        out->x = powf(v->x, exp);
+        out->y = powf(v->y, exp);
+        out->z = powf(v->z, exp);
+        out->w = powf(v->w, exp);
     }
 
     static void vec4_abs(const vec4 *v, vec4 *out)
     {
-        out->x = fabs(v->x);
-        out->y = fabs(v->y);
-        out->z = fabs(v->z);
-        out->w = fabs(v->w);
+        out->x = fabsf(v->x);
+        out->y = fabsf(v->y);
+        out->z = fabsf(v->z);
+        out->w = fabsf(v->w);
     }
 
     static void vec4_sqrt(const vec4 *v, vec4 *out)
@@ -597,20 +582,26 @@ extern "C"
         return (v1->x * v2->x) + (v1->y * v2->y) + (v1->z * v2->z) + (v1->w * v2->w);
     }
 
+    static float vec4_length_sqrd(const vec4 *v)
+    {
+        return v->x * v->x + v->y * v->y + v->z * v->z + v->w * v->w;
+    }
+
     static float vec4_length(const vec4 *v)
     {
-        return sqrtf(v->x * v->x + v->y * v->y + v->z * v->z + v->w * v->w);
+        return sqrtf(vec4_length_sqrd(v));
     }
 
     static float vec4_dist_sqrd(const vec4 *v1, const vec4 *v2)
     {
-        return (v1->x - v2->x) * (v1->x - v2->x) + (v1->y - v2->y) * (v1->y - v2->y) +
-               (v1->y - v2->z) * (v1->y - v2->z) + (v1->y - v2->w) * (v1->y - v2->w);
+        vec4 d = {0};
+        vec4_sub(v1, v2, &d);
+        return vec4_length_sqrd(&d);
     }
 
     static float vec4_dist(const vec4 *v1, const vec4 *v2)
     {
-        return sqrt(vec4_dist_sqrd(v1, v2));
+        return sqrtf(vec4_dist_sqrd(v1, v2));
     }
 
     static void vec4_normalize(const vec4 *v, vec4 *out)
@@ -845,47 +836,7 @@ extern "C"
 
     static void mat4_mul(const mat4 *m1, const mat4 *m2, mat4 *out)
     {
-#if !R2_MAT_MUL_LUDICROUS_SPEED
         mat_mul(m1->a_mat4, m2->a_mat4, 4, 4, 4, 4, out->a_mat4);
-#else
-        // unrolling the loops makes this function faster
-        // so if you're keen you can use the -funroll-loops gcc flag.
-        //
-        //  10 runs of 10000 multiplies (average time in seconds):
-        //  -funroll-all-loops  -funroll-loops   looping
-        //  0.0018666           0.0018094        0.0019127
-        unsigned char i, j;
-        float row[4];
-        float col[4];
-
-        // #pragma omp parallel for simd collapse(2)
-#pragma omp simd collapse(2)
-        for (i = 0; i < 16; i += 4)
-        {
-            for (j = 0; j < 4; j++)
-            {
-                // Row
-                row[0] = m1->a_mat4[i + 0];
-                row[1] = m1->a_mat4[i + 1];
-                row[2] = m1->a_mat4[i + 2];
-                row[3] = m1->a_mat4[i + 3];
-
-                // Column
-                col[0] = m2->a_mat4[j + 0];
-                col[1] = m2->a_mat4[j + 4];
-                col[2] = m2->a_mat4[j + 8];
-                col[3] = m2->a_mat4[j + 12];
-
-                // clang-format off
-                out->a_mat4[i + j] =
-                   row[0] * col[0] +
-                   row[1] * col[1] +
-                   row[2] * col[2] +
-                   row[3] * col[3];
-                // clang-format on
-            }
-        }
-#endif
     }
 
     static void mat4_perspective(float fov, float aspect, float near, float far, mat4 *out)
@@ -994,45 +945,7 @@ extern "C"
     // Multiply two 3x3 matrix output to out
     static void mat3_mul(const mat3 *m1, const mat3 *m2, mat3 *out)
     {
-#if !R2_MAT_MUL_LUDICROUS_SPEED
         mat_mul(m1->a_mat3, m2->a_mat3, 3, 3, 3, 3, out->a_mat3);
-#else
-        // unrolling the loops makes this function faster
-        // so if you're keen you can use the -funroll-loops gcc flag.
-        // I am too lazy to unroll this by hand at the moment; PRs welcome
-        //
-        //  10 runs of 10000 multiplies (average time in seconds):
-        //  -funroll-all-loops  -funroll-loops   looping
-        //  0.0018666           0.0018094        0.0019127
-        unsigned char i, j;
-        float row[4];
-        float col[4];
-
-// #pragma omp parallel for simd collapse(2)
-#pragma omp simd collapse(2)
-        for (i = 0; i < 9; i += 3)
-        {
-            for (j = 0; j < 3; j++)
-            {
-                // Row
-                row[0] = m1->a_mat3[i + 0];
-                row[1] = m1->a_mat3[i + 1];
-                row[2] = m1->a_mat3[i + 2];
-
-                // Column
-                col[0] = m2->a_mat3[j + 0];
-                col[1] = m2->a_mat3[j + 3];
-                col[2] = m2->a_mat3[j + 6];
-
-                // clang-format off
-                out->a_mat3[i + j] =
-                   row[0] * col[0] +
-                   row[1] * col[1] +
-                   row[2] * col[2];
-                // clang-format on
-            }
-        }
-#endif
     }
 
     static char *mat3_tos(const mat3 *m)
@@ -1060,34 +973,19 @@ extern "C"
             return;
         }
 
-        float *row = (float *)calloc(sizeof(float), r1);
-        float *col = (float *)calloc(sizeof(float), c2);
-
-        unsigned char i, r, j, c;
-        // Loop over each row of the first matrix
+        unsigned char i, j, k;
         for (i = 0; i < r1; i++)
         {
-            // Load a single Row
-            for (r = 0; r < c1; r++)
-            {
-                row[r] = m1[r + i * c1];
-            }
-// Loop over the columns to use when multiplying
-// against the row loaded above
-#pragma omp simd collapse(2)
             for (j = 0; j < c2; j++)
             {
-                for (c = 0; c < r2; c++)
+                float sum = 0.f;
+                for (k = 0; k < c1; k++)
                 {
-                    // Load a single column
-                    col[c] = m2[j + c * c2];
-                    // v = E row * col
-                    out[j + i * r1] += row[c] * col[c];
+                    sum += m1[i * c1 + k] * m2[k * c2 + j];
                 }
+                out[i * c2 + j] = sum;
             }
         }
-        free(row);
-        free(col);
     }
 
 #endif /* implementation */

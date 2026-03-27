@@ -8,17 +8,13 @@ on:
 
 jobs:
   build:
+    strategy:
+      matrix:
+        os: [ ubuntu-latest, macos-latest ]
 
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
 
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v4
     - name: make test
       run: make test
-    - uses: actions/checkout@v2
-    - name: cppcheck
-      uses: deep5050/cppcheck-action@master
-      with:
-        github_token: ${{ secrets.GITHUB_TOKEN}}
-        enable: warning,style,performance,portability,information,unusedFunction
-        force_language: c

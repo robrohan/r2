@@ -9,9 +9,6 @@
 
 #include "../r2_unit.h"
 
-#if (__WORDSIZE == 64)
-#define BUILD_64 1
-#endif
 
 static const char *test_vec2_add(void)
 {
@@ -150,10 +147,18 @@ static const char *test_vec4_normalize(void)
     vec4_normalize(&v1, &out);
     // Octave: 0.18257   0.36515   0.54772   0.73030
     // clang-format off
-    r2_assert("vec4 normalize is wrong", 
+    r2_assert("vec4 normalize is wrong",
         r2_equals(out.x, .182574) && r2_equals(out.y, 0.365148) &&
         r2_equals(out.z, 0.547723) && r2_equals(out.w, 0.730297));
     // clang-format on
+
+    // Normalizing a zero vector should give (0,0,0,0), not (0,0,0,1)
+    vec4 zero = {.x = 0.f, .y = 0.f, .z = 0.f, .w = 0.f};
+    vec4 zero_out = {0};
+    vec4_normalize(&zero, &zero_out);
+    r2_assert("vec4 normalize zero is wrong",
+              r2_equals(zero_out.x, 0.f) && r2_equals(zero_out.y, 0.f) &&
+              r2_equals(zero_out.z, 0.f) && r2_equals(zero_out.w, 0.f));
     return 0;
 }
 
@@ -166,6 +171,48 @@ static const char *test_vec4_cross(void)
 
     // Octave: 1 -1 1
     r2_assert("vec4 cross is wrong", r2_equals(out.x, 1.) && r2_equals(out.y, -1.) && r2_equals(out.z, 1.));
+    return 0;
+}
+
+static const char *test_vec4_dist_sqrd(void)
+{
+    // Identical points: distance should be zero
+    vec4 v1 = {.x = 1.f, .y = 2.f, .z = 3.f, .w = 4.f};
+    vec4 v2 = {.x = 1.f, .y = 2.f, .z = 3.f, .w = 4.f};
+    r2_assert("vec4 dist sqrd same point is wrong", r2_equals(vec4_dist_sqrd(&v1, &v2), 0.f));
+
+    // Axis-aligned: only x differs by 3, so dist_sqrd = 9
+    vec4 v3 = {.x = 0.f, .y = 0.f, .z = 0.f, .w = 0.f};
+    vec4 v4 = {.x = 3.f, .y = 0.f, .z = 0.f, .w = 0.f};
+    r2_assert("vec4 dist sqrd x-axis is wrong", r2_equals(vec4_dist_sqrd(&v3, &v4), 9.f));
+
+    // Only z differs — this is what the old bug broke (used v1->y instead of v1->z)
+    vec4 v5 = {.x = 0.f, .y = 0.f, .z = 0.f, .w = 0.f};
+    vec4 v6 = {.x = 0.f, .y = 0.f, .z = 4.f, .w = 0.f};
+    r2_assert("vec4 dist sqrd z-axis is wrong", r2_equals(vec4_dist_sqrd(&v5, &v6), 16.f));
+
+    // Only w differs — same bug would have masked this too
+    vec4 v7 = {.x = 0.f, .y = 0.f, .z = 0.f, .w = 0.f};
+    vec4 v8 = {.x = 0.f, .y = 0.f, .z = 0.f, .w = 5.f};
+    r2_assert("vec4 dist sqrd w-axis is wrong", r2_equals(vec4_dist_sqrd(&v7, &v8), 25.f));
+
+    // All components: 1²+2²+3²+4² = 1+4+9+16 = 30
+    vec4 v9  = {.x = 0.f, .y = 0.f, .z = 0.f, .w = 0.f};
+    vec4 v10 = {.x = 1.f, .y = 2.f, .z = 3.f, .w = 4.f};
+    r2_assert("vec4 dist sqrd all components is wrong", r2_equals(vec4_dist_sqrd(&v9, &v10), 30.f));
+    return 0;
+}
+
+static const char *test_vec4_dist(void)
+{
+    // Distance from origin to (3,4,0,0) = 5 (3-4-5 triangle)
+    vec4 origin = {.x = 0.f, .y = 0.f, .z = 0.f, .w = 0.f};
+    vec4 v      = {.x = 3.f, .y = 4.f, .z = 0.f, .w = 0.f};
+    r2_assert("vec4 dist is wrong", r2_equals(vec4_dist(&origin, &v), 5.f));
+
+    // Distance from point to itself is zero
+    vec4 p = {.x = 7.f, .y = 3.f, .z = 1.f, .w = 2.f};
+    r2_assert("vec4 dist same point is wrong", r2_equals(vec4_dist(&p, &p), 0.f));
     return 0;
 }
 
@@ -454,43 +501,18 @@ static const char *test_mat4_mul2(void)
 
     mat4_mul(&k1, &k2, &out);
 
+    // Expected values are the exact mathematical results for these inputs.
+    // A slightly wider epsilon is used here because accumulated float rounding
+    // differs by a few ULPs across platforms (x86+SSE3, ARM64, wasm, etc).
     // clang-format off
-    // printf("%f %f %f %f\n%f %f %f %f\n%f %f %f %f\n%f %f %f %f\n",
-    //    out->m00, out->m10, out->m20, out->m30,
-    //    out->m01, out->m11, out->m21, out->m31,
-    //    out->m02, out->m12, out->m22, out->m32,
-    //    out->m03, out->m13, out->m23, out->m33);
+#define M2_EQ(a, b) (fabsf((a) - (b)) < 0.0001f)
+    r2_assert("mat4 mul 2 is wrong",
+        M2_EQ(out.m00, 4.1984f)  && M2_EQ(out.m10, 44.169f)  && M2_EQ(out.m20, 28.1204f) && M2_EQ(out.m30, 8.986f)
+     && M2_EQ(out.m01, 5.51864f) && M2_EQ(out.m11, 20.564f)  && M2_EQ(out.m21, 10.13f)   && M2_EQ(out.m31, 3.21f)
+     && M2_EQ(out.m02, 1.872f)   && M2_EQ(out.m12, 11.15f)   && M2_EQ(out.m22, 7.86f)    && M2_EQ(out.m32, 3.5f)
+     && M2_EQ(out.m03, 4.2408f)  && M2_EQ(out.m13, 1.53f)    && M2_EQ(out.m23, 3.76f)    && M2_EQ(out.m33, 3.1f));
+#undef M2_EQ
     // clang-format on
-
-#ifdef BUILD_64
-    // clang-format off
-    r2_assert("mat4 mul 2 is wrong",
-        r2_equals(out.m00, 4.198400) && r2_equals(out.m10, 44.168995) && r2_equals(out.m20, 28.120401) && r2_equals(out.m30, 8.986000) 
-     && r2_equals(out.m01, 5.518640) && r2_equals(out.m11, 20.563999) && r2_equals(out.m21, 10.129999) && r2_equals(out.m31, 3.21000) 
-     && r2_equals(out.m02, 1.87200)  && r2_equals(out.m12, 11.150001) && r2_equals(out.m22, 7.86000)   && r2_equals(out.m32, 3.500000) 
-     && r2_equals(out.m03, 4.240800) && r2_equals(out.m13, 1.530000)  && r2_equals(out.m23, 3.76000)   &&  r2_equals(out.m33, 3.10000));
-    // clang-format on
-#elif EMSCRIPTEN
-    // 4.198400 44.168995 28.120401 8.986000
-    // 5.518640 20.563999 10.129999 3.210000
-    // 1.872000 11.150001 7.860000 3.500000
-    // 4.240800 1.530000 3.760000 3.100000
-    r2_assert("mat4 mul 2 is wrong",
-              r2_equals(out.m00, 4.198400) && r2_equals(out.m10, 44.168995) && r2_equals(out.m20, 28.120401) &&
-                  r2_equals(out.m30, 8.986000) && r2_equals(out.m01, 5.518640) && r2_equals(out.m11, 20.563999) &&
-                  r2_equals(out.m21, 10.129999) && r2_equals(out.m31, 3.21000) && r2_equals(out.m02, 1.87200) &&
-                  r2_equals(out.m12, 11.150001) && r2_equals(out.m22, 7.86000) && r2_equals(out.m32, 3.500000) &&
-                  r2_equals(out.m03, 4.240800) && r2_equals(out.m13, 1.530000) && r2_equals(out.m23, 3.76000) &&
-                  r2_equals(out.m33, 3.10000));
-#else
-    r2_assert("mat4 mul 2 is wrong",
-              r2_equals(out.m00, 4.198400) && r2_equals(out.m10, 44.168999) && r2_equals(out.m20, 28.120399) &&
-                  r2_equals(out.m30, 8.986000) && r2_equals(out.m01, 5.518640) && r2_equals(out.m11, 20.563999) &&
-                  r2_equals(out.m21, 10.13000) && r2_equals(out.m31, 3.21000) && r2_equals(out.m02, 1.87200) &&
-                  r2_equals(out.m12, 11.150001) && r2_equals(out.m22, 7.86000) && r2_equals(out.m32, 3.500000) &&
-                  r2_equals(out.m03, 4.240800) && r2_equals(out.m13, 1.530000) && r2_equals(out.m23, 3.76000) &&
-                  r2_equals(out.m33, 3.10000));
-#endif
     return 0;
 }
 
@@ -630,6 +652,180 @@ static const char *test_mat_mul(void)
     return 0;
 }
 
+static const char *test_mat4_mul_identity(void)
+{
+    mat4 ident = {0};
+    mat4 k = {0};
+    mat4 out = {0};
+
+    mat4_identity(&ident);
+
+    static const float kmat[16] = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16};
+    memcpy(k.a_mat4, kmat, sizeof(kmat));
+
+    // I * A = A
+    mat4_mul(&ident, &k, &out);
+    // clang-format off
+    r2_assert("mat4 mul left identity is wrong",
+        r2_equals(out.m00, k.m00) && r2_equals(out.m10, k.m10) && r2_equals(out.m20, k.m20) && r2_equals(out.m30, k.m30) &&
+        r2_equals(out.m01, k.m01) && r2_equals(out.m11, k.m11) && r2_equals(out.m21, k.m21) && r2_equals(out.m31, k.m31) &&
+        r2_equals(out.m02, k.m02) && r2_equals(out.m12, k.m12) && r2_equals(out.m22, k.m22) && r2_equals(out.m32, k.m32) &&
+        r2_equals(out.m03, k.m03) && r2_equals(out.m13, k.m13) && r2_equals(out.m23, k.m23) && r2_equals(out.m33, k.m33));
+    // clang-format on
+
+    // A * I = A
+    mat4 out2 = {0};
+    mat4_mul(&k, &ident, &out2);
+    // clang-format off
+    r2_assert("mat4 mul right identity is wrong",
+        r2_equals(out2.m00, k.m00) && r2_equals(out2.m10, k.m10) && r2_equals(out2.m20, k.m20) && r2_equals(out2.m30, k.m30) &&
+        r2_equals(out2.m01, k.m01) && r2_equals(out2.m11, k.m11) && r2_equals(out2.m21, k.m21) && r2_equals(out2.m31, k.m31) &&
+        r2_equals(out2.m02, k.m02) && r2_equals(out2.m12, k.m12) && r2_equals(out2.m22, k.m22) && r2_equals(out2.m32, k.m32) &&
+        r2_equals(out2.m03, k.m03) && r2_equals(out2.m13, k.m13) && r2_equals(out2.m23, k.m23) && r2_equals(out2.m33, k.m33));
+    // clang-format on
+    return 0;
+}
+
+static const char *test_mat4_mul_not_commutative(void)
+{
+    mat4 a = {0};
+    mat4 b = {0};
+    mat4 ab = {0};
+    mat4 ba = {0};
+
+    // A has a shear in the first row
+    static const float amat[16] = {2, 0, 0, 0,  1, 1, 0, 0,  0, 0, 1, 0,  0, 0, 0, 1};
+    memcpy(a.a_mat4, amat, sizeof(amat));
+    // B has a shear in the second row
+    static const float bmat[16] = {1, 2, 0, 0,  0, 1, 0, 0,  0, 0, 1, 0,  0, 0, 0, 1};
+    memcpy(b.a_mat4, bmat, sizeof(bmat));
+
+    mat4_mul(&a, &b, &ab);
+    mat4_mul(&b, &a, &ba);
+
+    // A*B: m00=2 m10=4 m11=3
+    // B*A: m00=4 m10=2 m11=1
+    r2_assert("mat4 mul should not be commutative",
+              !r2_equals(ab.m00, ba.m00) && !r2_equals(ab.m10, ba.m10) && !r2_equals(ab.m11, ba.m11));
+    return 0;
+}
+
+static const char *test_mat4_transpose(void)
+{
+    mat4 k = {0};
+    mat4 out = {0};
+
+    static const float kmat[16] = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16};
+    memcpy(k.a_mat4, kmat, sizeof(kmat));
+
+    mat4_transpose(&k, &out);
+
+    // clang-format off
+    r2_assert("mat4 transpose is wrong",
+        r2_equals(out.m00,  1.) && r2_equals(out.m10,  5.) && r2_equals(out.m20,  9.) && r2_equals(out.m30, 13.) &&
+        r2_equals(out.m01,  2.) && r2_equals(out.m11,  6.) && r2_equals(out.m21, 10.) && r2_equals(out.m31, 14.) &&
+        r2_equals(out.m02,  3.) && r2_equals(out.m12,  7.) && r2_equals(out.m22, 11.) && r2_equals(out.m32, 15.) &&
+        r2_equals(out.m03,  4.) && r2_equals(out.m13,  8.) && r2_equals(out.m23, 12.) && r2_equals(out.m33, 16.));
+    // clang-format on
+    return 0;
+}
+
+static const char *test_mat4_transpose_twice(void)
+{
+    mat4 k = {0};
+    mat4 tmp = {0};
+    mat4 out = {0};
+
+    static const float kmat[16] = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16};
+    memcpy(k.a_mat4, kmat, sizeof(kmat));
+
+    // (A^T)^T = A
+    mat4_transpose(&k, &tmp);
+    mat4_transpose(&tmp, &out);
+
+    // clang-format off
+    r2_assert("mat4 transpose twice is wrong",
+        r2_equals(out.m00, k.m00) && r2_equals(out.m10, k.m10) && r2_equals(out.m20, k.m20) && r2_equals(out.m30, k.m30) &&
+        r2_equals(out.m01, k.m01) && r2_equals(out.m11, k.m11) && r2_equals(out.m21, k.m21) && r2_equals(out.m31, k.m31) &&
+        r2_equals(out.m02, k.m02) && r2_equals(out.m12, k.m12) && r2_equals(out.m22, k.m22) && r2_equals(out.m32, k.m32) &&
+        r2_equals(out.m03, k.m03) && r2_equals(out.m13, k.m13) && r2_equals(out.m23, k.m23) && r2_equals(out.m33, k.m33));
+    // clang-format on
+    return 0;
+}
+
+static const char *test_mat3_mul_identity(void)
+{
+    mat3 ident = {0};
+    mat3 k = {0};
+    mat3 out = {0};
+
+    mat3_identity(&ident);
+
+    static const float kmat[9] = {1, 2, 3, 4, 5, 6, 7, 8, 9};
+    memcpy(k.a_mat3, kmat, sizeof(kmat));
+
+    // I * A = A
+    mat3_mul(&ident, &k, &out);
+    // clang-format off
+    r2_assert("mat3 mul left identity is wrong",
+        r2_equals(out.m00, k.m00) && r2_equals(out.m10, k.m10) && r2_equals(out.m20, k.m20) &&
+        r2_equals(out.m01, k.m01) && r2_equals(out.m11, k.m11) && r2_equals(out.m21, k.m21) &&
+        r2_equals(out.m02, k.m02) && r2_equals(out.m12, k.m12) && r2_equals(out.m22, k.m22));
+    // clang-format on
+
+    // A * I = A
+    mat3 out2 = {0};
+    mat3_mul(&k, &ident, &out2);
+    // clang-format off
+    r2_assert("mat3 mul right identity is wrong",
+        r2_equals(out2.m00, k.m00) && r2_equals(out2.m10, k.m10) && r2_equals(out2.m20, k.m20) &&
+        r2_equals(out2.m01, k.m01) && r2_equals(out2.m11, k.m11) && r2_equals(out2.m21, k.m21) &&
+        r2_equals(out2.m02, k.m02) && r2_equals(out2.m12, k.m12) && r2_equals(out2.m22, k.m22));
+    // clang-format on
+    return 0;
+}
+
+static const char *test_mat3_mul_not_commutative(void)
+{
+    mat3 a = {0};
+    mat3 b = {0};
+    mat3 ab = {0};
+    mat3 ba = {0};
+
+    static const float amat[9] = {2, 1, 0,  0, 1, 0,  0, 0, 1};
+    memcpy(a.a_mat3, amat, sizeof(amat));
+    static const float bmat[9] = {1, 0, 0,  2, 1, 0,  0, 0, 1};
+    memcpy(b.a_mat3, bmat, sizeof(bmat));
+
+    mat3_mul(&a, &b, &ab);
+    mat3_mul(&b, &a, &ba);
+
+    // A*B: m00=4, m10=1
+    // B*A: m00=2, m10=1 (m11 differs: AB=3, BA=1)
+    r2_assert("mat3 mul should not be commutative",
+              !r2_equals(ab.m00, ba.m00) && !r2_equals(ab.m11, ba.m11));
+    return 0;
+}
+
+static const char *test_mat_mul_non_square(void)
+{
+    // 2x3 * 3x2 = 2x2
+    static const float a[6]  = {1, 2, 3,  4, 5, 6};
+    static const float b[6]  = {7, 8,  9, 10,  11, 12};
+    float out[4] = {0};
+
+    mat_mul(a, b, 2, 3, 3, 2, out);
+
+    // [1,2,3] . [7,9,11]  = 7+18+33 = 58
+    // [1,2,3] . [8,10,12] = 8+20+36 = 64
+    // [4,5,6] . [7,9,11]  = 28+45+66 = 139
+    // [4,5,6] . [8,10,12] = 32+50+72 = 154
+    r2_assert("mat_mul non-square is wrong",
+              r2_equals(out[0], 58.f) && r2_equals(out[1], 64.f) &&
+              r2_equals(out[2], 139.f) && r2_equals(out[3], 154.f));
+    return 0;
+}
+
 static const char *r2_maths_test(void)
 {
     // v2
@@ -653,6 +849,8 @@ static const char *r2_maths_test(void)
     r2_run_test(test_vec4_div);
     r2_run_test(test_vec4_normalize);
     r2_run_test(test_vec4_cross);
+    r2_run_test(test_vec4_dist_sqrd);
+    r2_run_test(test_vec4_dist);
 
     // quat
     r2_run_test(test_quat_rot2q);
@@ -673,14 +871,21 @@ static const char *r2_maths_test(void)
     r2_run_test(test_mat4_identity);
     r2_run_test(test_mat4_mul);
     r2_run_test(test_mat4_mul2);
+    r2_run_test(test_mat4_mul_identity);
+    r2_run_test(test_mat4_mul_not_commutative);
+    r2_run_test(test_mat4_transpose);
+    r2_run_test(test_mat4_transpose_twice);
     r2_run_test(test_mat4_mul_speed);
 
     // mat3
     r2_run_test(test_mat3_mul);
     r2_run_test(test_mat3_identity);
+    r2_run_test(test_mat3_mul_identity);
+    r2_run_test(test_mat3_mul_not_commutative);
 
     // generic mat
     r2_run_test(test_mat_mul);
+    r2_run_test(test_mat_mul_non_square);
 
     return 0;
 }
