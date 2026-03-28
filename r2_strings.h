@@ -82,6 +82,9 @@ extern "C"
 /* implementation */
 #ifdef R2_STRINGS_IMPLEMENTATION
 
+#include <stdio.h>
+#include <stdlib.h>
+
     typedef struct
     {
         char mask;       /* char data will be bitwise AND with this */
@@ -150,11 +153,8 @@ extern "C"
         char tmp[5] = {0};
         int srci = 0;
         int len = 0;
-        for (int i = 0; i < src_size; i++)
+        while (srci < src_size && str[srci] != 0)
         {
-            if (str[srci] == 0)
-                break;
-
             // look at the first char to see if the bytes
             // say this rune is more than one byte
             int plen = utf8_len(str[srci]);
@@ -189,6 +189,9 @@ extern "C"
 
         // string length in bytes
         unsigned long l = strlen(s);
+        if (l == 0)
+            return (s8){(char *)s, NULL, 0, 0};
+
         // string as an array of integers
         rune *i = calloc(l, sizeof(rune));
         if (!i)

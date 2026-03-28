@@ -28,10 +28,20 @@ static const char *test_create_string_blank(void)
     return 0;
 }
 
-static const char *test_create_string_null(void)
+static const char *test_create_string_empty(void)
 {
     const char *str1 = "";
     s8 str = S(str1);
+
+    r2_assert("empty string length is wrong", (str.len == 0));
+    r2_assert("empty string size is wrong", (str.size == 0));
+    free_S(str);
+    return 0;
+}
+
+static const char *test_create_string_null(void)
+{
+    s8 str = S(NULL);
 
     r2_assert("null string length is wrong", (str.len == 0));
     r2_assert("null string size is wrong", (str.size == 0));
@@ -144,6 +154,7 @@ static const char *r2_strings_test(void)
     r2_run_test(test_create_utf8_string_mod);
     r2_run_test(test_create_utf8_string_mod2);
     r2_run_test(test_create_string_blank);
+    r2_run_test(test_create_string_empty);
     r2_run_test(test_create_string_null);
     r2_run_test(test_print_utf8_string);
     return 0;
