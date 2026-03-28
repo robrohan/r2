@@ -1,4 +1,15 @@
-.PHONY: all test clean build
+.PHONY: all test test_strings test_clang clean build help
+
+help:
+	@echo "Available targets:"
+	@echo "  run          - build with gcc and clang, then lint (default)"
+	@echo "  test         - build and run all tests with gcc"
+	@echo "  test_strings - build and run only the strings test suite with gcc"
+	@echo "  test_clang   - build and run all tests with clang"
+	@echo "  test_wasm    - build and run all tests with emcc (needs emsdk env)"
+	@echo "  check        - run static analysis / lint (check.sh)"
+	@echo "  perf         - run perf stat on the test binary (Linux only, run as sudo)"
+	@echo "  clean        - remove build artifacts"
 
 ARCH    := $(shell uname -m)
 OS      := $(shell uname -s)
@@ -42,6 +53,13 @@ test: clean
 #	objdump -S --disassemble ./bin/run_tests > ./bin/run_tests.asm
 	./bin/run_tests
 
+
+test_strings: clean
+	mkdir -p bin
+	CC=gcc OUT=./bin/run_tests \
+	CFLAGS='-std=c11 $(C_ERRS) -g3 -v -O3 -funroll-loops $(SIMD_FLAGS) $(OMP_FLAGS)' \
+	./test.sh
+	./bin/run_tests strings
 
 test_clang: clean
 #	sudo apt-get install libomp-dev
