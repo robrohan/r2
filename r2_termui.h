@@ -9,7 +9,7 @@
     Usage:
     #include "r2_termui.h"
 
-    void main(void) 
+    int main(void)
     {
         printf(ESC_ERASE_SCREEN);
         printf(ESC_CURSOR_POS, 10, 10);
@@ -24,8 +24,8 @@
 LICENSE
     See end of file for license information.
 */
-#ifndef R2_TERMCUI_H
-#define R2_TERMCUI_H
+#ifndef R2_TERMUI_H
+#define R2_TERMUI_H
 
 #ifdef __cplusplus
 extern "C"
@@ -137,7 +137,10 @@ the cursor will move to the home position, at the upper left of the screen. */
 ///////////////////////////////
 // Set Display Attributes
 ///////////////////////////////
-/* Sets multiple display attribute settings. The following lists standard attributes: */
+/* Sets multiple display attribute settings. The following lists standard attributes.
+   The suffix _1, _2, _3 indicates how many semicolon-separated SGR parameters the
+   format string accepts. SGR = Select Graphic Rendition (the formal ANSI name).
+   Example: printf(ESC_SET_ATTRIBUTE_MODE_2, 1, 31) => bright red foreground. */
 #define ESC_SET_ATTRIBUTE_MODE_3   "\033[%d;%d;%dm"
 #define ESC_SET_ATTRIBUTE_MODE_2   "\033[%d;%dm"
 #define ESC_SET_ATTRIBUTE_MODE_1   "\033[%dm"
@@ -145,7 +148,7 @@ the cursor will move to the home position, at the upper left of the screen. */
 0	Reset all attributes
 1	Bright
 2	Dim
-4	Underscore	
+4	Underscore
 5	Blink
 7	Reverse
 8	Hidden
@@ -171,11 +174,32 @@ the cursor will move to the home position, at the upper left of the screen. */
 47	White
 */
 
+///////////////////////////////
+// 256-Colour and True Colour
+///////////////////////////////
+/* 256-colour mode: n is a colour index 0-255.
+   0-7   standard colours (same as the 8 basic foreground/background colours above)
+   8-15  high-intensity colours
+   16-231 a 6x6x6 colour cube
+   232-255 grayscale ramp
+   Example: printf(ESC_SET_FG_256, 196)  => bright red
+            printf(ESC_SET_BG_256, 232)  => very dark grey background */
+#define ESC_SET_FG_256             "\033[38;5;%dm"
+#define ESC_SET_BG_256             "\033[48;5;%dm"
+
+/* True colour (24-bit) mode: r, g, b are each 0-255.
+   Not supported on all terminals; most modern terminals (kitty, iTerm2,
+   Windows Terminal, recent xterm) handle it fine.
+   Example: printf(ESC_SET_FG_RGB, 255, 128, 0)  => orange foreground
+            printf(ESC_SET_BG_RGB, 0,   0,   0)  => black background */
+#define ESC_SET_FG_RGB             "\033[38;2;%d;%d;%dm"
+#define ESC_SET_BG_RGB             "\033[48;2;%d;%d;%dm"
+
 #ifdef __cplusplus
 }
 #endif
 
-#endif /* R2_TERMCUI_H */
+#endif /* R2_TERMUI_H */
 
 /*
 ------------------------------------------------------------------------------
