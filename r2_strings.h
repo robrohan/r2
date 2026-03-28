@@ -60,8 +60,8 @@ extern "C"
         char *data;
         // The integer representation of the bytes as utf8
         rune *rune;
-        // The size of the string (in bytes)
-        unsigned int size;
+        // The capacity of the string (in bytes)
+        unsigned int cap;
         // The length of the string (in runes)
         unsigned long len;
     } s8;
