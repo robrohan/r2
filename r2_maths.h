@@ -39,7 +39,6 @@ extern "C"
 #include <stdio.h>
 #include <stdlib.h>
 
-
 #ifndef EPSILON
 #define EPSILON 0.000000954
 #endif
@@ -142,7 +141,16 @@ extern "C"
      * r2,c2 = rows and column size of m2
      */
     static void mat_mul(const float *m1, const float *m2, unsigned char r1, unsigned char c1, unsigned char r2,
-                 unsigned char c2, float *out);
+                        unsigned char c2, float *out);
+
+    /**
+     * Transpose a matrix of arbitrary size. m is row-major with r rows
+     * and c columns. out must be a caller-allocated buffer of r*c floats
+     * and will be written as a c×r row-major matrix.
+     *
+     * r,c = rows and columns of m
+     */
+    static void mat_transpose(const float *m, unsigned char r, unsigned char c, float *out);
 
     /** Multiply two 4x4 matrices, result into out */
     static void mat4_mul(const mat4 *m1, const mat4 *m2, mat4 *out);
@@ -247,23 +255,23 @@ extern "C"
     static void vec2_to_array(const vec2 *v, float *out);
 
     /** Generic vector functions operating on any float array of length n */
-    static void  vecn_zero(float *v, int n);
-    static bool  vecn_equals(const float *v1, const float *v2, int n);
-    static void  vecn_add(const float *v1, const float *v2, int n, float *out);
-    static void  vecn_sub(const float *v1, const float *v2, int n, float *out);
-    static void  vecn_mul(const float *v, float fac, int n, float *out);
-    static void  vecn_mul_vec(const float *v1, const float *v2, int n, float *out);
-    static void  vecn_div(const float *v, float fac, int n, float *out);
-    static void  vecn_div_vec(const float *v1, const float *v2, int n, float *out);
-    static void  vecn_pow(const float *v, float exp, int n, float *out);
-    static void  vecn_abs(const float *v, int n, float *out);
-    static void  vecn_sqrt(const float *v, int n, float *out);
+    static void vecn_zero(float *v, int n);
+    static bool vecn_equals(const float *v1, const float *v2, int n);
+    static void vecn_add(const float *v1, const float *v2, int n, float *out);
+    static void vecn_sub(const float *v1, const float *v2, int n, float *out);
+    static void vecn_mul(const float *v, float fac, int n, float *out);
+    static void vecn_mul_vec(const float *v1, const float *v2, int n, float *out);
+    static void vecn_div(const float *v, float fac, int n, float *out);
+    static void vecn_div_vec(const float *v1, const float *v2, int n, float *out);
+    static void vecn_pow(const float *v, float exp, int n, float *out);
+    static void vecn_abs(const float *v, int n, float *out);
+    static void vecn_sqrt(const float *v, int n, float *out);
     static float vecn_dot(const float *v1, const float *v2, int n);
     static float vecn_length_sqrd(const float *v, int n);
     static float vecn_length(const float *v, int n);
     static float vecn_dist_sqrd(const float *v1, const float *v2, int n);
     static float vecn_dist(const float *v1, const float *v2, int n);
-    static void  vecn_normalize(const float *v, int n, float *out);
+    static void vecn_normalize(const float *v, int n, float *out);
 
 #ifdef R2_MATHS_IMPLEMENTATION
 
@@ -287,77 +295,89 @@ extern "C"
     static void vecn_zero(float *v, int n)
     {
         int i;
-        for (i = 0; i < n; i++) v[i] = 0.f;
+        for (i = 0; i < n; i++)
+            v[i] = 0.f;
     }
 
     static bool vecn_equals(const float *v1, const float *v2, int n)
     {
         int i;
         for (i = 0; i < n; i++)
-            if (!r2_equals(v1[i], v2[i])) return false;
+            if (!r2_equals(v1[i], v2[i]))
+                return false;
         return true;
     }
 
     static void vecn_add(const float *v1, const float *v2, int n, float *out)
     {
         int i;
-        for (i = 0; i < n; i++) out[i] = v1[i] + v2[i];
+        for (i = 0; i < n; i++)
+            out[i] = v1[i] + v2[i];
     }
 
     static void vecn_sub(const float *v1, const float *v2, int n, float *out)
     {
         int i;
-        for (i = 0; i < n; i++) out[i] = v1[i] - v2[i];
+        for (i = 0; i < n; i++)
+            out[i] = v1[i] - v2[i];
     }
 
     static void vecn_mul(const float *v, float fac, int n, float *out)
     {
         int i;
-        for (i = 0; i < n; i++) out[i] = v[i] * fac;
+        for (i = 0; i < n; i++)
+            out[i] = v[i] * fac;
     }
 
     static void vecn_mul_vec(const float *v1, const float *v2, int n, float *out)
     {
         int i;
-        for (i = 0; i < n; i++) out[i] = v1[i] * v2[i];
+        for (i = 0; i < n; i++)
+            out[i] = v1[i] * v2[i];
     }
 
     static void vecn_div(const float *v, float fac, int n, float *out)
     {
         float d = 1.f / ((fac == 0.f) ? 1.f : fac);
         int i;
-        for (i = 0; i < n; i++) out[i] = v[i] * d;
+        for (i = 0; i < n; i++)
+            out[i] = v[i] * d;
     }
 
     static void vecn_div_vec(const float *v1, const float *v2, int n, float *out)
     {
         int i;
-        for (i = 0; i < n; i++) out[i] = v1[i] / ((v2[i] == 0.f) ? 1.f : v2[i]);
+        for (i = 0; i < n; i++)
+            out[i] = v1[i] / ((v2[i] == 0.f) ? 1.f : v2[i]);
     }
 
     static void vecn_pow(const float *v, float exp, int n, float *out)
     {
         int i;
-        for (i = 0; i < n; i++) out[i] = powf(v[i], exp);
+        for (i = 0; i < n; i++)
+            out[i] = powf(v[i], exp);
     }
 
     static void vecn_abs(const float *v, int n, float *out)
     {
         int i;
-        for (i = 0; i < n; i++) out[i] = fabsf(v[i]);
+        for (i = 0; i < n; i++)
+            out[i] = fabsf(v[i]);
     }
 
     static void vecn_sqrt(const float *v, int n, float *out)
     {
         int i;
-        for (i = 0; i < n; i++) out[i] = sqrtf(v[i]);
+        for (i = 0; i < n; i++)
+            out[i] = sqrtf(v[i]);
     }
 
     static float vecn_dot(const float *v1, const float *v2, int n)
     {
         float sum = 0.f;
         int i;
-        for (i = 0; i < n; i++) sum += v1[i] * v2[i];
+        for (i = 0; i < n; i++)
+            sum += v1[i] * v2[i];
         return sum;
     }
 
@@ -375,7 +395,8 @@ extern "C"
     {
         float sum = 0.f;
         int i;
-        for (i = 0; i < n; i++) {
+        for (i = 0; i < n; i++)
+        {
             float d = v1[i] - v2[i];
             sum += d * d;
         }
@@ -399,8 +420,14 @@ extern "C"
     ///////////////////////////////////////////////////////////////
     // Vec2
 
-    static void vec2_zero(vec2 *out)       { vecn_zero(out->a_vec2, 2); }
-    static bool vec2_equals(const vec2 *v1, const vec2 *v2) { return vecn_equals(v1->a_vec2, v2->a_vec2, 2); }
+    static void vec2_zero(vec2 *out)
+    {
+        vecn_zero(out->a_vec2, 2);
+    }
+    static bool vec2_equals(const vec2 *v1, const vec2 *v2)
+    {
+        return vecn_equals(v1->a_vec2, v2->a_vec2, 2);
+    }
 
     static void vec2_set(float x, float y, vec2 *v)
     {
@@ -408,19 +435,58 @@ extern "C"
         v->y = y;
     }
 
-    static void vec2_add(const vec2 *v1, const vec2 *v2, vec2 *out)      { vecn_add(v1->a_vec2, v2->a_vec2, 2, out->a_vec2); }
-    static void vec2_sub(const vec2 *v1, const vec2 *v2, vec2 *out)      { vecn_sub(v1->a_vec2, v2->a_vec2, 2, out->a_vec2); }
-    static void vec2_div(const vec2 *v, float fac, vec2 *out)             { vecn_div(v->a_vec2, fac, 2, out->a_vec2); }
-    static void vec2_div_vec2(const vec2 *v1, const vec2 *v2, vec2 *out) { vecn_div_vec(v1->a_vec2, v2->a_vec2, 2, out->a_vec2); }
-    static void vec2_mul(const vec2 *v, float fac, vec2 *out)             { vecn_mul(v->a_vec2, fac, 2, out->a_vec2); }
-    static void vec2_mul_vec2(const vec2 *v1, const vec2 *v2, vec2 *out) { vecn_mul_vec(v1->a_vec2, v2->a_vec2, 2, out->a_vec2); }
-    static void vec2_pow(const vec2 *v, float exp, vec2 *out)             { vecn_pow(v->a_vec2, exp, 2, out->a_vec2); }
-    static float vec2_dot(const vec2 *v1, const vec2 *v2)                 { return vecn_dot(v1->a_vec2, v2->a_vec2, 2); }
-    static float vec2_length_sqrd(const vec2 *v)                          { return vecn_length_sqrd(v->a_vec2, 2); }
-    static float vec2_length(const vec2 *v)                               { return vecn_length(v->a_vec2, 2); }
-    static float vec2_dist_sqrd(const vec2 *v1, const vec2 *v2)          { return vecn_dist_sqrd(v1->a_vec2, v2->a_vec2, 2); }
-    static float vec2_dist(const vec2 *v1, const vec2 *v2)               { return vecn_dist(v1->a_vec2, v2->a_vec2, 2); }
-    static void vec2_normalize(const vec2 *v, vec2 *out)                  { vecn_normalize(v->a_vec2, 2, out->a_vec2); }
+    static void vec2_add(const vec2 *v1, const vec2 *v2, vec2 *out)
+    {
+        vecn_add(v1->a_vec2, v2->a_vec2, 2, out->a_vec2);
+    }
+    static void vec2_sub(const vec2 *v1, const vec2 *v2, vec2 *out)
+    {
+        vecn_sub(v1->a_vec2, v2->a_vec2, 2, out->a_vec2);
+    }
+    static void vec2_div(const vec2 *v, float fac, vec2 *out)
+    {
+        vecn_div(v->a_vec2, fac, 2, out->a_vec2);
+    }
+    static void vec2_div_vec2(const vec2 *v1, const vec2 *v2, vec2 *out)
+    {
+        vecn_div_vec(v1->a_vec2, v2->a_vec2, 2, out->a_vec2);
+    }
+    static void vec2_mul(const vec2 *v, float fac, vec2 *out)
+    {
+        vecn_mul(v->a_vec2, fac, 2, out->a_vec2);
+    }
+    static void vec2_mul_vec2(const vec2 *v1, const vec2 *v2, vec2 *out)
+    {
+        vecn_mul_vec(v1->a_vec2, v2->a_vec2, 2, out->a_vec2);
+    }
+    static void vec2_pow(const vec2 *v, float exp, vec2 *out)
+    {
+        vecn_pow(v->a_vec2, exp, 2, out->a_vec2);
+    }
+    static float vec2_dot(const vec2 *v1, const vec2 *v2)
+    {
+        return vecn_dot(v1->a_vec2, v2->a_vec2, 2);
+    }
+    static float vec2_length_sqrd(const vec2 *v)
+    {
+        return vecn_length_sqrd(v->a_vec2, 2);
+    }
+    static float vec2_length(const vec2 *v)
+    {
+        return vecn_length(v->a_vec2, 2);
+    }
+    static float vec2_dist_sqrd(const vec2 *v1, const vec2 *v2)
+    {
+        return vecn_dist_sqrd(v1->a_vec2, v2->a_vec2, 2);
+    }
+    static float vec2_dist(const vec2 *v1, const vec2 *v2)
+    {
+        return vecn_dist(v1->a_vec2, v2->a_vec2, 2);
+    }
+    static void vec2_normalize(const vec2 *v, vec2 *out)
+    {
+        vecn_normalize(v->a_vec2, 2, out->a_vec2);
+    }
 
     static float vec2_edge_cross(const vec2 *a, const vec2 *b, const vec2 *c)
     {
@@ -436,8 +502,14 @@ extern "C"
     ///////////////////////////////////////////////////////////////
     // Vec3
 
-    static void vec3_zero(vec3 *out)       { vecn_zero(out->a_vec, 3); }
-    static bool vec3_equals(const vec3 *v1, const vec3 *v2) { return vecn_equals(v1->a_vec, v2->a_vec, 3); }
+    static void vec3_zero(vec3 *out)
+    {
+        vecn_zero(out->a_vec, 3);
+    }
+    static bool vec3_equals(const vec3 *v1, const vec3 *v2)
+    {
+        return vecn_equals(v1->a_vec, v2->a_vec, 3);
+    }
 
     static void vec3_set(float x, float y, float z, vec3 *v)
     {
@@ -446,19 +518,58 @@ extern "C"
         v->z = z;
     }
 
-    static void vec3_add(const vec3 *v1, const vec3 *v2, vec3 *out)      { vecn_add(v1->a_vec, v2->a_vec, 3, out->a_vec); }
-    static void vec3_sub(const vec3 *v1, const vec3 *v2, vec3 *out)      { vecn_sub(v1->a_vec, v2->a_vec, 3, out->a_vec); }
-    static void vec3_div(const vec3 *v, float fac, vec3 *out)             { vecn_div(v->a_vec, fac, 3, out->a_vec); }
-    static void vec3_div_vec3(const vec3 *v1, const vec3 *v2, vec3 *out) { vecn_div_vec(v1->a_vec, v2->a_vec, 3, out->a_vec); }
-    static void vec3_mul(const vec3 *v, float fac, vec3 *out)             { vecn_mul(v->a_vec, fac, 3, out->a_vec); }
-    static void vec3_mul_vec3(const vec3 *v1, const vec3 *v2, vec3 *out) { vecn_mul_vec(v1->a_vec, v2->a_vec, 3, out->a_vec); }
-    static void vec3_pow(const vec3 *v, float exp, vec3 *out)             { vecn_pow(v->a_vec, exp, 3, out->a_vec); }
-    static float vec3_dot(const vec3 *v1, const vec3 *v2)                 { return vecn_dot(v1->a_vec, v2->a_vec, 3); }
-    static float vec3_length_sqrd(const vec3 *v)                          { return vecn_length_sqrd(v->a_vec, 3); }
-    static float vec3_length(const vec3 *v)                               { return vecn_length(v->a_vec, 3); }
-    static float vec3_dist_sqrd(const vec3 *v1, const vec3 *v2)          { return vecn_dist_sqrd(v1->a_vec, v2->a_vec, 3); }
-    static float vec3_dist(const vec3 *v1, const vec3 *v2)               { return vecn_dist(v1->a_vec, v2->a_vec, 3); }
-    static void vec3_normalize(const vec3 *v, vec3 *out)                  { vecn_normalize(v->a_vec, 3, out->a_vec); }
+    static void vec3_add(const vec3 *v1, const vec3 *v2, vec3 *out)
+    {
+        vecn_add(v1->a_vec, v2->a_vec, 3, out->a_vec);
+    }
+    static void vec3_sub(const vec3 *v1, const vec3 *v2, vec3 *out)
+    {
+        vecn_sub(v1->a_vec, v2->a_vec, 3, out->a_vec);
+    }
+    static void vec3_div(const vec3 *v, float fac, vec3 *out)
+    {
+        vecn_div(v->a_vec, fac, 3, out->a_vec);
+    }
+    static void vec3_div_vec3(const vec3 *v1, const vec3 *v2, vec3 *out)
+    {
+        vecn_div_vec(v1->a_vec, v2->a_vec, 3, out->a_vec);
+    }
+    static void vec3_mul(const vec3 *v, float fac, vec3 *out)
+    {
+        vecn_mul(v->a_vec, fac, 3, out->a_vec);
+    }
+    static void vec3_mul_vec3(const vec3 *v1, const vec3 *v2, vec3 *out)
+    {
+        vecn_mul_vec(v1->a_vec, v2->a_vec, 3, out->a_vec);
+    }
+    static void vec3_pow(const vec3 *v, float exp, vec3 *out)
+    {
+        vecn_pow(v->a_vec, exp, 3, out->a_vec);
+    }
+    static float vec3_dot(const vec3 *v1, const vec3 *v2)
+    {
+        return vecn_dot(v1->a_vec, v2->a_vec, 3);
+    }
+    static float vec3_length_sqrd(const vec3 *v)
+    {
+        return vecn_length_sqrd(v->a_vec, 3);
+    }
+    static float vec3_length(const vec3 *v)
+    {
+        return vecn_length(v->a_vec, 3);
+    }
+    static float vec3_dist_sqrd(const vec3 *v1, const vec3 *v2)
+    {
+        return vecn_dist_sqrd(v1->a_vec, v2->a_vec, 3);
+    }
+    static float vec3_dist(const vec3 *v1, const vec3 *v2)
+    {
+        return vecn_dist(v1->a_vec, v2->a_vec, 3);
+    }
+    static void vec3_normalize(const vec3 *v, vec3 *out)
+    {
+        vecn_normalize(v->a_vec, 3, out->a_vec);
+    }
 
     static void vec3_cross(const vec3 *v1, const vec3 *v2, vec3 *out)
     {
@@ -470,8 +581,14 @@ extern "C"
     ///////////////////////////////////////////////////////////////
     // Vec4
 
-    static void vec4_zero(vec4 *out)       { vecn_zero(out->a_vec, 4); }
-    static bool vec4_equals(const vec4 *v1, const vec4 *v2) { return vecn_equals(v1->a_vec, v2->a_vec, 4); }
+    static void vec4_zero(vec4 *out)
+    {
+        vecn_zero(out->a_vec, 4);
+    }
+    static bool vec4_equals(const vec4 *v1, const vec4 *v2)
+    {
+        return vecn_equals(v1->a_vec, v2->a_vec, 4);
+    }
 
     static void vec4_set(const float ary[4], vec4 *v)
     {
@@ -481,20 +598,62 @@ extern "C"
         v->w = ary[3];
     }
 
-    static void vec4_add(const vec4 *v1, const vec4 *v2, vec4 *out)      { vecn_add(v1->a_vec, v2->a_vec, 4, out->a_vec); }
-    static void vec4_sub(const vec4 *v1, const vec4 *v2, vec4 *out)      { vecn_sub(v1->a_vec, v2->a_vec, 4, out->a_vec); }
-    static void vec4_div(const vec4 *v, float fac, vec4 *out)             { vecn_div(v->a_vec, fac, 4, out->a_vec); }
-    static void vec4_mul(const vec4 *v, float fac, vec4 *out)             { vecn_mul(v->a_vec, fac, 4, out->a_vec); }
-    static void vec4_mul_vec4(const vec4 *v1, const vec4 *v2, vec4 *out) { vecn_mul_vec(v1->a_vec, v2->a_vec, 4, out->a_vec); }
-    static void vec4_pow(const vec4 *v, float exp, vec4 *out)             { vecn_pow(v->a_vec, exp, 4, out->a_vec); }
-    static void vec4_abs(const vec4 *v, vec4 *out)                        { vecn_abs(v->a_vec, 4, out->a_vec); }
-    static void vec4_sqrt(const vec4 *v, vec4 *out)                       { vecn_sqrt(v->a_vec, 4, out->a_vec); }
-    static float vec4_dot(const vec4 *v1, const vec4 *v2)                 { return vecn_dot(v1->a_vec, v2->a_vec, 4); }
-    static float vec4_length_sqrd(const vec4 *v)                          { return vecn_length_sqrd(v->a_vec, 4); }
-    static float vec4_length(const vec4 *v)                               { return vecn_length(v->a_vec, 4); }
-    static float vec4_dist_sqrd(const vec4 *v1, const vec4 *v2)          { return vecn_dist_sqrd(v1->a_vec, v2->a_vec, 4); }
-    static float vec4_dist(const vec4 *v1, const vec4 *v2)               { return vecn_dist(v1->a_vec, v2->a_vec, 4); }
-    static void vec4_normalize(const vec4 *v, vec4 *out)                  { vecn_normalize(v->a_vec, 4, out->a_vec); }
+    static void vec4_add(const vec4 *v1, const vec4 *v2, vec4 *out)
+    {
+        vecn_add(v1->a_vec, v2->a_vec, 4, out->a_vec);
+    }
+    static void vec4_sub(const vec4 *v1, const vec4 *v2, vec4 *out)
+    {
+        vecn_sub(v1->a_vec, v2->a_vec, 4, out->a_vec);
+    }
+    static void vec4_div(const vec4 *v, float fac, vec4 *out)
+    {
+        vecn_div(v->a_vec, fac, 4, out->a_vec);
+    }
+    static void vec4_mul(const vec4 *v, float fac, vec4 *out)
+    {
+        vecn_mul(v->a_vec, fac, 4, out->a_vec);
+    }
+    static void vec4_mul_vec4(const vec4 *v1, const vec4 *v2, vec4 *out)
+    {
+        vecn_mul_vec(v1->a_vec, v2->a_vec, 4, out->a_vec);
+    }
+    static void vec4_pow(const vec4 *v, float exp, vec4 *out)
+    {
+        vecn_pow(v->a_vec, exp, 4, out->a_vec);
+    }
+    static void vec4_abs(const vec4 *v, vec4 *out)
+    {
+        vecn_abs(v->a_vec, 4, out->a_vec);
+    }
+    static void vec4_sqrt(const vec4 *v, vec4 *out)
+    {
+        vecn_sqrt(v->a_vec, 4, out->a_vec);
+    }
+    static float vec4_dot(const vec4 *v1, const vec4 *v2)
+    {
+        return vecn_dot(v1->a_vec, v2->a_vec, 4);
+    }
+    static float vec4_length_sqrd(const vec4 *v)
+    {
+        return vecn_length_sqrd(v->a_vec, 4);
+    }
+    static float vec4_length(const vec4 *v)
+    {
+        return vecn_length(v->a_vec, 4);
+    }
+    static float vec4_dist_sqrd(const vec4 *v1, const vec4 *v2)
+    {
+        return vecn_dist_sqrd(v1->a_vec, v2->a_vec, 4);
+    }
+    static float vec4_dist(const vec4 *v1, const vec4 *v2)
+    {
+        return vecn_dist(v1->a_vec, v2->a_vec, 4);
+    }
+    static void vec4_normalize(const vec4 *v, vec4 *out)
+    {
+        vecn_normalize(v->a_vec, 4, out->a_vec);
+    }
 
     static char *vec4_tos(const quat *q)
     {
@@ -825,24 +984,11 @@ extern "C"
         mat_mul(m1->a_mat3, m2->a_mat3, 3, 3, 3, 3, out->a_mat3);
     }
 
-    static char *mat3_tos(const mat3 *m)
-    {
-        char *out = calloc(sizeof(char), 300);
-        // clang-format off
-        snprintf(out, 300, "[\n %f, %f, %f \n %f, %f, %f \n %f, %f, %f \n]\n", 
-            m->m00, m->m10, m->m20,
-            m->m01, m->m11, m->m21,
-            m->m02, m->m12, m->m22
-        );
-        // clang-format on
-        return out;
-    }
-
     ///////////////////////////////////////////////////////////////
     // Generic Matrix Multiply
 
     static void mat_mul(const float *m1, const float *m2, unsigned char r1, unsigned char c1, unsigned char r2,
-                 unsigned char c2, float *out)
+                        unsigned char c2, float *out)
     {
         if (c1 != r2)
         {
@@ -861,6 +1007,21 @@ extern "C"
                     sum += m1[i * c1 + k] * m2[k * c2 + j];
                 }
                 out[i * c2 + j] = sum;
+            }
+        }
+    }
+
+    ///////////////////////////////////////////////////////////////
+    // Generic Matrix Transpose
+
+    static void mat_transpose(const float *m, unsigned char r, unsigned char c, float *out)
+    {
+        unsigned char i, j;
+        for (i = 0; i < r; i++)
+        {
+            for (j = 0; j < c; j++)
+            {
+                out[j * r + i] = m[i * c + j];
             }
         }
     }
