@@ -150,7 +150,7 @@ extern "C"
      *
      * r,c = rows and columns of m
      */
-    static void mat_transpose(const float *m, unsigned char r, unsigned char c, float *out);
+    static void mat_transpose(const float *m, unsigned int r, unsigned int c, float *out);
 
     /** Multiply two 4x4 matrices, result into out */
     static void mat4_mul(const mat4 *m1, const mat4 *m2, mat4 *out);
@@ -1014,9 +1014,9 @@ extern "C"
     ///////////////////////////////////////////////////////////////
     // Generic Matrix Transpose
 
-    static void mat_transpose(const float *m, unsigned char r, unsigned char c, float *out)
+    static void mat_transpose(const float *m, unsigned int r, unsigned int c, float *out)
     {
-        unsigned char i, j;
+        unsigned int i, j;
         for (i = 0; i < r; i++)
         {
             for (j = 0; j < c; j++)
