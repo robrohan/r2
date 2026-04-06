@@ -140,8 +140,8 @@ extern "C"
      * r1,c1 = rows and column size of m1
      * r2,c2 = rows and column size of m2
      */
-    static void mat_mul(const float *m1, const float *m2, unsigned char r1, unsigned char c1, unsigned char r2,
-                        unsigned char c2, float *out);
+    static void mat_mul(const float *m1, const float *m2, unsigned int r1, unsigned int c1, unsigned int r2,
+                        unsigned int c2, float *out);
 
     /**
      * Transpose a matrix of arbitrary size. m is row-major with r rows
@@ -987,8 +987,8 @@ extern "C"
     ///////////////////////////////////////////////////////////////
     // Generic Matrix Multiply
 
-    static void mat_mul(const float *m1, const float *m2, unsigned char r1, unsigned char c1, unsigned char r2,
-                        unsigned char c2, float *out)
+    static void mat_mul(const float *m1, const float *m2, unsigned int r1, unsigned int c1, unsigned int r2,
+                        unsigned int c2, float *out)
     {
         if (c1 != r2)
         {
@@ -996,7 +996,7 @@ extern "C"
             return;
         }
 
-        unsigned char i, j, k;
+        unsigned int i, j, k;
         for (i = 0; i < r1; i++)
         {
             for (j = 0; j < c2; j++)
