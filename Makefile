@@ -51,34 +51,25 @@ endif
 
 run: test test_clang check
 
-test: clean
+build_tests: clean
 	mkdir -p bin
 	CC=gcc OUT=./bin/run_tests \
 	CFLAGS='-std=c11 $(C_ERRS) -g3 -v -O3 -funroll-loops $(SIMD_FLAGS) $(OMP_FLAGS) $(BLAS_CFLAGS)' \
 	LDFLAGS='$(BLAS_LDFLAGS)' \
 	./test.sh
 #	objdump -S --disassemble ./bin/run_tests > ./bin/run_tests.asm
+
+test: build_tests
 	./bin/run_tests
 
-
-test_strings: clean
-	mkdir -p bin
-	CC=gcc OUT=./bin/run_tests \
-	CFLAGS='-std=c11 $(C_ERRS) -g3 -v -O3 -funroll-loops $(SIMD_FLAGS) $(OMP_FLAGS) $(BLAS_CFLAGS)' \
-	LDFLAGS='$(BLAS_LDFLAGS)' \
-	./test.sh
+test_strings: build_tests
 	./bin/run_tests strings
 
-test_clang: clean
-#	sudo apt-get install libomp-dev
-	mkdir -p bin
-	CC=clang OUT=./bin/run_tests \
-	CFLAGS='-std=c11 $(C_ERRS) -g3 -v -O3 -funroll-loops $(SIMD_FLAGS) $(OMP_FLAGS) $(BLAS_CFLAGS)' \
-	LDFLAGS='$(BLAS_LDFLAGS)' \
-	LIBS='-lm $(OMP_LIBS)' \
-	./test.sh
-#	objdump -S --disassemble ./bin/run_tests > ./bin/run_tests.asm
-	./bin/run_tests
+test_maths: build_tests
+	./bin/run_tests maths
+
+test_term: build_tests
+	./bin/run_tests termui
 
 perf:
 #####################################
