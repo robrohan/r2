@@ -35,7 +35,7 @@ ifeq ($(OS)_$(ARCH),Darwin_arm64)
 endif
 
 ifeq ($(OS), Darwin)
-	BLAS_CFLAGS  = -DHAVE_BLAS -framework Accelerate
+	BLAS_CFLAGS  = -DHAVE_BLAS -DACCELERATE_NEW_LAPACK -framework Accelerate
 	BLAS_LDFLAGS = -framework Accelerate
 else
 	BLAS_LIBS := $(shell pkg-config --libs openblas 2>/dev/null)
