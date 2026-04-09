@@ -17,4 +17,4 @@ jobs:
     steps:
     - uses: actions/checkout@v4
     - name: make test
-      run: make test
+      run: make test NO_BLAS=1
