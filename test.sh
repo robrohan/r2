@@ -13,9 +13,8 @@ CC=${CC:-gcc}
 # -g preserves debug information; -g4 generates source maps (emcc)
 #############################
 
-## Desktop version
 CFLAGS=${CFLAGS:- -std=c11 -Wall -Werror -Wno-unused -g3 -v -O3 -funroll-loops -msse3 -fopenmp }
-LDFLAGS=${LDFLAGS: }
+LDFLAGS=${LDFLAGS:- }
 
 OUT=${OUT:-run_tests}
 LIBS=${LIBS:- -lm}
