@@ -15,6 +15,7 @@ CC=${CC:-gcc}
 
 ## Desktop version
 CFLAGS=${CFLAGS:- -std=c11 -Wall -Werror -Wno-unused -g3 -v -O3 -funroll-loops -msse3 -fopenmp }
+LDFLAGS=${LDFLAGS: }
 
 OUT=${OUT:-run_tests}
 LIBS=${LIBS:- -lm}
@@ -22,11 +23,5 @@ LIBS=${LIBS:- -lm}
 TESTS=./tests/*.c
 
 #############################
-${CC} ${CFLAGS} tests.c ${TESTS} ${LIBS} -o ${OUT}
-#############################
 
-# if [ $? -eq 0 ]
-# then
-#     ./${OUT}
-#     # rm ./${OUT}
-# fi
+${CC} ${CFLAGS} tests.c ${TESTS} ${LIBS} ${LDFLAGS} -o ${OUT}

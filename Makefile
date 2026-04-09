@@ -34,21 +34,25 @@ ifeq ($(OS)_$(ARCH),Darwin_arm64)
 	OMP_LIBS    :=
 endif
 
-run: test test_clang check
+ifeq ($(OS), Darwin)
+	BLAS_CFLAGS  = -DHAVE_BLAS -framework Accelerate
+	BLAS_LDFLAGS = -framework Accelerate
+else
+	BLAS_LIBS := $(shell pkg-config --libs openblas 2>/dev/null)
+	ifneq ($(BLAS_LIBS),)
+		BLAS_CFLAGS  = -DHAVE_BLAS $(shell pkg-config --cflags openblas)
+		BLAS_LDFLAGS = $(shell pkg-config --libs openblas)
+	endif
+endif
 
-# Should run something like
-# `source ~/Projects/spikes/emsdk/emsdk_env.sh`
-# first to setup environment
-test_wasm: clean
-	mkdir -p bin
-	CC=emcc OUT=./bin/run_tests.html \
-	CFLAGS='-std=c11 -Wall -Werror -Wno-unused -v -Os' \
-	./test.sh
+
+run: test test_clang check
 
 test: clean
 	mkdir -p bin
 	CC=gcc OUT=./bin/run_tests \
-	CFLAGS='-std=c11 $(C_ERRS) -g3 -v -O3 -funroll-loops $(SIMD_FLAGS) $(OMP_FLAGS)' \
+	CFLAGS='-std=c11 $(C_ERRS) -g3 -v -O3 -funroll-loops $(SIMD_FLAGS) $(OMP_FLAGS) $(BLAS_CFLAGS)' \
+	LDFLAGS='$(BLAS_LDFLAGS)' \
 	./test.sh
 #	objdump -S --disassemble ./bin/run_tests > ./bin/run_tests.asm
 	./bin/run_tests
@@ -57,7 +61,8 @@ test: clean
 test_strings: clean
 	mkdir -p bin
 	CC=gcc OUT=./bin/run_tests \
-	CFLAGS='-std=c11 $(C_ERRS) -g3 -v -O3 -funroll-loops $(SIMD_FLAGS) $(OMP_FLAGS)' \
+	CFLAGS='-std=c11 $(C_ERRS) -g3 -v -O3 -funroll-loops $(SIMD_FLAGS) $(OMP_FLAGS) $(BLAS_CFLAGS)' \
+	LDFLAGS='$(BLAS_LDFLAGS)' \
 	./test.sh
 	./bin/run_tests strings
 
@@ -65,7 +70,8 @@ test_clang: clean
 #	sudo apt-get install libomp-dev
 	mkdir -p bin
 	CC=clang OUT=./bin/run_tests \
-	CFLAGS='-std=c11 $(C_ERRS) -g3 -v -O3 -funroll-loops $(SIMD_FLAGS) $(OMP_FLAGS)' \
+	CFLAGS='-std=c11 $(C_ERRS) -g3 -v -O3 -funroll-loops $(SIMD_FLAGS) $(OMP_FLAGS) $(BLAS_CFLAGS)' \
+	LDFLAGS='$(BLAS_LDFLAGS)' \
 	LIBS='-lm $(OMP_LIBS)' \
 	./test.sh
 #	objdump -S --disassemble ./bin/run_tests > ./bin/run_tests.asm

@@ -39,6 +39,14 @@ extern "C"
 #include <stdio.h>
 #include <stdlib.h>
 
+#ifdef HAVE_BLAS
+  #ifdef __APPLE__
+    #include <Accelerate/Accelerate.h>
+  #else
+    #include <cblas.h>
+  #endif
+#endif
+
 #ifndef EPSILON
 #define EPSILON 0.000000954
 #endif
@@ -990,6 +998,13 @@ extern "C"
     static void mat_mul(const float *m1, const float *m2, unsigned int r1, unsigned int c1, unsigned int r2,
                         unsigned int c2, float *out)
     {
+#ifdef HAVE_BLAS
+      cblas_sgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans,
+		  r2, c2, c1,
+		  1.0f, m1, c1,
+		        m2, c2,
+		  0.0f, out, c2);
+#else
         if (c1 != r2)
         {
             perror("column size of m1 must match row size of m2");
@@ -1009,6 +1024,7 @@ extern "C"
                 out[i * c2 + j] = sum;
             }
         }
+#endif
     }
 
     ///////////////////////////////////////////////////////////////
