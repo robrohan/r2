@@ -1,3 +1,4 @@
+
 /* r2_maths - v0.0 - public domain vector, matrix and quaternion library
     no warranty implied; use at your own risk
 
@@ -1000,7 +1001,7 @@ extern "C"
     {
 #ifdef HAVE_BLAS
       cblas_sgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans,
-		  r2, c2, c1,
+		  r1, c2, c1,
 		  1.0f, m1, c1,
 		        m2, c2,
 		  0.0f, out, c2);
