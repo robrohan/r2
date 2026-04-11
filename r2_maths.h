@@ -333,9 +333,14 @@ extern "C"
 
     static void vecn_mul(const float *v, float fac, int n, float *out)
     {
+#ifdef HAVE_BLAS
+        cblas_scopy(n, v, 1, out, 1);
+        cblas_sscal(n, fac, out, 1);
+#else
         int i;
         for (i = 0; i < n; i++)
             out[i] = v[i] * fac;
+#endif
     }
 
     static void vecn_mul_vec(const float *v1, const float *v2, int n, float *out)
@@ -347,10 +352,15 @@ extern "C"
 
     static void vecn_div(const float *v, float fac, int n, float *out)
     {
-        float d = 1.f / ((fac == 0.f) ? 1.f : fac);
+        float d = (fac == 0.f) ? 1.f : 1.f / fac;
+#ifdef HAVE_BLAS
+        cblas_scopy(n, v, 1, out, 1);
+        cblas_sscal(n, d, out, 1);
+#else
         int i;
         for (i = 0; i < n; i++)
             out[i] = v[i] * d;
+#endif
     }
 
     static void vecn_div_vec(const float *v1, const float *v2, int n, float *out)
@@ -383,11 +393,15 @@ extern "C"
 
     static float vecn_dot(const float *v1, const float *v2, int n)
     {
+#ifdef HAVE_BLAS
+        return cblas_sdot(n, v1, 1, v2, 1);
+#else
         float sum = 0.f;
         int i;
         for (i = 0; i < n; i++)
             sum += v1[i] * v2[i];
         return sum;
+#endif
     }
 
     static float vecn_length_sqrd(const float *v, int n)
@@ -397,7 +411,11 @@ extern "C"
 
     static float vecn_length(const float *v, int n)
     {
+#ifdef HAVE_BLAS
+        return cblas_snrm2(n, v, 1);
+#else
         return sqrtf(vecn_length_sqrd(v, n));
+#endif
     }
 
     static float vecn_dist_sqrd(const float *v1, const float *v2, int n)

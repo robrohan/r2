@@ -996,6 +996,56 @@ static const char *test_vecn_arbitrary_n(void)
     return 0;
 }
 
+// Large-n tests that exercise the BLAS code paths (n=256 ensures BLAS overhead
+// is warranted and confirms correctness at scale with and without BLAS).
+static const char *test_vecn_dot_large(void)
+{
+    // a = {1,1,...} b = {2,2,...} -> dot = 256*2 = 512
+    float a[256], b[256];
+    int i;
+    for (i = 0; i < 256; i++) { a[i] = 1.f; b[i] = 2.f; }
+    r2_assert("vecn_dot large is wrong", r2_equals(vecn_dot(a, b, 256), 512.f));
+    return 0;
+}
+
+static const char *test_vecn_length_large(void)
+{
+    // v = {1,0,0,...} -> length = 1
+    float v[256] = {0};
+    v[0] = 1.f;
+    r2_assert("vecn_length large is wrong", r2_equals(vecn_length(v, 256), 1.f));
+    // v = {3,4,0,...} -> length = 5
+    v[0] = 3.f; v[1] = 4.f;
+    r2_assert("vecn_length large 3-4-5 is wrong", r2_equals(vecn_length(v, 256), 5.f));
+    return 0;
+}
+
+static const char *test_vecn_mul_large(void)
+{
+    // a = {2,2,...} * 3 -> {6,6,...}
+    float a[256], out[256];
+    int i;
+    for (i = 0; i < 256; i++) a[i] = 2.f;
+    vecn_mul(a, 3.f, 256, out);
+    int ok = 1;
+    for (i = 0; i < 256; i++) ok &= r2_equals(out[i], 6.f);
+    r2_assert("vecn_mul large is wrong", ok);
+    return 0;
+}
+
+static const char *test_vecn_div_large(void)
+{
+    // a = {6,6,...} / 2 -> {3,3,...}
+    float a[256], out[256];
+    int i;
+    for (i = 0; i < 256; i++) a[i] = 6.f;
+    vecn_div(a, 2.f, 256, out);
+    int ok = 1;
+    for (i = 0; i < 256; i++) ok &= r2_equals(out[i], 3.f);
+    r2_assert("vecn_div large is wrong", ok);
+    return 0;
+}
+
 static const char *r2_maths_test(void)
 {
     // v2
@@ -1074,6 +1124,10 @@ static const char *r2_maths_test(void)
     r2_run_test(test_vecn_pow);
     r2_run_test(test_vecn_sqrt);
     r2_run_test(test_vecn_arbitrary_n);
+    r2_run_test(test_vecn_dot_large);
+    r2_run_test(test_vecn_length_large);
+    r2_run_test(test_vecn_mul_large);
+    r2_run_test(test_vecn_div_large);
 
     return 0;
 }
