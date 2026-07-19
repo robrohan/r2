@@ -52,6 +52,13 @@ extern "C"
 #define EPSILON 0.000000954
 #endif
 
+/* restrict is C99; not a keyword in C++ */
+#ifdef __cplusplus
+#define R2_RESTRICT
+#else
+#define R2_RESTRICT restrict
+#endif
+
 #ifndef M_PI
 #define M_PI 3.141592653589
 #endif
@@ -1030,17 +1037,25 @@ extern "C"
             return;
         }
 
+        /* i-k-j order: both inner-loop accesses are unit-stride, unlike the
+           textbook i-j-k order whose m2 reads stride by c2 and thrash cache
+           on large matrices */
         unsigned int i, j, k;
         for (i = 0; i < r1; i++)
         {
+            float *R2_RESTRICT out_row = out + i * c2;
             for (j = 0; j < c2; j++)
             {
-                float sum = 0.f;
-                for (k = 0; k < c1; k++)
+                out_row[j] = 0.f;
+            }
+            for (k = 0; k < c1; k++)
+            {
+                const float a = m1[i * c1 + k];
+                const float *R2_RESTRICT m2_row = m2 + k * c2;
+                for (j = 0; j < c2; j++)
                 {
-                    sum += m1[i * c1 + k] * m2[k * c2 + j];
+                    out_row[j] += a * m2_row[j];
                 }
-                out[i * c2 + j] = sum;
             }
         }
 #endif
