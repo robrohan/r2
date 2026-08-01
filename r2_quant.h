@@ -170,6 +170,18 @@ extern "C"
         for (i = 0; i < n; i++) out[i] = (float)in[i] * scale;
     }
 
+#if defined(R2_SIMD_XTENSA_PIE)
+    /* r2_quant.h stays portable and does not implement PIE kernels itself -
+       the platform (e.g. Chestnut) must define this symbol, since a real
+       implementation needs things r2_quant.h has no business owning: the
+       call0 ABI wrapper, the CPENABLE coprocessor-enable that must happen
+       once at boot before any PIE instruction can execute without faulting,
+       and validation against real hardware/emulation this header can't do.
+       See r2's project notes for a verified-against-real-esp-nn-source
+       starting point for the actual kernel body. */
+    extern int32_t r2_xtensa_pie_dot_i8(const int8_t *v1, const int8_t *v2, int n);
+#endif
+
     static int32_t vecn_dot_i8(const int8_t *v1, const int8_t *v2, int n)
     {
 #if defined(R2_SIMD_AVX2)
@@ -233,7 +245,7 @@ extern "C"
         return sum;
 
 #elif defined(R2_SIMD_XTENSA_PIE)
-        #error "R2_XTENSA_PIE kernels not implemented yet - see r2 plan follow-ups"
+        return r2_xtensa_pie_dot_i8(v1, v2, n);
 
 #else
         int32_t sum = 0;
@@ -272,22 +284,16 @@ extern "C"
     {
         if (c1 != r2) return;
 
-        /* No extra allocation: int32_t and float are the same size, so out's
-           own storage is reused as the int32 accumulator buffer, then
-           rescaled to float in place below. */
-        int32_t *raw = (int32_t *)out;
-        mat_mul_i8(m1, m2, r1, c1, r2, c2, raw);
-
         float scale = s1 * s2;
-        unsigned total = r1 * c2;
-        unsigned idx;
-        /* Each iteration reads raw[idx] before writing out[idx] (same slot,
-           same address) and never touches any other index, so overwriting
-           the int32 value with its rescaled float in place is safe. */
-        for (idx = 0; idx < total; idx++)
+        unsigned i, j, k;
+        for (i = 0; i < r1; i++)
         {
-            int32_t v = raw[idx];
-            out[idx] = (float)v * scale;
+            for (j = 0; j < c2; j++)
+            {
+                int32_t acc = 0;
+                for (k = 0; k < c1; k++) acc += (int32_t)m1[i * c1 + k] * (int32_t)m2[k * c2 + j];
+                out[i * c2 + j] = (float)acc * scale;
+            }
         }
     }
 
@@ -369,6 +375,15 @@ extern "C"
         for (i = 0; i < n; i++) out[i] = (float)in[i] * scale;
     }
 
+#if defined(R2_SIMD_XTENSA_PIE)
+    /* See the r2_xtensa_pie_dot_i8 comment above - same contract, not yet
+       implemented anywhere. Declared (not #error'd) so that R2_XTENSA_PIE
+       builds compile even before every kernel has a platform-side
+       implementation; only an actual call to this one would fail to link
+       until a platform provides it. */
+    extern int64_t r2_xtensa_pie_dot_i16(const int16_t *v1, const int16_t *v2, int n);
+#endif
+
     static int64_t vecn_dot_i16(const int16_t *v1, const int16_t *v2, int n)
     {
 #if defined(R2_SIMD_AVX2)
@@ -436,7 +451,7 @@ extern "C"
         return sum;
 
 #elif defined(R2_SIMD_XTENSA_PIE)
-        #error "R2_XTENSA_PIE kernels not implemented yet - see r2 plan follow-ups"
+        return r2_xtensa_pie_dot_i16(v1, v2, n);
 
 #else
         int64_t sum = 0;
