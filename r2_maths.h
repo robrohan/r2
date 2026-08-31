@@ -37,8 +37,15 @@ extern "C"
 
 #include <math.h>
 #include <stdbool.h>
+#include <stddef.h>
 #include <stdio.h>
-#include <stdlib.h>
+
+/* Suggested buffer sizes for the *_tos() functions below - callers own the
+   buffer, nothing in this file allocates. */
+#define R2_VEC4_TOS_BUF_SIZE 64
+#define R2_QUAT_TOS_BUF_SIZE 100
+#define R2_MAT3_TOS_BUF_SIZE 160
+#define R2_MAT4_TOS_BUF_SIZE 300
 
 #ifdef HAVE_BLAS
   #ifdef __APPLE__
@@ -185,12 +192,14 @@ extern "C"
      */
     static void mat4_lookat(const vec4 *pos, const vec4 *target, const vec4 *up, mat4 *out);
     static void mat4_transpose(const mat4 *m1, mat4 *m2);
-    static char *mat4_tos(const mat4 *m);
+    /** Write a mat4 as a string into buf (size buf_size). See R2_MAT4_TOS_BUF_SIZE. */
+    static void mat4_tos(const mat4 *m, char *buf, size_t buf_size);
 
     /** Multiply two 3x3 matrices, result into out */
     static void mat3_mul(const mat3 *m1, const mat3 *m2, mat3 *out);
     static void mat3_identity(mat3 *m);
-    static char *mat3_tos(const mat3 *m);
+    /** Write a mat3 as a string into buf (size buf_size). See R2_MAT3_TOS_BUF_SIZE. */
+    static void mat3_tos(const mat3 *m, char *buf, size_t buf_size);
 
     static void quat_mat4(const quat *q, mat4 *out);
     static void quat_mul_vec3(const quat *q, const vec3 *v, vec3 *out);
@@ -207,8 +216,11 @@ extern "C"
     static void quat_add(const quat *q1, const quat *q2, quat *out);
     static void quat_identity(quat *q);
     static void quat_zero(quat *q);
-    /** To string a quat (also see vec4_tos) - you need to free */
-    static char *quat_tos(const quat *q);
+    /**
+     * Write a quat as a string into buf (size buf_size). See R2_QUAT_TOS_BUF_SIZE.
+     * (also see vec4_tos)
+     */
+    static void quat_tos(const quat *q, char *buf, size_t buf_size);
 
     static void vec4_normalize(const vec4 *v, vec4 *out);
     static float vec4_dist(const vec4 *v1, const vec4 *v2);
@@ -228,10 +240,10 @@ extern "C"
     static bool vec4_equals(const vec4 *v1, const vec4 *v2);
     static void vec4_zero(vec4 *out);
     /**
-     * To string a vec4 - you need to free
+     * Write a vec4 as a string into buf (size buf_size). See R2_VEC4_TOS_BUF_SIZE.
      * Will also work for quat, color, and vec3
      */
-    static char *vec4_tos(const vec4 *q);
+    static void vec4_tos(const vec4 *q, char *buf, size_t buf_size);
 
     static void vec3_zero(vec3 *out);
     static bool vec3_equals(const vec3 *v1, const vec3 *v2);
@@ -689,11 +701,9 @@ extern "C"
         vecn_normalize(v->a_vec, 4, out->a_vec);
     }
 
-    static char *vec4_tos(const quat *q)
+    static void vec4_tos(const quat *q, char *buf, size_t buf_size)
     {
-        char *out = calloc(sizeof(char), 60);
-        snprintf(out, 50, "(%f, %f, %f, %f)\n", q->x, q->y, q->z, q->w);
-        return out;
+        snprintf(buf, buf_size, "(%f, %f, %f, %f)\n", q->x, q->y, q->z, q->w);
     }
 
     ///////////////////////////////////////////////////////////////
@@ -806,11 +816,9 @@ extern "C"
         out->z = -q->z;
     }
 
-    static char *quat_tos(const quat *q)
+    static void quat_tos(const quat *q, char *buf, size_t buf_size)
     {
-        char *out = calloc(sizeof(char), 100);
-        snprintf(out, 100, "[%f + %fi + %fj + %fk]\n", q->w, q->x, q->y, q->z);
-        return out;
+        snprintf(buf, buf_size, "[%f + %fi + %fj + %fk]\n", q->w, q->x, q->y, q->z);
     }
 
     static void quat_normalize(const quat *q, quat *out)
@@ -956,18 +964,16 @@ extern "C"
         // clang-format on
     }
 
-    static char *mat4_tos(const mat4 *m)
+    static void mat4_tos(const mat4 *m, char *buf, size_t buf_size)
     {
-        char *out = calloc(sizeof(char), 300);
         // clang-format off
-        snprintf(out, 300, "[\n %f, %f, %f, %f \n %f, %f, %f, %f \n %f, %f, %f, %f \n %f, %f, %f, %f \n]\n", 
+        snprintf(buf, buf_size, "[\n %f, %f, %f, %f \n %f, %f, %f, %f \n %f, %f, %f, %f \n %f, %f, %f, %f \n]\n",
             m->m00, m->m10, m->m20, m->m30,
             m->m01, m->m11, m->m21, m->m31,
             m->m02, m->m12, m->m22, m->m32,
             m->m03, m->m13, m->m23, m->m33
         );
         // clang-format on
-        return out;
     }
 
     static void mat4_transpose(const mat4 *m1, mat4 *m2)
@@ -1016,6 +1022,17 @@ extern "C"
     static void mat3_mul(const mat3 *m1, const mat3 *m2, mat3 *out)
     {
         mat_mul(m1->a_mat3, m2->a_mat3, 3, 3, 3, 3, out->a_mat3);
+    }
+
+    static void mat3_tos(const mat3 *m, char *buf, size_t buf_size)
+    {
+        // clang-format off
+        snprintf(buf, buf_size, "[\n %f, %f, %f \n %f, %f, %f \n %f, %f, %f \n]\n",
+            m->m00, m->m10, m->m20,
+            m->m01, m->m11, m->m21,
+            m->m02, m->m12, m->m22
+        );
+        // clang-format on
     }
 
     ///////////////////////////////////////////////////////////////

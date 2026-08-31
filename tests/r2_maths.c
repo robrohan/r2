@@ -437,7 +437,9 @@ static const char *test_mat4_lookat(void)
     vec4 up = {.x = 0, .y = 1, .z = 0};
 
     mat4_lookat(&pos, &target, &up, &view);
-    // printf("%s", mat4_tos(view));
+    // char buf[R2_MAT4_TOS_BUF_SIZE];
+    // mat4_tos(&view, buf, sizeof(buf));
+    // printf("%s", buf);
     return 0;
 }
 
@@ -583,8 +585,9 @@ static const char *test_mat3_mul(void)
 
     // printf("Matrix Mul 3x3 run...\n");
     mat3_mul(&k1, &k2, &out);
-    // leak
-    // printf("%s", mat3_tos(out));
+    // char buf[R2_MAT3_TOS_BUF_SIZE];
+    // mat3_tos(&out, buf, sizeof(buf));
+    // printf("%s", buf);
 
     // -1.836970198, 1, 300,
     // -2, -3.67394039, 300,
@@ -639,9 +642,9 @@ static const char *test_mat_mul(void)
     // printf("Matrix Generic Mul 3x3 run...\n");
     mat_mul(k1.a_mat3, k2.a_mat3, 3, 3, 3, 3, out.a_mat3);
 
-    // char *m = mat3_tos(&out);
-    // printf("%s", m);
-    // free(m);
+    // char buf[R2_MAT3_TOS_BUF_SIZE];
+    // mat3_tos(&out, buf, sizeof(buf));
+    // printf("%s", buf);
 
     // clang-format off
     r2_assert("mat3 mul is wrong", 
@@ -1046,6 +1049,53 @@ static const char *test_vecn_div_large(void)
     return 0;
 }
 
+static const char *test_vec4_tos(void)
+{
+    quat q = {.x = 1.f, .y = 2.f, .z = 3.f, .w = 4.f};
+    char buf[R2_VEC4_TOS_BUF_SIZE];
+    vec4_tos(&q, buf, sizeof(buf));
+    r2_assert("vec4_tos produced empty string", strlen(buf) > 0);
+    return 0;
+}
+
+static const char *test_vec4_tos_truncates_safely(void)
+{
+    quat q = {.x = 1.f, .y = 2.f, .z = 3.f, .w = 4.f};
+    char buf[4];
+    vec4_tos(&q, buf, sizeof(buf));
+    r2_assert("vec4_tos did not null-terminate an undersized buffer", buf[sizeof(buf) - 1] == '\0');
+    return 0;
+}
+
+static const char *test_quat_tos(void)
+{
+    quat q = {.x = 1.f, .y = 2.f, .z = 3.f, .w = 4.f};
+    char buf[R2_QUAT_TOS_BUF_SIZE];
+    quat_tos(&q, buf, sizeof(buf));
+    r2_assert("quat_tos produced empty string", strlen(buf) > 0);
+    return 0;
+}
+
+static const char *test_mat3_tos(void)
+{
+    mat3 m = {0};
+    mat3_identity(&m);
+    char buf[R2_MAT3_TOS_BUF_SIZE];
+    mat3_tos(&m, buf, sizeof(buf));
+    r2_assert("mat3_tos produced empty string", strlen(buf) > 0);
+    return 0;
+}
+
+static const char *test_mat4_tos(void)
+{
+    mat4 m = {0};
+    mat4_identity(&m);
+    char buf[R2_MAT4_TOS_BUF_SIZE];
+    mat4_tos(&m, buf, sizeof(buf));
+    r2_assert("mat4_tos produced empty string", strlen(buf) > 0);
+    return 0;
+}
+
 static const char *r2_maths_test(void)
 {
     // v2
@@ -1128,6 +1178,12 @@ static const char *r2_maths_test(void)
     r2_run_test(test_vecn_length_large);
     r2_run_test(test_vecn_mul_large);
     r2_run_test(test_vecn_div_large);
+
+    r2_run_test(test_vec4_tos);
+    r2_run_test(test_vec4_tos_truncates_safely);
+    r2_run_test(test_quat_tos);
+    r2_run_test(test_mat3_tos);
+    r2_run_test(test_mat4_tos);
 
     return 0;
 }

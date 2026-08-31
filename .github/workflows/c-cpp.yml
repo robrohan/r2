@@ -18,3 +18,8 @@ jobs:
     - uses: actions/checkout@v4
     - name: make test
       run: make test NO_BLAS=1
+    - name: make test (forced scalar reference path)
+      run: make test NO_BLAS=1 SIMD_FORCE_SCALAR=1
+    - name: make test (AVX2)
+      if: matrix.os == 'ubuntu-latest'
+      run: make test NO_BLAS=1 SIMD_AVX2=1

@@ -13,7 +13,7 @@ CC=${CC:-gcc}
 # -g preserves debug information; -g4 generates source maps (emcc)
 #############################
 
-CFLAGS=${CFLAGS:- -std=c11 -Wall -Werror -Wno-unused -g3 -v -O3 -funroll-loops -msse3 -fopenmp }
+CFLAGS=${CFLAGS:- -std=c11 -Wall -Werror -Wno-unused -g3 -v -O3 -funroll-loops -msse4.1 -fopenmp }
 LDFLAGS=${LDFLAGS:- }
 
 OUT=${OUT:-run_tests}

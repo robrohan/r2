@@ -1,10 +1,12 @@
-.PHONY: all test test_strings test_clang clean build help
+.PHONY: all test test_strings test_maths test_quant test_clang clean build help
 
 help:
 	@echo "Available targets:"
 	@echo "  run          - build with gcc and clang, then lint (default)"
 	@echo "  test         - build and run all tests with gcc"
 	@echo "  test_strings - build and run only the strings test suite with gcc"
+	@echo "  test_maths   - build and run only the maths test suite with gcc"
+	@echo "  test_quant   - build and run only the quantized-math test suite with gcc"
 	@echo "  test_clang   - build and run all tests with clang"
 	@echo "  test_wasm    - build and run all tests with emcc (needs emsdk env)"
 	@echo "  check        - run static analysis / lint (check.sh)"
@@ -22,16 +24,30 @@ C_ERRS += -Wall -Wextra -Wpedantic \
 
 # x86-only flags
 ifeq ($(ARCH),x86_64)
-	SIMD_FLAGS  := -msse3
+	SIMD_FLAGS  := -msse4.1
 	OMP_FLAGS   := -fopenmp
 	OMP_LIBS    :=
+	# SIMD_AVX2=1 opts into the AVX2 quantized-math kernels (r2_quant.h);
+	# not the default since not every x86_64 host is guaranteed to have it.
+	ifdef SIMD_AVX2
+		SIMD_FLAGS += -mavx2 -mfma
+	endif
 endif
 
-# On macOS ARM64 (Apple Silicon), skip SSE3 and OpenMP
+# On macOS ARM64 (Apple Silicon), skip SSE3 and OpenMP. NEON is mandatory
+# on aarch64 so r2_quant.h's NEON kernels are picked up automatically here
+# with no extra flag needed.
 ifeq ($(OS)_$(ARCH),Darwin_arm64)
 	SIMD_FLAGS  :=
 	OMP_FLAGS   :=
 	OMP_LIBS    :=
+endif
+
+# SIMD_FORCE_SCALAR=1 forces r2_quant.h's portable-C reference kernels even
+# on hosts that would otherwise auto-select a real SIMD backend - used in CI
+# so the scalar fallback actually runs, not just compiles. Arch-independent.
+ifdef SIMD_FORCE_SCALAR
+	SIMD_FLAGS += -DR2_SIMD_FORCE_SCALAR
 endif
 
 ifeq ($(OS), Darwin)
@@ -67,6 +83,9 @@ test_strings: build_tests
 
 test_maths: build_tests
 	./bin/run_tests maths
+
+test_quant: build_tests
+	./bin/run_tests quant
 
 test_term: build_tests
 	./bin/run_tests termui

@@ -9,6 +9,9 @@
 #define R2_MATHS_IMPLEMENTATION
 #include "r2_maths.h"
 
+#define R2_QUANT_IMPLEMENTATION
+#include "r2_quant.h"
+
 #define R2_STRINGS_IMPLEMENTATION
 #include "r2_strings.h"
 
@@ -18,6 +21,7 @@
 // function <whatever>_test() in the all tests() method
 ///////////////////////////////////////////////
 #include "tests/r2_maths.c"
+#include "tests/r2_quant.c"
 #include "tests/r2_strings.c"
 #include "tests/r2_termui.c"
 ///////////////////////////////////////////////
@@ -26,6 +30,7 @@
 static struct { const char *name; const char *(*fn)(void); } suites[] = {
     { "termui",  r2_termui_test  },
     { "maths",   r2_maths_test   },
+    { "quant",   r2_quant_test   },
     { "strings", r2_strings_test },
 };
 ///////////////////////////////////////////////
