@@ -88,11 +88,13 @@ LICENSE
     #define R2_SIMD_XTENSA_PIE 1
     #define R2_SIMD_BACKEND_NAME "xtensa-pie"
     /* R2_XTENSA_PIE is a consumer-supplied opt-in (e.g. Chestnut's Makefile
-       would define it) - it is never auto-detected from __xtensa__ alone,
-       because it's unverified whether a given Xtensa toolchain even ships
-       the TIE/PIE intrinsic headers. Kernel bodies for this backend are a
-       follow-up, not implemented yet - see r2_quant.h's dispatch chains,
-       which #error out if this macro is ever active. */
+       defines it) - it is never auto-detected from __xtensa__ alone: only
+       the ESP32-S3 has PIE, and the consumer has to enable coprocessor 3
+       (CPENABLE |= 0x8) before the first EE.* instruction. No intrinsic
+       headers are needed - the kernel is inline asm the stock
+       xtensa-esp32s3-elf assembler accepts. Implemented: vecn_dot_i8
+       (r2_xtensa_pie_dot_i8, aligned SIMD path + scalar fallback);
+       vecn_dot_i16 is still scalar under this backend. */
 
 #else
     #define R2_SIMD_LEVEL 0

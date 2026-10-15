@@ -92,6 +92,26 @@ extern "C"
     static void mat_mul_i16_f(const int16_t *m1, float s1, const int16_t *m2, float s2, unsigned r1, unsigned c1,
                               unsigned r2, unsigned c2, float *out);
 
+    /* ---------------- u4 groups (asymmetric 4-bit weights) ----------------
+       Unsigned 4-bit codes (0..15) for weights stored with a per-group
+       scale and zero point: w = s_g * (q - z_g). The kernel only computes
+       the raw per-group sums sum(q * x) against int8 activations; the
+       caller applies s_g, z_g (via sum(x) per group) and any row scale.
+       Layout, per 32-element block: 16 bytes, byte j = q[j] | q[j+16] << 4,
+       so a block's low nibbles are group 2b and its high nibbles group 2b+1
+       (one SIMD register each after a mask/shift, no shuffles). */
+
+    /** Pack `n` (multiple of 32) codes 0..15 into n/2 bytes, block layout above. */
+    static void r2_pack_u4g16(const uint8_t *q, int n, uint8_t *out);
+    /** Inverse of r2_pack_u4g16. */
+    static void r2_unpack_u4g16(const uint8_t *packed, int n, uint8_t *out);
+    /** One 32-element block of r2_dot_u4g16: *d0, *d1 = the two group sums. For fused
+        kernels that apply per-group scales in the same loop (no store/reload, no call).
+        PIE: packed and x must be 16-byte aligned. */
+    static void r2_dot_u4g16_block(const uint8_t *packed, const int8_t *x, int32_t *d0, int32_t *d1);
+    /** out[g] = sum of q[i] * x[i] over each group of 16 (n/16 outputs, n multiple of 32). */
+    static void r2_dot_u4g16(const uint8_t *packed, const int8_t *x, int n, int32_t *out);
+
     /** Number of packed bytes needed to hold `n` int4 elements: (n+1)/2. */
     static size_t r2_i4_packed_bytes(int n);
     /** Pack `n` already-quantized int4 values (each defensively clamped to -7..7) into `out`. */
@@ -153,7 +173,60 @@ extern "C"
     }
 
 #if defined(R2_SIMD_XTENSA_PIE)
-    extern int32_t r2_xtensa_pie_dot_i8(const int8_t *v1, const int8_t *v2, int n);
+    /* ESP32-S3 PIE ("cop_ai", coprocessor 3) int8 dot product. The caller
+       must have set CPENABLE bit 3 (0x8) or the first EE.* instruction
+       raises Coprocessor3Disabled.
+
+       EE.VLD.128 ignores address bits [3:0], so the SIMD path only runs
+       when both pointers are 16-byte aligned; anything else (and any tail
+       past the last 32-byte step) goes through the scalar loop, so the
+       usual (v1, v2, n) contract holds for every input. The accumulator
+       is the 40-bit ACCX; ACCX_0 (its low 32 bits) is exact for any sum
+       that fits int32_t, which every caller of an int8 dot already needs.
+
+       A branch loop rather than LOOPNEZ on purpose: Xtensa zero-overhead
+       loops don't nest, and once this is inlined into a row loop GCC may
+       have turned that row loop into a hardware loop it doesn't know this
+       asm clobbers. Verified bit-exact against the scalar loop on silicon
+       (Chestnut apps/alanbench, ESP32-S3 rev 0.2). */
+    static int32_t r2_xtensa_pie_dot_i8(const int8_t *v1, const int8_t *v2, int n)
+    {
+        int32_t sum = 0;
+        int i = 0;
+        if (n >= 32 && ((((uintptr_t)v1) | ((uintptr_t)v2)) & 15u) == 0)
+        {
+            const int8_t *a = v1, *b = v2;
+            int pairs = n >> 5; /* 32-byte steps: two 16-lane MACs each */
+            __asm__ volatile(
+                "ee.zero.accx\n"
+                "ee.vld.128.ip q0, %[a], 16\n"
+                "ee.vld.128.ip q1, %[b], 16\n"
+                "addi %[k], %[k], -1\n"
+                "beqz %[k], 2f\n"
+                "1:\n"
+                "ee.vld.128.ip q2, %[a], 16\n"
+                "ee.vld.128.ip q3, %[b], 16\n"
+                "ee.vmulas.s8.accx q0, q1\n"
+                "ee.vld.128.ip q0, %[a], 16\n"
+                "ee.vld.128.ip q1, %[b], 16\n"
+                "ee.vmulas.s8.accx q2, q3\n"
+                "addi %[k], %[k], -1\n"
+                "bnez %[k], 1b\n"
+                "2:\n"
+                "ee.vld.128.ip q2, %[a], 16\n"
+                "ee.vld.128.ip q3, %[b], 16\n"
+                "ee.vmulas.s8.accx q0, q1\n"
+                "ee.vmulas.s8.accx q2, q3\n"
+                "rur.accx_0 %[s]\n"
+                : [a] "+r"(a), [b] "+r"(b), [k] "+r"(pairs), [s] "=r"(sum)
+                :
+                : "memory");
+            i = (n >> 5) << 5;
+        }
+        for (; i < n; i++)
+            sum += (int32_t)v1[i] * (int32_t)v2[i];
+        return sum;
+    }
 #endif
 
     static int32_t vecn_dot_i8(const int8_t *v1, const int8_t *v2, int n)
@@ -358,7 +431,16 @@ extern "C"
     }
 
 #if defined(R2_SIMD_XTENSA_PIE)
-    extern int64_t r2_xtensa_pie_dot_i16(const int16_t *v1, const int16_t *v2, int n);
+    /* No PIE kernel for int16 yet: a correct scalar body so defining
+       R2_XTENSA_PIE never leaves an unresolved symbol. */
+    static int64_t r2_xtensa_pie_dot_i16(const int16_t *v1, const int16_t *v2, int n)
+    {
+        int64_t sum = 0;
+        int i;
+        for (i = 0; i < n; i++)
+            sum += (int64_t)v1[i] * (int64_t)v2[i];
+        return sum;
+    }
 #endif
 
     static int64_t vecn_dot_i16(const int16_t *v1, const int16_t *v2, int n)
@@ -613,6 +695,152 @@ extern "C"
                     out_row[j] += a * (int32_t)r2__i4_at(packed_m2, k * c2 + j);
             }
         }
+    }
+
+
+    /* ---------------- u4 groups ---------------- */
+
+    static void r2_pack_u4g16(const uint8_t *q, int n, uint8_t *out)
+    {
+        int b, j;
+        for (b = 0; b < n; b += 32)
+            for (j = 0; j < 16; j++)
+                *out++ = (uint8_t)((q[b + j] & 15u) | ((q[b + 16 + j] & 15u) << 4));
+    }
+
+    static void r2_unpack_u4g16(const uint8_t *packed, int n, uint8_t *out)
+    {
+        int b, j;
+        for (b = 0; b < n; b += 32, packed += 16)
+            for (j = 0; j < 16; j++)
+            {
+                out[b + j] = packed[j] & 15u;
+                out[b + 16 + j] = packed[j] >> 4;
+            }
+    }
+
+    static void r2__dot_u4g16_scalar(const uint8_t *packed, const int8_t *x, int n, int32_t *out)
+    {
+        int b, j;
+        for (b = 0; b < n; b += 32, packed += 16, x += 32)
+        {
+            int32_t lo = 0, hi = 0;
+            for (j = 0; j < 16; j++)
+            {
+                lo += (int32_t)(packed[j] & 15u) * x[j];
+                hi += (int32_t)(packed[j] >> 4) * x[16 + j];
+            }
+            *out++ = lo;
+            *out++ = hi;
+        }
+    }
+
+    static void r2_dot_u4g16_block(const uint8_t *packed, const int8_t *x, int32_t *d0, int32_t *d1)
+    {
+#if defined(R2_SIMD_XTENSA_PIE)
+        static const uint8_t r2__blk_mask = 15u;
+        int32_t a, b;
+        const uint8_t *pk = packed;
+        const int8_t *px = x;
+        __asm__ volatile(
+            "ssai 4\n"
+            "ee.vldbc.8 q7, %[m]\n"
+            "ee.vld.128.ip q0, %[pk], 16\n"
+            "ee.vld.128.ip q4, %[px], 16\n"
+            "ee.vld.128.ip q5, %[px], 16\n"
+            "ee.andq q1, q0, q7\n"
+            "ee.vsr.32 q2, q0\n"
+            "ee.andq q2, q2, q7\n"
+            "ee.zero.accx\n"
+            "ee.vmulas.s8.accx q1, q4\n"
+            "rur.accx_0 %[a]\n"
+            "ee.zero.accx\n"
+            "ee.vmulas.s8.accx q2, q5\n"
+            "rur.accx_0 %[b]\n"
+            : [pk] "+r"(pk), [px] "+r"(px), [a] "=&r"(a), [b] "=&r"(b)
+            : [m] "r"(&r2__blk_mask)
+            : "memory");
+        *d0 = a;
+        *d1 = b;
+#elif defined(R2_SIMD_NEON) && defined(__aarch64__) && defined(__ARM_FEATURE_DOTPROD)
+        uint8x16_t v = vld1q_u8(packed);
+        int8x16_t lo = vreinterpretq_s8_u8(vandq_u8(v, vdupq_n_u8(15)));
+        int8x16_t hi = vreinterpretq_s8_u8(vshrq_n_u8(v, 4));
+        *d0 = vaddvq_s32(vdotq_s32(vdupq_n_s32(0), lo, vld1q_s8(x)));
+        *d1 = vaddvq_s32(vdotq_s32(vdupq_n_s32(0), hi, vld1q_s8(x + 16)));
+#else
+        int32_t lo = 0, hi = 0;
+        int j;
+        for (j = 0; j < 16; j++)
+        {
+            lo += (int32_t)(packed[j] & 15u) * x[j];
+            hi += (int32_t)(packed[j] >> 4) * x[16 + j];
+        }
+        *d0 = lo;
+        *d1 = hi;
+#endif
+    }
+
+    static void r2_dot_u4g16(const uint8_t *packed, const int8_t *x, int n, int32_t *out)
+    {
+#if defined(R2_SIMD_NEON) && defined(__aarch64__) && defined(__ARM_FEATURE_DOTPROD)
+        const uint8x16_t m4 = vdupq_n_u8(15);
+        int b;
+        for (b = 0; b < n; b += 32, packed += 16, x += 32)
+        {
+            uint8x16_t v = vld1q_u8(packed);
+            int8x16_t lo = vreinterpretq_s8_u8(vandq_u8(v, m4));
+            int8x16_t hi = vreinterpretq_s8_u8(vshrq_n_u8(v, 4));
+            *out++ = vaddvq_s32(vdotq_s32(vdupq_n_s32(0), lo, vld1q_s8(x)));
+            *out++ = vaddvq_s32(vdotq_s32(vdupq_n_s32(0), hi, vld1q_s8(x + 16)));
+        }
+#elif defined(R2_SIMD_XTENSA_PIE)
+        /* Needs CPENABLE bit 3 (see r2_xtensa_pie_dot_i8). One block per
+           iteration: split nibbles with AND / 32-bit-lane shift right by 4
+           (SAR) / AND -- bits shifted in from the neighbouring byte are
+           masked off -- then one 16-lane MAC per group into ACCX. */
+        if (n >= 32 && ((((uintptr_t)packed) | ((uintptr_t)x)) & 15u) == 0)
+        {
+            static const uint8_t r2__nib_mask = 15u;
+            const uint8_t *pk = packed;
+            const int8_t *px = x;
+            int32_t *po = out;
+            int k = n >> 5;
+            int32_t t;
+            __asm__ volatile(
+                "ssai 4\n"
+                "ee.vldbc.8 q7, %[m]\n"
+                "1:\n"
+                "ee.vld.128.ip q0, %[pk], 16\n"
+                "ee.vld.128.ip q4, %[px], 16\n"
+                "ee.vld.128.ip q5, %[px], 16\n"
+                "ee.andq q1, q0, q7\n"
+                "ee.vsr.32 q2, q0\n"
+                "ee.andq q2, q2, q7\n"
+                "ee.zero.accx\n"
+                "ee.vmulas.s8.accx q1, q4\n"
+                "rur.accx_0 %[t]\n"
+                "s32i %[t], %[po], 0\n"
+                "ee.zero.accx\n"
+                "ee.vmulas.s8.accx q2, q5\n"
+                "rur.accx_0 %[t]\n"
+                "s32i %[t], %[po], 4\n"
+                "addi %[po], %[po], 8\n"
+                "addi %[k], %[k], -1\n"
+                "bnez %[k], 1b\n"
+                : [pk] "+r"(pk), [px] "+r"(px), [po] "+r"(po), [k] "+r"(k), [t] "=&r"(t)
+                : [m] "r"(&r2__nib_mask)
+                /* SAR is written (ssai) but can't be named as a clobber;
+                   GCC only uses SAR inside a single shift pattern (ssl/ssr
+                   immediately followed by the shift), never live across an
+                   asm statement, so that's safe. */
+                : "memory");
+            return;
+        }
+        r2__dot_u4g16_scalar(packed, x, n, out);
+#else
+        r2__dot_u4g16_scalar(packed, x, n, out);
+#endif
     }
 
 #endif /* R2_QUANT_IMPLEMENTATION */

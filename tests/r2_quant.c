@@ -316,6 +316,59 @@ static const char *test_mat_mul_i4_vs_float_reference(void)
     return 0;
 }
 
+static const char *test_u4g16_pack_roundtrip(void)
+{
+    uint8_t q[96], packed[48], back[96];
+    int i;
+    for (i = 0; i < 96; i++)
+        q[i] = (uint8_t)((i * 7 + 3) & 15);
+    r2_pack_u4g16(q, 96, packed);
+    r2_unpack_u4g16(packed, 96, back);
+    for (i = 0; i < 96; i++)
+        r2_assert("u4g16 pack/unpack roundtrip", back[i] == q[i]);
+    /* layout: byte j of a block = q[j] | q[j+16] << 4 */
+    r2_assert("u4g16 layout", packed[0] == (uint8_t)(q[0] | (q[16] << 4)));
+    return NULL;
+}
+
+static const char *test_dot_u4g16_vs_naive(void)
+{
+    /* every code 0..15 against every int8 activation sign, incl. extremes */
+    static uint8_t q[512], packed[256];
+    static int8_t x[512];
+    int32_t got[32];
+    unsigned r = 12345u;
+    int i, g, trial;
+    for (trial = 0; trial < 50; trial++)
+    {
+        for (i = 0; i < 512; i++)
+        {
+            r = r * 1103515245u + 12345u;
+            q[i] = (uint8_t)((r >> 16) & 15u);
+            r = r * 1103515245u + 12345u;
+            x[i] = (int8_t)(trial == 0 ? (i & 1 ? -127 : 127) : (int)((r >> 16) % 255u) - 127);
+            if (trial == 0)
+                q[i] = 15;
+        }
+        r2_pack_u4g16(q, 512, packed);
+        r2_dot_u4g16(packed, x, 512, got);
+        for (g = 0; g < 32; g += 2)
+        {
+            int32_t b0, b1;
+            r2_dot_u4g16_block(packed + g * 8, x + g * 16, &b0, &b1);
+            r2_assert("dot_u4g16_block == dot_u4g16", b0 == got[g] && b1 == got[g + 1]);
+        }
+        for (g = 0; g < 32; g++)
+        {
+            int32_t want = 0;
+            for (i = 0; i < 16; i++)
+                want += (int32_t)q[g * 16 + i] * x[g * 16 + i];
+            r2_assert("dot_u4g16 matches naive per-group sums", got[g] == want);
+        }
+    }
+    return NULL;
+}
+
 static const char *test_vecn_dot_i16_int32_would_overflow(void)
 {
     int16_t v[8] = {32767, -32767, 32767, -32767, 32767, -32767, 32767, -32767};
@@ -377,6 +430,8 @@ static const char *r2_quant_test(void)
     r2_run_test(test_mat_mul_i16_vs_float_reference);
     r2_run_test(test_mat_mul_i4_vs_float_reference);
 
+    r2_run_test(test_u4g16_pack_roundtrip);
+    r2_run_test(test_dot_u4g16_vs_naive);
     r2_run_test(test_vecn_dot_i16_int32_would_overflow);
 
     r2_run_test(test_mat_mul_i8_requant_chaining);
