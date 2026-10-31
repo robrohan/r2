@@ -53,8 +53,9 @@ OVERVIEW
 CHANGES
     v0.4  immediate-mode widgets (label, button, checkbox, radio, text input,
           list, scroll view) with Tab focus and hot letters; tui_input_box
+    v0.5  the command palette moves to Ctrl+] (Ctrl+Space is set-mark in the editor)
     v0.3  window command prefix (Ctrl+\\ then a key), minimize, and a fuzzy
-          command palette (Ctrl+Space) over menus, window commands and windows
+          command palette over menus, window commands and windows
     v0.2  window manager: overlapping and docked windows, z-order, focus,
           the menu bar following focus, system menu, move / size / zoom,
           status line, message boxes; immediate-mode window contents
@@ -242,7 +243,9 @@ extern "C"
 #endif
 /* the key that opens the command palette; see tui_set_palette_key */
 #ifndef R2_TUI_PALETTE_KEY
-#define R2_TUI_PALETTE_KEY "Ctrl+Space"
+/* Ctrl+] because Ctrl+Space is Emacs set-mark (the editor's), and Ctrl+] is
+   one byte (0x1D) in every terminal */
+#define R2_TUI_PALETTE_KEY "Ctrl+]"
 #endif
 /* commands the palette can list at once */
 #ifndef R2_TUI_PALETTE_MAX
@@ -596,7 +599,7 @@ extern "C"
      */
     R2_TUI_DEF int tui_set_prefix(tui *t, const char *shortcut);
     /**
-     * The key that opens the command palette ("Ctrl+Space" by default), or 0
+     * The key that opens the command palette ("Ctrl+]" by default), or 0
      * for none (the prefix then / still opens it). The palette fuzzy-searches
      * every menu item, the window commands and the windows themselves.
      */

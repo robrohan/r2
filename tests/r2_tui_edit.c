@@ -104,7 +104,7 @@ static const char *test_edit_model(void)
     static const char *const pieces[] = {"a", "bc", "\n", "\n\n", "\t", "\xC3\xA9", "\xE4\xB8\xAD", "xyz\nq", " "};
     static char buf[2048];
     char model[2048];
-    uint32_t mlen = 0, mcur = 0;
+    uint32_t mlen = 0, mcur = 0, mmark = 0;
     tui_edit e;
     const char *err;
     tui_edit_init(&e, buf, sizeof(buf));
@@ -122,6 +122,8 @@ static const char *test_edit_model(void)
                 memmove(model + mcur + n, model + mcur, mlen - mcur);
                 memcpy(model + mcur, p, n);
                 mlen += n;
+                if (mmark > mcur)
+                    mmark += n;
                 mcur += n;
             }
         }
@@ -146,6 +148,10 @@ static const char *test_edit_model(void)
                 mcur -= b - a;
             else if (mcur > a)
                 mcur = a;
+            if (mmark >= b)
+                mmark -= b - a;
+            else if (mmark > a)
+                mmark = a;
         }
         else if (r < 8)
         {
@@ -154,6 +160,8 @@ static const char *test_edit_model(void)
                 to--;
             tui_edit_goto(&e, to);
             mcur = to;
+            if (ed_rand() & 1)
+                e.mark = mmark = mcur; /* set the mark here */
         }
         else
         {
@@ -163,6 +171,7 @@ static const char *test_edit_model(void)
         model[mlen] = 0;
         r2_assert("text differs from the model", strcmp(ed_text(&e), model) == 0);
         r2_assert("cursor differs from the model", e.cursor == mcur);
+        r2_assert("mark differs from the model", e.mark == mmark);
         err = ed_check(&e);
         r2_assert(err ? err : "", !err);
     }
@@ -199,6 +208,8 @@ typedef struct ed_app
     tui_edit e;
     char buf[1024];
     int w, h, changes, with_button, presses;
+    tui_clipboard clip;
+    char clipbuf[256];
 } ed_app;
 
 static void ed_ui(tui *t, tui_window *w, void *user)
@@ -219,6 +230,8 @@ static tui_window *ed_open(ed_app *a, const char *text, int w, int h)
     tui_init(&ed_t, ed_arena, sizeof(ed_arena), ED_COLS, ED_ROWS);
     tui_edit_init(&a->e, a->buf, sizeof(a->buf));
     tui_edit_set(&a->e, s8_from_cstr(text));
+    tui_clipboard_init(&a->clip, a->clipbuf, sizeof(a->clipbuf));
+    a->e.clip = &a->clip;
     a->w = w;
     a->h = h;
     /* the window's inside is (1, 2) .. (1 + w, 2 + h) */
@@ -227,12 +240,39 @@ static tui_window *ed_open(ed_app *a, const char *text, int w, int h)
     return win;
 }
 
-static void ed_keys(const char *bytes)
+static void ed_keys_n(const char *bytes, size_t n)
 {
-    tui_feed(&ed_t, (const uint8_t *)bytes, strlen(bytes), ed_now);
-    ed_now += 100;
+    tui_feed(&ed_t, (const uint8_t *)bytes, n, ed_now);
+    ed_now += 100; /* lets a lone Esc time out */
     tui_update(&ed_t, ed_now);
 }
+
+static void ed_keys(const char *bytes)
+{
+    ed_keys_n(bytes, strlen(bytes));
+}
+
+/* Ctrl+Space is a NUL byte */
+#define ED_CTRL_SPACE() ed_keys_n("\0", 1)
+
+#if !defined(R2_TUI_EDIT_NO_SELECTION) && !defined(R2_TUI_EDIT_NO_CLIPBOARD)
+static const char *ed_clip(const ed_app *a)
+{
+    static char out[300];
+    memcpy(out, a->clipbuf, a->clip.len);
+    out[a->clip.len] = 0;
+    return out;
+}
+
+#endif
+
+#ifndef R2_TUI_EDIT_NO_SELECTION
+/* attributes of the editor cell at (x, y) */
+static unsigned ed_attr(int x, int y)
+{
+    return TUI_STYLE_ATTR(TUI_CELL_STYLE(tui_get_cell(&ed_t, 1 + x, 2 + y)));
+}
+#endif
 
 /* row y of the editor area as text */
 static const char *ed_row(int y, int w)
@@ -417,7 +457,9 @@ static const char *test_edit_random_keys(void)
     static const char *const keys[] = {"a", "\xC3\xA9", "\xE4\xB8\xAD", "\r", "\t", "\x7f", "\x1b[3~", "\x1b[A",
                                        "\x1b[B", "\x1b[C", "\x1b[D", "\x1b[H", "\x1b[F", "\x1b[5~", "\x1b[6~",
                                        "\x1b[1;5H", "\x1b[1;5F", "\x1b[1;5C", "\x1b[1;5D", "\x01", "\x05",
-                                       "\x0b", "\x04", "\x10", "\x0e", " ", "\x1b\x80"};
+                                       "\x0b", "\x04", "\x10", "\x0e", " ", "\x1b\x80", "\x1b[1;2C",
+                                       "\x1b[1;2D", "\x1b[1;2A", "\x1b[1;2B", "\x1b[1;6C", "\x17", "\x19",
+                                       "\x07", "\x1b", "w", "d", "\x1b[2;5~", "\x1b[2;2~", "\x1b[3;2~"};
     static ed_app a;
     ed_open(&a, "start\n\there", 30, 6);
     for (int iter = 0; iter < 20000; iter++)
@@ -425,8 +467,14 @@ static const char *test_edit_random_keys(void)
         const char *err;
         if (ed_rand() % 500 == 0)
             a.e.flags ^= TUI_EDIT_LINE_NUMBERS | (ed_rand() & 1 ? TUI_EDIT_AUTO_INDENT : 0);
-        ed_keys(keys[ed_rand() % (sizeof(keys) / sizeof(keys[0]))]);
+        if (ed_rand() % 20 == 0)
+            ED_CTRL_SPACE();
+        else
+            ed_keys(keys[ed_rand() % (sizeof(keys) / sizeof(keys[0]))]);
         err = ed_check(&a.e);
+        r2_assert("mark past the end", a.e.mark <= tui_edit_len(&a.e));
+        r2_assert("clipboard overflow", a.clip.len <= a.clip.cap);
+        r2_assert("clipboard holds whole characters", s8_is_valid_utf8(s8_from_bytes(a.clipbuf, a.clip.len)));
         r2_assert(err ? err : "", !err);
         r2_assert("cursor row on screen", a.e.line >= a.e.top_line && a.e.line < a.e.top_line + 6);
         r2_assert("cursor column on screen", ed_t.cur_x >= 1 && ed_t.cur_x < 1 + 30);
@@ -434,6 +482,171 @@ static const char *test_edit_random_keys(void)
     }
     return 0;
 }
+
+///////////////////////////////////////////////////////////////
+// Selection and clipboard
+
+#ifndef R2_TUI_EDIT_NO_SELECTION
+static const char *test_edit_select_shift(void)
+{
+    static ed_app a;
+    uint32_t from, to;
+    ed_open(&a, "hello world\nsecond", 30, 5);
+    tui_edit *e = &a.e;
+    ed_keys("\x1b[1;2C\x1b[1;2C\x1b[1;2C\x1b[1;2C\x1b[1;2C");
+    r2_assert("Shift+Right x5 selects hello", tui_edit_selection(e, &from, &to) && from == 0 && to == 5);
+    r2_assert("selection drawn in reverse", (ed_attr(0, 0) & TUI_REVERSE) && (ed_attr(4, 0) & TUI_REVERSE) &&
+                                                !(ed_attr(5, 0) & TUI_REVERSE));
+    ed_keys("\x1b[C");
+    r2_assert("a plain move clears a Shift selection", !e->mark_on && e->cursor == 6);
+    ed_keys("\x1b[1;2F");
+    r2_assert("Shift+End selects to the end of the line", tui_edit_selection(e, &from, &to) && from == 6 && to == 11);
+    ed_keys("X");
+    r2_assert("typing replaces it", strcmp(ed_text(e), "hello X\nsecond") == 0 && !e->mark_on);
+    ed_keys("\x1b[1;6D");
+    r2_assert("Ctrl+Shift+Left selects a word", tui_edit_selection(e, &from, &to) && from == 6 && to == 7);
+    ed_keys("\x7f");
+    r2_assert("Backspace deletes the selection only", strcmp(ed_text(e), "hello \nsecond") == 0);
+    ed_keys("\x1b[1;2B");
+    r2_assert("Shift+Down selects across the line break", tui_edit_selection(e, &from, &to) && from == 6 && to == 13);
+    r2_assert("a selected line break shows as a reversed blank", ed_attr(6, 0) & TUI_REVERSE);
+    ed_keys("\x1b[3~");
+    r2_assert("Delete deletes it", strcmp(ed_text(e), "hello ") == 0);
+    return 0;
+}
+
+static const char *test_edit_select_mark(void)
+{
+    static ed_app a;
+    uint32_t from, to;
+    ed_open(&a, "one two three\nfour", 30, 5);
+    tui_edit *e = &a.e;
+    ED_CTRL_SPACE();
+    r2_assert("Ctrl+Space sets the mark", e->mark_on && e->mark == 0 && !e->mark_shift);
+    ed_keys("\x06\x06\x06");
+    r2_assert("moving extends the region", tui_edit_selection(e, &from, &to) && from == 0 && to == 3);
+    ed_keys("\x05");
+    r2_assert("plain moves keep an Emacs region", tui_edit_selection(e, &from, &to) && to == 13);
+    ed_keys("Z");
+    r2_assert("typing inserts (no replace) and drops the mark", strcmp(ed_text(e), "one two threeZ\nfour") == 0 && !e->mark_on);
+    ED_CTRL_SPACE();
+    ed_keys("\x01");
+    ed_keys("\x07");
+    r2_assert("Ctrl+G clears", !e->mark_on);
+    ED_CTRL_SPACE();
+    ed_keys("\x1b");
+    r2_assert("Esc alone is Meta: the region stays", e->mark_on && e->meta);
+    ed_keys("\x1b");
+    r2_assert("Esc Esc clears it", !e->mark_on && !e->meta);
+    ed_keys("\x1b");
+    ed_keys("f");
+    r2_assert("Esc f: forward a word", e->cursor == 3);
+    ed_keys("\x1b");
+    ed_keys(">");
+    r2_assert("Esc >: the end", e->cursor == tui_edit_len(e));
+    ed_keys("\x1b");
+    ed_keys("<");
+    r2_assert("Esc <: the start", e->cursor == 0);
+    ed_keys("\x1b" "f"); /* sent together: the terminal's Alt+f */
+    r2_assert("Alt+f too", e->cursor == 3);
+    return 0;
+}
+#endif
+
+#if !defined(R2_TUI_EDIT_NO_SELECTION) && !defined(R2_TUI_EDIT_NO_CLIPBOARD)
+static const char *test_edit_clipboard(void)
+{
+    static ed_app a;
+    ed_open(&a, "hello world\nsecond line", 30, 5);
+    tui_edit *e = &a.e;
+    ED_CTRL_SPACE();
+    ed_keys("\x05\x17"); /* Ctrl+E, Ctrl+W */
+    r2_assert("Ctrl+W kills the region", strcmp(ed_text(e), "\nsecond line") == 0 && strcmp(ed_clip(&a), "hello world") == 0);
+    ed_keys("\x19"); /* Ctrl+Y */
+    r2_assert("Ctrl+Y yanks it back", strcmp(ed_text(e), "hello world\nsecond line") == 0 && e->cursor == 11);
+    /* Ctrl+W then Ctrl+K: one kill */
+    ed_keys("\x1b[H");
+    ED_CTRL_SPACE();
+    ed_keys("\x06\x06\x17\x0b");
+    r2_assert("Ctrl+W then Ctrl+K join up", strcmp(ed_clip(&a), "hello world") == 0 && strcmp(ed_text(e), "\nsecond line") == 0);
+    ed_keys("\x19");
+    ed_keys("\x1b[1;5H");
+    ED_CTRL_SPACE();
+    ed_keys("\x06\x06\x06\x06\x06");
+    ed_keys("\x1b");
+    ed_keys("w");
+    r2_assert("Esc w copies", strcmp(ed_clip(&a), "hello") == 0 && strcmp(ed_text(e), "hello world\nsecond line") == 0 &&
+                                  !e->mark_on);
+    ed_keys("\x1b[1;5H\x0b\x0b");
+    r2_assert("Ctrl+K twice: the line and its break, joined", strcmp(ed_clip(&a), "hello world\n") == 0 &&
+                                                                 strcmp(ed_text(e), "second line") == 0);
+    ed_keys("\x1b[F\x0b");
+    ed_keys("\x1b[H\x0b");
+    r2_assert("a kill after another key starts afresh", strcmp(ed_clip(&a), "second line") == 0 && tui_edit_len(e) == 0);
+    tui_edit_set(e, S8("one two three"));
+    ed_keys("\x1b[F");
+    ed_keys("\x1b");
+    ed_keys("\x7f");
+    ed_keys("\x1b");
+    ed_keys("\x7f");
+    r2_assert("Esc Backspace kills words backwards, joined in order", strcmp(ed_clip(&a), "two three") == 0 &&
+                                                                         strcmp(ed_text(e), "one ") == 0);
+    ed_keys("\x1b[H");
+    ed_keys("\x1b");
+    ed_keys("d");
+    r2_assert("Esc d kills a word forward", strcmp(ed_clip(&a), "one") == 0 && strcmp(ed_text(e), " ") == 0);
+    /* Borland keys */
+    tui_edit_set(e, S8("abc def"));
+    ed_keys("\x1b[1;2C\x1b[1;2C\x1b[1;2C\x1b[2;5~");
+    r2_assert("Ctrl+Ins copies", strcmp(ed_clip(&a), "abc") == 0 && strcmp(ed_text(e), "abc def") == 0);
+    ed_keys("\x1b[F\x1b[2;2~");
+    r2_assert("Shift+Ins pastes", strcmp(ed_text(e), "abc defabc") == 0);
+    ed_keys("\x1b[H\x1b[1;2C\x1b[1;2C\x1b[3;2~");
+    r2_assert("Shift+Del cuts", strcmp(ed_text(e), "c defabc") == 0 && strcmp(ed_clip(&a), "ab") == 0);
+    ed_keys("\x1b[1;2C\x19");
+    r2_assert("pasting over a Shift selection replaces it", strcmp(ed_text(e), "ab defabc") == 0);
+    /* read only: copying works, nothing changes */
+    e->flags |= TUI_EDIT_READ_ONLY;
+    ED_CTRL_SPACE();
+    ed_keys("\x05\x17\x19\x0b");
+    r2_assert("read only: no kill or yank", strcmp(ed_text(e), "ab defabc") == 0);
+    ED_CTRL_SPACE();
+    ed_keys("\x01\x1b[2;5~");
+    r2_assert("read only: copy works", strcmp(ed_clip(&a), "ab defabc") == 0);
+    e->flags &= ~TUI_EDIT_READ_ONLY;
+    /* the clipboard cuts on a character boundary when full */
+    char small[7];
+    tui_clipboard c2;
+    tui_clipboard_init(&c2, small, sizeof(small));
+    e->clip = &c2;
+    tui_edit_set(e, S8("h\xC3\xA9llo w\xC3\xB6rld"));
+    ED_CTRL_SPACE();
+    ed_keys("\x05\x1b[2;5~");
+    r2_assert("cut short at the 7 byte limit", c2.len == 7 && memcmp(small, "h\xC3\xA9llo ", 7) == 0);
+    tui_edit_set(e, S8("\xC3\xA9\xC3\xA9\xC3\xA9\xC3\xA9"));
+    ED_CTRL_SPACE();
+    ed_keys("\x05\x1b[2;5~");
+    r2_assert("never half a character", c2.len == 6);
+    e->clip = &a.clip;
+    return 0;
+}
+
+static const char *test_edit_paste_full(void)
+{
+    static ed_app a;
+    ed_open(&a, "", 30, 5);
+    tui_edit *e = &a.e;
+    char text[1024];
+    memset(text, 'x', sizeof(text) - 1);
+    text[sizeof(text) - 1] = 0;
+    tui_edit_set(e, s8_from_bytes(text, 1020));
+    memcpy(a.clipbuf, "12345", 5);
+    a.clip.len = 5;
+    ed_keys("\x1b[1;5F\x19");
+    r2_assert("paste that doesn't fit is refused", tui_edit_len(e) == 1020 && a.changes == 0);
+    return 0;
+}
+#endif
 
 ////////////////////////////////////////////
 
@@ -448,6 +661,14 @@ static const char *r2_tui_edit_test(void)
     r2_run_test(test_edit_drawing);
     r2_run_test(test_edit_scrolling);
     r2_run_test(test_edit_focus);
+#ifndef R2_TUI_EDIT_NO_SELECTION
+    r2_run_test(test_edit_select_shift);
+    r2_run_test(test_edit_select_mark);
+#endif
+#if !defined(R2_TUI_EDIT_NO_SELECTION) && !defined(R2_TUI_EDIT_NO_CLIPBOARD)
+    r2_run_test(test_edit_clipboard);
+    r2_run_test(test_edit_paste_full);
+#endif
     r2_run_test(test_edit_random_keys);
     return 0;
 }

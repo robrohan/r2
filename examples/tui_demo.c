@@ -15,12 +15,13 @@
         Ctrl+\          a real Ctrl+\ for the window
 
     F8 (File > Editor) opens the text editor widget: arrows, Home/End,
-    PgUp/PgDn, Ctrl+Home/End, Ctrl+Left/Right, and Emacs Ctrl+A/E/B/F/P/N/D/K.
+    PgUp/PgDn, Ctrl+Home/End, Ctrl+Left/Right, and Emacs Ctrl+A/E/B/F/P/N/D/K;
+    Ctrl+Space mark, Ctrl+W / Esc w / Ctrl+Y cut / copy / paste.
 
     F9 (File > Preferences) shows the widgets: text input, checkboxes,
     radios, a list, a scrolling view and buttons. Tab moves between them.
 
-    Ctrl+Space (or Ctrl+\ then /) searches every command and window:
+    Ctrl+] (or Ctrl+\ then /) searches every command and window:
     type a few letters (fuzzy: "fnn" finds File > New note), Up / Down
     (or Ctrl+P / Ctrl+N), Enter runs it, Esc closes.
 
@@ -111,7 +112,7 @@ static void file_menu_for(tui *tt, int in_editor)
             prefs_win = tui_window_open(&t, "Preferences", (tui_rect){-1, -1, 58, 19}, TUI_WIN_DIALOG, prefs_ui, 0);
     }
     tui_menu_separator(tt);
-    if (tui_menu_item(tt, "~S~earch commands", "Ctrl+Space"))
+    if (tui_menu_item(tt, "~S~earch commands", "Ctrl+]"))
         tui_palette(tt);
     tui_menu_separator(tt);
     if (tui_menu_item(tt, "E~x~it", "Ctrl+Q"))
@@ -159,7 +160,7 @@ static void desktop_ui(tui *tt, tui_window *w, void *user)
     (void)user;
     file_menu(tt);
     help_menu(tt);
-    tui_status(tt, " ~Ctrl+\\~ Commands  ~Ctrl+Space~ Search  ~Ctrl+N~ New note  ~Ctrl+Q~ Quit");
+    tui_status(tt, " ~Ctrl+\\~ Commands  ~Ctrl+]~ Search  ~Ctrl+N~ New note  ~Ctrl+Q~ Quit");
     ask_quit(tt);
 }
 
@@ -270,15 +271,27 @@ static void glyphs_ui(tui *tt, tui_window *w, void *user)
 /* the text editor widget, filling a window */
 static char edit_buf[16 * 1024];
 static tui_edit ed;
+static char clip_buf[4096];
+static tui_clipboard clip;
 
 static void editor_ui(tui *tt, tui_window *w, void *user)
 {
     char status[128];
     int cw, ch;
+    uint32_t from, to;
     (void)w;
     (void)user;
     file_menu_for(tt, 1);
     tui_menu_begin(tt, "~E~dit");
+    /* Emacs notation for the keys: shown, but not bound as menu shortcuts,
+       so the keys stay with the editor */
+    if (tui_menu_item_flags(tt, "Cu~t~", "C-w", tui_edit_selection(&ed, &from, &to) ? 0 : TUI_ITEM_DISABLED))
+        tui_edit_cut(&ed);
+    if (tui_menu_item_flags(tt, "~C~opy", "M-w", tui_edit_selection(&ed, &from, &to) ? 0 : TUI_ITEM_DISABLED))
+        tui_edit_copy(&ed);
+    if (tui_menu_item_flags(tt, "~P~aste", "C-y", clip.len ? 0 : TUI_ITEM_DISABLED))
+        tui_edit_paste(&ed);
+    tui_menu_separator(tt);
     if (tui_menu_item_flags(tt, "~L~ine numbers", "F4", ed.flags & TUI_EDIT_LINE_NUMBERS ? TUI_ITEM_CHECKED : 0))
         ed.flags ^= TUI_EDIT_LINE_NUMBERS;
     if (tui_menu_item_flags(tt, "~A~uto indent", 0, ed.flags & TUI_EDIT_AUTO_INDENT ? TUI_ITEM_CHECKED : 0))
@@ -293,9 +306,14 @@ static void editor_ui(tui *tt, tui_window *w, void *user)
     tui_size(tt, &cw, &ch);
     tui_at(tt, 0, 0);
     tui_editor(tt, "##editor", &ed, cw, ch);
-    snprintf(status, sizeof(status), " Line %u  Col %u  %s%u bytes free  ~F4~ Numbers  ~Ctrl+\\~ Commands",
-             (unsigned)ed.line + 1, (unsigned)tui_edit_column(&ed) + 1, ed.modified ? "Modified  " : "",
-             (unsigned)(ed.cap - tui_edit_len(&ed)));
+    if (tui_edit_selection(&ed, &from, &to))
+        snprintf(status, sizeof(status), " Line %u  Col %u  %u bytes selected  ~C-w~ Cut  ~Esc w~ Copy  ~C-g~ Clear",
+                 (unsigned)ed.line + 1, (unsigned)tui_edit_column(&ed) + 1, (unsigned)(to - from));
+    else
+        snprintf(status, sizeof(status),
+                 " Line %u  Col %u  %s%u free  ~C-SPC~ Mark  ~C-y~ Paste  ~F4~ Numbers  ~Ctrl+\\~ Commands",
+                 (unsigned)ed.line + 1, (unsigned)tui_edit_column(&ed) + 1, ed.modified ? "Modified  " : "",
+                 (unsigned)(ed.cap - tui_edit_len(&ed)));
     tui_status(tt, status);
     ask_quit(tt);
 }
@@ -479,6 +497,8 @@ int main(int argc, char **argv)
     tui_window_open(&t, "Keys", (tui_rect){-1, -1, 30, 12}, 0, keys_ui, 0);
     new_note();
     tui_edit_init(&ed, edit_buf, sizeof(edit_buf));
+    tui_clipboard_init(&clip, clip_buf, sizeof(clip_buf));
+    ed.clip = &clip;
     ed.flags = TUI_EDIT_LINE_NUMBERS | TUI_EDIT_AUTO_INDENT;
     tui_edit_set(&ed, S8("r2_tui_edit: a text editor widget\n"
                          "\n"
@@ -489,6 +509,11 @@ int main(int argc, char **argv)
                          "\tCtrl+P / Ctrl+N\tup / down\n"
                          "\tCtrl+D\t\tdelete\n"
                          "\tCtrl+K\t\tkill to the end of the line (or join)\n"
+                         "\n"
+                         "Select: Ctrl+Space sets the mark, then move (or Shift+arrows).\n"
+                         "\tCtrl+W cut, Esc w copy, Ctrl+Y paste; Ctrl+G / Esc Esc clear.\n"
+                         "\tKills in a row join up: Ctrl+K Ctrl+K takes the line and its break.\n"
+                         "Esc then a key is Meta: Esc f / Esc b words, Esc < / Esc > top / bottom.\n"
                          "\n"
                          "Tab types a tab; Shift+Tab leaves the editor. Edit > Line numbers (F4)\n"
                          "toggles the gutter; Edit > Auto indent keeps your indentation on Enter.\n"

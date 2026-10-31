@@ -1,4 +1,4 @@
-.PHONY: all test test_strings test_maths test_quant test_tui test_edit test_clang wasm demo clean build help
+.PHONY: all test test_strings test_maths test_quant test_tui test_edit test_edit_flags test_clang wasm demo clean build help
 
 help:
 	@echo "Available targets:"
@@ -9,6 +9,7 @@ help:
 	@echo "  test_quant   - build and run only the quantized-math test suite with gcc"
 	@echo "  test_tui     - build and run only the terminal UI test suite with gcc"
 	@echo "  test_edit    - build and run only the text editor widget suite with gcc"
+	@echo "  test_edit_flags - the editor suite with each -D feature switch off"
 	@echo "  test_clang   - build and run all tests with clang"
 	@echo "  wasm         - check the freestanding headers build for wasm32 with clang (no libc)"
 	@echo "  demo         - build the terminal UI demo (bin/tui_demo)"
@@ -98,6 +99,14 @@ test_tui: build_tests
 
 test_edit: build_tests
 	./bin/run_tests edit
+
+# the editor suite with each feature compiled out (r2_tui_edit.h -D switches)
+test_edit_flags:
+	mkdir -p bin
+	@for f in "" -DR2_TUI_EDIT_NO_SELECTION -DR2_TUI_EDIT_NO_CLIPBOARD -DR2_TUI_EDIT_MINIMAL; do \
+		echo "== edit suite $${f:-(all features)}"; \
+		$(CC) -std=c11 $(C_ERRS) -O2 $$f tests.c tests/*.c -lm -o bin/run_tests_edit && ./bin/run_tests_edit edit | tail -2 || exit 1; \
+	done
 
 # Nothing here uses OpenMP pragmas, so clang builds without OMP_FLAGS
 # (clang's -fopenmp needs libomp, which isn't always installed).

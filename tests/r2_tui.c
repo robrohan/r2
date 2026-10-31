@@ -1242,15 +1242,16 @@ static const char *test_wm_prefix_config(void)
     tui_window_open(&t, "A", (tui_rect){2, 2, 20, 6}, 0, wm_app_ui, &a);
     tui_update(&t, wm_now);
     r2_assert("bad prefix rejected", !tui_set_prefix(&t, "Hyper+Q"));
-    r2_assert("Ctrl+] accepted", tui_set_prefix(&t, "Ctrl+]"));
+    /* Ctrl+^ (0x1E); Ctrl+] would collide with the palette key */
+    r2_assert("Ctrl+^ accepted", tui_set_prefix(&t, "Ctrl+^"));
     wm_keys(&t, "\x1c");
     r2_assert("old prefix now a plain key", !t.chord && a.last_ctrl == '\\');
-    wm_keys(&t, "\x1d" "f");
+    wm_keys(&t, "\x1e" "f");
     r2_assert("new prefix works", t.menu_open && t.menu_idx == 1);
     wm_keys(&t, "\x1b");
     r2_assert("prefix off", tui_set_prefix(&t, 0));
-    wm_keys(&t, "\x1d");
-    r2_assert("no prefix: key goes to the window", !t.chord && a.last_ctrl == ']');
+    wm_keys(&t, "\x1e");
+    r2_assert("no prefix: key goes to the window", !t.chord && a.last_ctrl == '^');
     r2_assert("status without a prefix", strstr(wm_row(&t, VT_ROWS - 1), "Ctrl+F5 Move") != 0);
     wm_keys(&t, "\x1b ");
     r2_assert("system menu falls back to F-keys", wm_has(&t, "Alt+F3"));
@@ -1321,11 +1322,11 @@ static const char *test_palette(void)
     tui_window *wb = tui_window_open(&t, "Bravo", (tui_rect){30, 8, 20, 6}, 0, wm_app_ui, &b);
     tui_window *wa = tui_window_open(&t, "Alpha", (tui_rect){2, 2, 26, 8}, 0, wm_app_ui, &a);
     tui_update(&t, wm_now);
-    r2_assert("status names the palette key", strstr(wm_row(&t, VT_ROWS - 1), "Ctrl+Space Search") != 0);
+    r2_assert("status names the palette key", strstr(wm_row(&t, VT_ROWS - 1), "Ctrl+] Search") != 0);
 
-    TUI_FEED(&t, "\0", wm_now); /* Ctrl+Space */
+    TUI_FEED(&t, "\x1d", wm_now); /* Ctrl+] */
     tui_update(&t, wm_now);
-    r2_assert("Ctrl+Space opens the palette", t.pal_open && strstr(wm_row(&t, 1), " Search ") != 0);
+    r2_assert("Ctrl+] opens the palette", t.pal_open && strstr(wm_row(&t, 1), " Search ") != 0);
     r2_assert("lists menu items with their shortcuts", wm_has(&t, "File \xE2\x80\xBA Save") && wm_has(&t, "Ctrl+S"));
     r2_assert("lists window commands", wm_has(&t, "Window \xE2\x80\xBA Zoom"));
     r2_assert("lists other windows", wm_has(&t, "Go to window \xE2\x80\xBA Bravo"));
@@ -1352,7 +1353,7 @@ static const char *test_palette(void)
     r2_assert("Zoom from the palette", wa->zoomed);
 
     /* go to a window, editing the query on the way */
-    TUI_FEED(&t, "\0", wm_now);
+    TUI_FEED(&t, "\x1d", wm_now);
     tui_update(&t, wm_now);
     wm_keys(&t, "brx");
     r2_assert("no matches shown", t.pal_n == 0 && wm_has(&t, "No matches"));
@@ -1362,7 +1363,7 @@ static const char *test_palette(void)
     r2_assert("went to Bravo", tui_focused_window(&t) == wb);
 
     /* moving the selection: Down / Ctrl+N / Tab and Up / Ctrl+P */
-    TUI_FEED(&t, "\0", wm_now);
+    TUI_FEED(&t, "\x1d", wm_now);
     tui_update(&t, wm_now);
     int n = t.pal_n;
     r2_assert("several results", n > 3);
@@ -1381,15 +1382,15 @@ static const char *test_palette(void)
     r2_assert("Ctrl+U clears", t.pal_query[0] == 0);
     wm_keys(&t, "\x1b");
     r2_assert("Esc closes", !t.pal_open);
-    TUI_FEED(&t, "\0", wm_now);
+    TUI_FEED(&t, "\x1d", wm_now);
     tui_update(&t, wm_now);
     wm_keys(&t, "\x07");
     r2_assert("Ctrl+G closes", !t.pal_open);
-    TUI_FEED(&t, "\0", wm_now);
+    TUI_FEED(&t, "\x1d", wm_now);
     tui_update(&t, wm_now);
-    TUI_FEED(&t, "\0", wm_now);
+    TUI_FEED(&t, "\x1d", wm_now);
     tui_update(&t, wm_now);
-    r2_assert("Ctrl+Space again closes", !t.pal_open);
+    r2_assert("Ctrl+] again closes", !t.pal_open);
     vt_flush(&t, 1);
     r2_assert(vt_err ? vt_err : "render", !vt_err && vt_matches(&t));
     return 0;
@@ -1452,15 +1453,15 @@ static const char *test_palette_desktop_and_modal(void)
     a.ask = 1;
     tui_window_invalidate(&t, wa);
     tui_update(&t, wm_now);
-    TUI_FEED(&t, "\0", wm_now);
+    TUI_FEED(&t, "\x1d", wm_now);
     tui_update(&t, wm_now);
     r2_assert("no palette under a modal", !t.pal_open);
     wm_keys(&t, "\x1b");
     /* configurable */
     r2_assert("palette key off", tui_set_palette_key(&t, 0));
-    TUI_FEED(&t, "\0", wm_now);
+    TUI_FEED(&t, "\x1d", wm_now);
     tui_update(&t, wm_now);
-    r2_assert("Ctrl+Space no longer opens it", !t.pal_open);
+    r2_assert("Ctrl+] no longer opens it", !t.pal_open);
     wm_keys(&t, "\x1c/");
     r2_assert("prefix / still does", t.pal_open);
     wm_keys(&t, "\x1b");

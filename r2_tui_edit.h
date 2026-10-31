@@ -33,6 +33,19 @@
     the end of the line, or join it with the next). Shift+Tab leaves the
     editor for the next widget back.
 
+    Esc then a key is Meta+key (as Emacs does in a terminal, so it works
+    where Alt / Option doesn't): Esc f / Esc b words, Esc < / Esc > top and
+    bottom, Esc v page up; Alt+key works too where the terminal sends it.
+
+    Selection: Ctrl+Space sets the mark and moving extends the region
+    (Emacs); Shift+movement selects too, and then a plain move clears it
+    and typing replaces it (CUA). Ctrl+G or Esc Esc clears it.
+
+    Clipboard (give the editor a tui_clipboard, see below): Ctrl+W kill (cut) the
+    region, Ctrl+Y yank (paste), Esc w copy; Ctrl+K, Esc d and
+    Esc Backspace kill into it too, and kills in a row join up. Borland
+    keys: Shift+Del, Ctrl+Ins, Shift+Ins.
+
     Tabs show to the next multiple of e->tab columns (4 by default); wide
     and combining characters are handled like everywhere in r2_tui.
 
@@ -40,16 +53,17 @@ FEATURES
     Everything below is on unless you turn it off, so a small target can
     build a minimal editor. Define before including:
 
-        R2_TUI_EDIT_NO_SELECTION    Shift+arrows selection       (next)
-        R2_TUI_EDIT_NO_CLIPBOARD    cut / copy / paste           (next)
+        R2_TUI_EDIT_NO_SELECTION    mark and Shift selection
+        R2_TUI_EDIT_NO_CLIPBOARD    kill / yank / cut / copy / paste
         R2_TUI_EDIT_NO_UNDO         undo / redo ring             (next)
         R2_TUI_EDIT_NO_SEARCH       find / replace               (next)
         R2_TUI_EDIT_NO_HIGHLIGHT    per-line colouring callback  (next)
         R2_TUI_EDIT_MINIMAL         all of the above off
 
-    v0.1 is the core editor; the features marked (next) are not written yet.
+    The features marked (next) are not written yet.
 
 CHANGES
+    v0.2  selection (mark, Shift), clipboard and kills, Esc as Meta
     v0.1  gap buffer, movement, editing, scrolling, line numbers
 
 LICENSE
@@ -90,6 +104,13 @@ extern "C"
 #define TUI_EDIT_AUTO_INDENT 4u  /* Enter copies the line's leading spaces / tabs */
 #define TUI_EDIT_SPACES 8u       /* Tab inserts spaces to the next tab stop */
 
+    /** A clipboard (kill buffer): memory you provide, shareable between editors. */
+    typedef struct tui_clipboard
+    {
+        char *buf;
+        uint32_t cap, len;
+    } tui_clipboard;
+
     typedef struct tui_edit
     {
         char *buf;          /* caller's memory: text before the gap, gap, text after */
@@ -105,6 +126,12 @@ extern "C"
         uint32_t flags;     /* TUI_EDIT_* */
         uint8_t tab;        /* tab width */
         uint8_t modified;   /* set by any change; clear it yourself */
+        uint8_t mark_on;    /* a region is selected: [mark, cursor) in either order */
+        uint8_t mark_shift; /* it was made with Shift (CUA rules) */
+        uint8_t meta;       /* Esc was pressed: the next key is Meta+key */
+        uint8_t last_kill;  /* the last key killed text (the next kill joins it) */
+        uint32_t mark;
+        tui_clipboard *clip;     /* where kills and copies go; 0 for none */
     } tui_edit;
 
     /** Use buf (cap bytes) for the text; starts empty. */
@@ -123,6 +150,14 @@ extern "C"
     R2_TUI_DEF void tui_edit_goto(tui_edit *e, uint32_t offset);
     /** Display column of the cursor (tabs and wide characters counted). */
     R2_TUI_DEF uint32_t tui_edit_column(const tui_edit *e);
+    /** Use buf (cap bytes) as a clipboard; set ed.clip = &clip to use it. */
+    R2_TUI_DEF void tui_clipboard_init(tui_clipboard *c, char *buf, uint32_t cap);
+    /** 1 and the region's byte range if something is selected. */
+    R2_TUI_DEF int tui_edit_selection(const tui_edit *e, uint32_t *from, uint32_t *to);
+    /** Copy / cut the region to e->clip (for menus); paste e->clip at the cursor (0 if it doesn't fit). */
+    R2_TUI_DEF void tui_edit_copy(tui_edit *e);
+    R2_TUI_DEF void tui_edit_cut(tui_edit *e);
+    R2_TUI_DEF int tui_edit_paste(tui_edit *e);
     /**
      * The editor widget, w x h cells at the layout cursor. Handles the keys
      * above while it has focus. Returns TUI_CHANGED when the text changed.
@@ -338,6 +373,8 @@ extern "C"
             e->top += text.len;
             e->top_line += k;
         }
+        if (e->mark > e->cursor)
+            e->mark += text.len;
         e->cursor += text.len;
         e->line += k;
         e->lines += k;
@@ -365,6 +402,10 @@ extern "C"
             e->line -= r2__ed_newlines(e, from, e->cursor);
             e->cursor = from;
         }
+        if (e->mark >= to)
+            e->mark -= n;
+        else if (e->mark > from)
+            e->mark = from;
         if (e->top >= to)
         {
             e->top -= n;
@@ -388,7 +429,8 @@ extern "C"
             return 0;
         e->gap_start = 0;
         e->gap_end = e->cap;
-        e->cursor = e->line = e->top = e->top_line = e->left = 0;
+        e->cursor = e->line = e->top = e->top_line = e->left = e->mark = 0;
+        e->mark_on = e->meta = e->last_kill = 0;
         e->lines = 1;
         e->goal = -1;
         tui_edit_insert(e, text);
@@ -463,10 +505,102 @@ extern "C"
         tui_edit_goto(e, r2__ed_off_at_col(e, start, (uint32_t)e->goal));
     }
 
+    /* ---------------- selection and clipboard ---------------- */
+
+    R2_TUI_DEF void tui_clipboard_init(tui_clipboard *c, char *buf, uint32_t cap)
+    {
+        c->buf = buf;
+        c->cap = cap;
+        c->len = 0;
+    }
+
+    R2_TUI_DEF int tui_edit_selection(const tui_edit *e, uint32_t *from, uint32_t *to)
+    {
+#ifndef R2_TUI_EDIT_NO_SELECTION
+        if (e->mark_on && e->mark != e->cursor)
+        {
+            *from = e->mark < e->cursor ? e->mark : e->cursor;
+            *to = e->mark < e->cursor ? e->cursor : e->mark;
+            return 1;
+        }
+#endif
+        (void)e;
+        *from = *to = 0;
+        return 0;
+    }
+
+    /* text [from, to) into the clipboard: mode 0 replaces, 1 appends, 2 prepends.
+       Whatever doesn't fit is left off, at a character boundary. */
+    static void r2__ed_clip_put(tui_edit *e, uint32_t from, uint32_t to, int mode)
+    {
+#ifndef R2_TUI_EDIT_NO_CLIPBOARD
+        tui_clipboard *c = e->clip;
+        uint32_t n = to - from, i;
+        if (!c || !c->buf || to <= from)
+            return;
+        if (mode == 0)
+            c->len = 0;
+        if (n > c->cap - c->len)
+        {
+            n = c->cap - c->len;
+            while (n > 0 && (r2__ed_at(e, from + n) & 0xC0u) == 0x80u)
+                n--;
+        }
+        if (mode == 2)
+        {
+            for (i = c->len; i-- > 0;)
+                c->buf[i + n] = c->buf[i];
+            for (i = 0; i < n; i++)
+                c->buf[i] = (char)r2__ed_at(e, from + i);
+        }
+        else
+            for (i = 0; i < n; i++)
+                c->buf[c->len + i] = (char)r2__ed_at(e, from + i);
+        c->len += n;
+#else
+        (void)e;
+        (void)from;
+        (void)to;
+        (void)mode;
+#endif
+    }
+
+    R2_TUI_DEF void tui_edit_copy(tui_edit *e)
+    {
+        uint32_t from, to;
+        if (tui_edit_selection(e, &from, &to))
+            r2__ed_clip_put(e, from, to, 0);
+        e->mark_on = 0;
+    }
+
+    R2_TUI_DEF void tui_edit_cut(tui_edit *e)
+    {
+        uint32_t from, to;
+        if (!(e->flags & TUI_EDIT_READ_ONLY) && tui_edit_selection(e, &from, &to))
+        {
+            r2__ed_clip_put(e, from, to, 0);
+            tui_edit_delete(e, from, to);
+        }
+        e->mark_on = 0;
+    }
+
+    R2_TUI_DEF int tui_edit_paste(tui_edit *e)
+    {
+#ifndef R2_TUI_EDIT_NO_CLIPBOARD
+        if (e->clip && e->clip->buf && !(e->flags & TUI_EDIT_READ_ONLY))
+        {
+            e->mark_on = 0;
+            return tui_edit_insert(e, s8_from_bytes(e->clip->buf, e->clip->len));
+        }
+#endif
+        (void)e;
+        return 0;
+    }
+
     /* ---------------- the widget ---------------- */
 
     /* the key while the editor has focus; returns TUI_CHANGED, *used if it took it */
-    static unsigned r2__ed_key(tui_edit *e, const tui_event *ev, int page, int *used)
+    static unsigned r2__ed_basic_key(tui_edit *e, const tui_event *ev, int page, int *used)
     {
         uint32_t len = tui_edit_len(e), keep_goal = 0;
         unsigned res = 0;
@@ -596,6 +730,195 @@ extern "C"
         return res;
     }
 
+    static int r2__ed_is(const tui_event *ev, uint16_t key, uint8_t mods, rune ch)
+    {
+        return ev->key == key && ev->mods == mods && (key != TUI_KEY_RUNE || r2__tui_lower(ev->ch) == ch);
+    }
+
+    /* Meta, selection and clipboard keys; everything else goes to r2__ed_basic_key */
+    static unsigned r2__ed_key(tui_edit *e, const tui_event *in, int page, int *used)
+    {
+        tui_event ev = *in;
+        unsigned res = 0;
+        int ro = (e->flags & TUI_EDIT_READ_ONLY) != 0, kill = 0, movement;
+        uint32_t from, to;
+        *used = 1;
+
+        /* Esc then a key is Meta+key */
+        if (e->meta)
+        {
+            e->meta = 0;
+            if (ev.key == TUI_KEY_ESC)
+            {
+                e->mark_on = 0; /* Esc Esc: clear the region */
+                e->last_kill = 0;
+                return 0;
+            }
+            ev.mods |= TUI_MOD_ALT;
+        }
+        else if (r2__ed_is(&ev, TUI_KEY_ESC, 0, 0))
+        {
+            /* always Meta (so Esc w copies an active region, as in Emacs) */
+            e->meta = 1;
+            return 0;
+        }
+        if (r2__ed_is(&ev, TUI_KEY_RUNE, TUI_MOD_CTRL, 'g'))
+        {
+            e->mark_on = 0;
+            e->last_kill = 0;
+            return 0;
+        }
+
+        /* Meta movement is the same as its Ctrl key */
+        if (ev.mods & TUI_MOD_ALT && ev.key == TUI_KEY_RUNE)
+        {
+            uint8_t keep = (uint8_t)(ev.mods & TUI_MOD_SHIFT);
+            switch (r2__tui_lower(ev.ch))
+            {
+            case 'f': ev.key = TUI_KEY_RIGHT; ev.mods = (uint8_t)(TUI_MOD_CTRL | keep); break;
+            case 'b': ev.key = TUI_KEY_LEFT; ev.mods = (uint8_t)(TUI_MOD_CTRL | keep); break;
+            case '<': ev.key = TUI_KEY_HOME; ev.mods = TUI_MOD_CTRL; break;
+            case '>': ev.key = TUI_KEY_END; ev.mods = TUI_MOD_CTRL; break;
+            case 'v': ev.key = TUI_KEY_PGUP; ev.mods = keep; break;
+            default: break;
+            }
+        }
+
+        movement = ev.key == TUI_KEY_LEFT || ev.key == TUI_KEY_RIGHT || ev.key == TUI_KEY_UP ||
+                   ev.key == TUI_KEY_DOWN || ev.key == TUI_KEY_HOME || ev.key == TUI_KEY_END ||
+                   ev.key == TUI_KEY_PGUP || ev.key == TUI_KEY_PGDN ||
+                   (ev.key == TUI_KEY_RUNE && (ev.mods & ~TUI_MOD_SHIFT) == TUI_MOD_CTRL &&
+                    (ev.ch == 'a' || ev.ch == 'e' || ev.ch == 'b' || ev.ch == 'f' || ev.ch == 'p' || ev.ch == 'n'));
+        (void)ro; /* unused when features are compiled out */
+        (void)kill;
+        (void)movement;
+        (void)from;
+        (void)to;
+
+#ifndef R2_TUI_EDIT_NO_SELECTION
+        if (r2__ed_is(&ev, TUI_KEY_RUNE, TUI_MOD_CTRL, ' '))
+        {
+            e->mark = e->cursor;
+            e->mark_on = 1;
+            e->mark_shift = 0;
+            e->last_kill = 0;
+            return 0;
+        }
+        if (movement)
+        {
+            if (ev.mods & TUI_MOD_SHIFT)
+            {
+                if (!e->mark_on)
+                {
+                    e->mark = e->cursor;
+                    e->mark_on = 1;
+                    e->mark_shift = 1;
+                }
+                ev.mods &= (uint8_t)~TUI_MOD_SHIFT;
+            }
+            else if (e->mark_on && e->mark_shift)
+                e->mark_on = 0;
+        }
+#endif
+
+#ifndef R2_TUI_EDIT_NO_CLIPBOARD
+        if (e->clip && e->clip->buf)
+        {
+            int copy = r2__ed_is(&ev, TUI_KEY_INSERT, TUI_MOD_CTRL, 0) || r2__ed_is(&ev, TUI_KEY_RUNE, TUI_MOD_ALT, 'w');
+            int cut = r2__ed_is(&ev, TUI_KEY_RUNE, TUI_MOD_CTRL, 'w') || r2__ed_is(&ev, TUI_KEY_DELETE, TUI_MOD_SHIFT, 0);
+            if (copy)
+            {
+                tui_edit_copy(e);
+                e->last_kill = 0;
+                return 0;
+            }
+            if (cut)
+            {
+                if (!ro && tui_edit_selection(e, &from, &to))
+                {
+                    r2__ed_clip_put(e, from, to, e->last_kill ? (to == e->cursor ? 2 : 1) : 0);
+                    tui_edit_delete(e, from, to);
+                    res = TUI_CHANGED;
+                    kill = 1;
+                }
+                e->mark_on = 0;
+                e->last_kill = (uint8_t)kill;
+                return res;
+            }
+            if (!ro && (r2__ed_is(&ev, TUI_KEY_RUNE, TUI_MOD_CTRL, 'k') || r2__ed_is(&ev, TUI_KEY_RUNE, TUI_MOD_ALT, 'd') ||
+                        r2__ed_is(&ev, TUI_KEY_BACKSPACE, TUI_MOD_ALT, 0)))
+            {
+                /* kills: to the end of the line (or the newline), or a word either way */
+                if (ev.key == TUI_KEY_BACKSPACE)
+                {
+                    from = r2__ed_word_left(e, e->cursor);
+                    to = e->cursor;
+                }
+                else
+                {
+                    from = e->cursor;
+                    to = ev.ch == 'k' ? r2__ed_line_end(e, e->cursor) : r2__ed_word_right(e, e->cursor);
+                    if (to == from && ev.ch == 'k' && to < tui_edit_len(e))
+                        to++;
+                }
+                if (to > from)
+                {
+                    r2__ed_clip_put(e, from, to, e->last_kill ? (ev.key == TUI_KEY_BACKSPACE ? 2 : 1) : 0);
+                    tui_edit_delete(e, from, to);
+                    res = TUI_CHANGED;
+                }
+                e->mark_on = 0;
+                e->goal = -1;
+                e->last_kill = 1;
+                return res;
+            }
+            if (r2__ed_is(&ev, TUI_KEY_RUNE, TUI_MOD_CTRL, 'y') || r2__ed_is(&ev, TUI_KEY_INSERT, TUI_MOD_SHIFT, 0))
+            {
+#ifndef R2_TUI_EDIT_NO_SELECTION
+                if (!ro && e->mark_shift && tui_edit_selection(e, &from, &to))
+                    tui_edit_delete(e, from, to);
+#endif
+                if (tui_edit_paste(e))
+                    res = TUI_CHANGED;
+                e->mark_on = 0;
+                e->goal = -1;
+                e->last_kill = 0;
+                return res;
+            }
+        }
+#endif
+
+#ifndef R2_TUI_EDIT_NO_SELECTION
+        /* editing with a region: a Shift selection is replaced (CUA); either way the mark goes */
+        if (!movement && e->mark_on && !ro)
+        {
+            int types = (ev.key == TUI_KEY_RUNE && !(ev.mods & (TUI_MOD_CTRL | TUI_MOD_ALT)) && ev.ch >= 0x20u) ||
+                        r2__ed_is(&ev, TUI_KEY_ENTER, 0, 0) || r2__ed_is(&ev, TUI_KEY_TAB, 0, 0);
+            int erases = r2__ed_is(&ev, TUI_KEY_BACKSPACE, 0, 0) || r2__ed_is(&ev, TUI_KEY_DELETE, 0, 0) ||
+                         r2__ed_is(&ev, TUI_KEY_RUNE, TUI_MOD_CTRL, 'd');
+            if (types || erases)
+            {
+                int had = e->mark_shift && tui_edit_selection(e, &from, &to);
+                e->mark_on = 0;
+                if (had)
+                {
+                    tui_edit_delete(e, from, to);
+                    res = TUI_CHANGED;
+                    if (erases)
+                    {
+                        e->goal = -1;
+                        e->last_kill = 0;
+                        return res;
+                    }
+                }
+            }
+        }
+#endif
+        res |= r2__ed_basic_key(e, &ev, page, used);
+        e->last_kill = 0;
+        return res;
+    }
+
     /* keep the cursor on screen */
     static void r2__ed_scroll(tui_edit *e, uint32_t h, uint32_t tw)
     {
@@ -624,7 +947,8 @@ extern "C"
         const tui_event *ev = tui_key(t);
         unsigned res = 0;
         int x, y, row, gutter = 0, tw, used;
-        uint32_t off, len = tui_edit_len(e);
+        uint32_t off, len = tui_edit_len(e), s0 = 0, s1 = 0;
+        tui_style body, sel_style;
         char tmp[512];
         if (w < 4)
             w = 4;
@@ -655,12 +979,15 @@ extern "C"
         r2__ed_scroll(e, (uint32_t)h, (uint32_t)tw);
         r2__tui_place(t, w, h, &x, &y);
         tui_fill(t, (tui_rect){x, y, w, h}, ' ', TUI_DEFAULT);
+        tui_edit_selection(e, &s0, &s1);
+        body = t->cur >= 0 ? r2__tui_body(t, t->cur) : t->theme->body;
+        sel_style = TUI_STYLE(TUI_STYLE_FG(body), TUI_STYLE_BG(body), TUI_STYLE_ATTR(body) | TUI_REVERSE);
 
         off = e->top;
         for (row = 0; row < h; row++)
         {
             uint32_t col = 0, n = 0, at = off;
-            int first = 1;
+            int first = 1, seg_sel = 0, seg_x = 0;
             if (e->top_line + (uint32_t)row >= e->lines)
                 break;
             if (gutter)
@@ -678,16 +1005,28 @@ extern "C"
                 tui_text(t, x + gutter - 1 - (int)k, y + row, s8_from_bytes(num, k),
                          r2__tui_on_body(t, t->theme->frame));
             }
-            /* the visible columns [left, left + tw) of this line */
+            /* the visible columns [left, left + tw) of this line, in runs of
+               selected / not selected text */
             while (at < len)
             {
                 rune r;
                 uint32_t rn = r2__ed_rune(e, at, &r), rw;
+                int sel = at >= s0 && at < s1;
                 if (r == '\n')
                     break;
                 rw = r2__ed_width(e, r, col);
                 if (col + rw > e->left + (uint32_t)tw)
                     break;
+                if (rw != 0 && sel != seg_sel && n)
+                {
+                    tui_text(t, x + gutter + seg_x, y + row, s8_from_bytes(tmp, n), seg_sel ? sel_style : TUI_DEFAULT);
+                    n = 0;
+                }
+                if (n == 0 && rw != 0)
+                {
+                    seg_sel = sel;
+                    seg_x = col >= e->left ? (int)(col - e->left) : 0;
+                }
                 if (col >= e->left || (rw == 0 && !first))
                 {
                     if (r == '\t')
@@ -716,7 +1055,10 @@ extern "C"
                 at += rn;
             }
             if (n)
-                tui_text(t, x + gutter, y + row, s8_from_bytes(tmp, n), TUI_DEFAULT);
+                tui_text(t, x + gutter + seg_x, y + row, s8_from_bytes(tmp, n), seg_sel ? sel_style : TUI_DEFAULT);
+            /* a selected line break shows as one selected blank after the text */
+            if (at < len && at >= s0 && at < s1 && col >= e->left && col - e->left < (uint32_t)tw)
+                tui_text(t, x + gutter + (int)(col - e->left), y + row, S8(" "), sel_style);
             off = r2__ed_line_end(e, off) + 1;
         }
         if (focused)

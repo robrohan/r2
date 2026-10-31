@@ -16,7 +16,7 @@
 		{"id":"w-posix","type":"file","file":"root.canvas","subpath":"#ext-posix","x":1249,"y":-299,"width":312,"height":188},
 		{"id":"w-blas","type":"file","file":"root.canvas","subpath":"#ext-blas","x":-366,"y":572,"width":320,"height":157},
 		{"id":"w-chestnut","type":"file","file":"root.canvas","subpath":"#ext-chestnut","x":1717,"y":305,"width":323,"height":220},
-		{"id":"ctr-edit","type":"text","text":"## r2_tui_edit\n*[Container: C header]*\nA multi-line text editor widget for r2_tui: gap buffer in caller memory, incrementally tracked lines, CUA and Emacs keys, line numbers. Selection, clipboard, undo, search and highlighting are next, each switchable off with `-D`.\nKey: `r2_tui_edit.h`\nCode: [[..]]","x":2120,"y":54,"width":300,"height":240,"color":"5"}
+		{"id":"ctr-edit","type":"text","text":"## r2_tui_edit\n*[Container: C header]*\nA multi-line text editor widget for r2_tui: gap buffer in caller memory, incrementally tracked lines, CUA and Emacs keys, Esc as Meta, mark and Shift selection, kill/yank clipboard. Undo, search and highlighting are next; every feature switches off with `-D`.\nKey: `r2_tui_edit.h`\nCode: [[..]]","x":2120,"y":54,"width":300,"height":240,"color":"5"}
 	],
 	"edges":[
 		{"id":"e-w-dev-g-r2","fromNode":"w-dev","toNode":"g-r2","label":"Copies in and #includes"},
