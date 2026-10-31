@@ -364,37 +364,53 @@ extern "C"
     static int64_t vecn_dot_i16(const int16_t *v1, const int16_t *v2, int n)
     {
 #if defined(R2_SIMD_AVX2)
-        int64_t sum = 0;
+        /* Not madd_epi16: it adds two products in an int32 lane, which
+           wraps for (-32768)^2 + (-32768)^2 = 2^31. Build each exact int32
+           product from its mullo/mulhi halves and widen to int64 before
+           adding. unpack works within 128-bit lanes, so the products come
+           out of order, which doesn't matter for a sum. */
+        __m256i acc = _mm256_setzero_si256();
         int i = 0;
         for (; i + 16 <= n; i += 16)
         {
             __m256i a = _mm256_loadu_si256((const __m256i *)(v1 + i));
             __m256i b = _mm256_loadu_si256((const __m256i *)(v2 + i));
-            __m256i prod = _mm256_madd_epi16(a, b);
-            int32_t buf[8];
-            _mm256_storeu_si256((__m256i *)buf, prod);
-            int k;
-            for (k = 0; k < 8; k++)
-                sum += (int64_t)buf[k];
+            __m256i lo = _mm256_mullo_epi16(a, b);
+            __m256i hi = _mm256_mulhi_epi16(a, b);
+            __m256i p0 = _mm256_unpacklo_epi16(lo, hi);
+            __m256i p1 = _mm256_unpackhi_epi16(lo, hi);
+            acc = _mm256_add_epi64(acc, _mm256_cvtepi32_epi64(_mm256_castsi256_si128(p0)));
+            acc = _mm256_add_epi64(acc, _mm256_cvtepi32_epi64(_mm256_extracti128_si256(p0, 1)));
+            acc = _mm256_add_epi64(acc, _mm256_cvtepi32_epi64(_mm256_castsi256_si128(p1)));
+            acc = _mm256_add_epi64(acc, _mm256_cvtepi32_epi64(_mm256_extracti128_si256(p1, 1)));
         }
+        int64_t buf[4];
+        _mm256_storeu_si256((__m256i *)buf, acc);
+        int64_t sum = buf[0] + buf[1] + buf[2] + buf[3];
         for (; i < n; i++)
             sum += (int64_t)v1[i] * (int64_t)v2[i];
         return sum;
 
 #elif defined(R2_SIMD_SSE41)
-        int64_t sum = 0;
+        /* see the AVX2 note on why this isn't madd_epi16 */
+        __m128i acc = _mm_setzero_si128();
         int i = 0;
         for (; i + 8 <= n; i += 8)
         {
             __m128i a = _mm_loadu_si128((const __m128i *)(v1 + i));
             __m128i b = _mm_loadu_si128((const __m128i *)(v2 + i));
-            __m128i prod = _mm_madd_epi16(a, b);
-            int32_t buf[4];
-            _mm_storeu_si128((__m128i *)buf, prod);
-            int k;
-            for (k = 0; k < 4; k++)
-                sum += (int64_t)buf[k];
+            __m128i lo = _mm_mullo_epi16(a, b);
+            __m128i hi = _mm_mulhi_epi16(a, b);
+            __m128i p0 = _mm_unpacklo_epi16(lo, hi);
+            __m128i p1 = _mm_unpackhi_epi16(lo, hi);
+            acc = _mm_add_epi64(acc, _mm_cvtepi32_epi64(p0));
+            acc = _mm_add_epi64(acc, _mm_cvtepi32_epi64(_mm_srli_si128(p0, 8)));
+            acc = _mm_add_epi64(acc, _mm_cvtepi32_epi64(p1));
+            acc = _mm_add_epi64(acc, _mm_cvtepi32_epi64(_mm_srli_si128(p1, 8)));
         }
+        int64_t buf[2];
+        _mm_storeu_si128((__m128i *)buf, acc);
+        int64_t sum = buf[0] + buf[1];
         for (; i < n; i++)
             sum += (int64_t)v1[i] * (int64_t)v2[i];
         return sum;
