@@ -1,5 +1,6 @@
 #include "../r2_termui.h"
 #include <stdio.h>
+#include <string.h>
 #include <unistd.h>
 #include "../r2_unit.h"
 
@@ -113,8 +114,62 @@ static const char *test_rgb_rainbow(void)
     return 0;
 }
 
+/* Non-visual checks: the format macros expand to the exact VT100 / ANSI
+   sequences (and the compiler checks their %d counts via -Wformat). */
+static const char *test_escape_sequences_exact(void)
+{
+    char buf[64];
+    snprintf(buf, sizeof(buf), ESC_CURSOR_POS, 12, 34);
+    r2_assert("ESC_CURSOR_POS is wrong", strcmp(buf, "\033[12;34H") == 0);
+    snprintf(buf, sizeof(buf), ESC_FORCE_CURSOR_POS, 1, 2);
+    r2_assert("ESC_FORCE_CURSOR_POS is wrong", strcmp(buf, "\033[1;2f") == 0);
+    snprintf(buf, sizeof(buf), ESC_CURSOR_UP, 3);
+    r2_assert("ESC_CURSOR_UP is wrong", strcmp(buf, "\033[3A") == 0);
+    snprintf(buf, sizeof(buf), ESC_CURSOR_DOWN, 3);
+    r2_assert("ESC_CURSOR_DOWN is wrong", strcmp(buf, "\033[3B") == 0);
+    snprintf(buf, sizeof(buf), ESC_CURSOR_FORWARD, 3);
+    r2_assert("ESC_CURSOR_FORWARD is wrong", strcmp(buf, "\033[3C") == 0);
+    snprintf(buf, sizeof(buf), ESC_CURSOR_BACKWARD, 3);
+    r2_assert("ESC_CURSOR_BACKWARD is wrong", strcmp(buf, "\033[3D") == 0);
+    snprintf(buf, sizeof(buf), ESC_SET_ATTRIBUTE_MODE_3, 1, 31, 40);
+    r2_assert("ESC_SET_ATTRIBUTE_MODE_3 is wrong", strcmp(buf, "\033[1;31;40m") == 0);
+    snprintf(buf, sizeof(buf), ESC_SET_ATTRIBUTE_MODE_2, 1, 31);
+    r2_assert("ESC_SET_ATTRIBUTE_MODE_2 is wrong", strcmp(buf, "\033[1;31m") == 0);
+    snprintf(buf, sizeof(buf), ESC_SET_ATTRIBUTE_MODE_1, 0);
+    r2_assert("ESC_SET_ATTRIBUTE_MODE_1 is wrong", strcmp(buf, "\033[0m") == 0);
+    snprintf(buf, sizeof(buf), ESC_SET_FG_256, 196);
+    r2_assert("ESC_SET_FG_256 is wrong", strcmp(buf, "\033[38;5;196m") == 0);
+    snprintf(buf, sizeof(buf), ESC_SET_BG_256, 232);
+    r2_assert("ESC_SET_BG_256 is wrong", strcmp(buf, "\033[48;5;232m") == 0);
+    snprintf(buf, sizeof(buf), ESC_SET_FG_RGB, 255, 128, 0);
+    r2_assert("ESC_SET_FG_RGB is wrong", strcmp(buf, "\033[38;2;255;128;0m") == 0);
+    snprintf(buf, sizeof(buf), ESC_SET_BG_RGB, 0, 0, 255);
+    r2_assert("ESC_SET_BG_RGB is wrong", strcmp(buf, "\033[48;2;0;0;255m") == 0);
+    snprintf(buf, sizeof(buf), ESC_REPORT_CURSOR_POSITION, 5, 6);
+    r2_assert("ESC_REPORT_CURSOR_POSITION is wrong", strcmp(buf, "\033[5;6R") == 0);
+    snprintf(buf, sizeof(buf), ESC_SET_KEY_DEFINITION, 65, "ls");
+    r2_assert("ESC_SET_KEY_DEFINITION is wrong", strcmp(buf, "\033[65;\"ls\"p") == 0);
+
+    r2_assert("ESC_START is wrong", ESC_START == 0x1B);
+    r2_assert("ESC_CURSOR_HOME is wrong", strcmp(ESC_CURSOR_HOME, "\x1b[H") == 0);
+    r2_assert("ESC_HIDE_CURSOR is wrong", strcmp(ESC_HIDE_CURSOR, "\x1b[?25l") == 0);
+    r2_assert("ESC_SHOW_CURSOR is wrong", strcmp(ESC_SHOW_CURSOR, "\x1b[?25h") == 0);
+    r2_assert("ESC_ERASE_SCREEN is wrong", strcmp(ESC_ERASE_SCREEN, "\x1b[2J") == 0);
+    r2_assert("ESC_ERASE_LINE is wrong", strcmp(ESC_ERASE_LINE, "\x1b[2K") == 0);
+    r2_assert("ESC_ERASE_END_OF_LINE is wrong", strcmp(ESC_ERASE_END_OF_LINE, "\x1b[K") == 0);
+    r2_assert("ESC_ERASE_START_OF_LINE is wrong", strcmp(ESC_ERASE_START_OF_LINE, "\x1b[1K") == 0);
+    r2_assert("ESC_ERASE_DOWN is wrong", strcmp(ESC_ERASE_DOWN, "\x1b[J") == 0);
+    r2_assert("ESC_ERASE_UP is wrong", strcmp(ESC_ERASE_UP, "\x1b[1J") == 0);
+    r2_assert("ESC_SAVE_CURSOR is wrong", strcmp(ESC_SAVE_CURSOR, "\x1b[s") == 0);
+    r2_assert("ESC_UNSAVE_CURSOR is wrong", strcmp(ESC_UNSAVE_CURSOR, "\x1b[u") == 0);
+    r2_assert("ESC_QUERY_CURSOR_POSITION is wrong", strcmp(ESC_QUERY_CURSOR_POSITION, "\x1b[6n") == 0);
+    r2_assert("ESC_QUERY_DEVICE_STATUS is wrong", strcmp(ESC_QUERY_DEVICE_STATUS, "\x1b[5n") == 0);
+    return 0;
+}
+
 static const char *r2_termui_test(void)
 {
+    r2_run_test(test_escape_sequences_exact);
     r2_run_test(test_simple_test);
     r2_run_test(test_256_grayscale_gradient);
     r2_run_test(test_256_color_gradient);

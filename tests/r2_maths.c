@@ -2,6 +2,7 @@
 #include "../r2_maths.h"
 
 #include <limits.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -1096,6 +1097,679 @@ static const char *test_mat4_tos(void)
     return 0;
 }
 
+///////////////////////////////////////////////////////////////
+// Helpers for the tests below
+
+static bool m_near(float a, float b, float tol)
+{
+    return fabsf(a - b) <= tol;
+}
+
+/* Deterministic xorshift, returns a float in [-1, 1] */
+static uint32_t m_seed = 0x12345678u;
+static float m_rand(void)
+{
+    m_seed ^= m_seed << 13;
+    m_seed ^= m_seed >> 17;
+    m_seed ^= m_seed << 5;
+    return (float)(m_seed & 0xFFFFFF) / (float)0x7FFFFF - 1.f;
+}
+
+/* out = M * p, treating a_mat4 as row-major with column vectors (the
+   layout mat4_perspective and mat4_lookat produce) */
+static void m_apply(const mat4 *m, const vec4 *p, vec4 *out)
+{
+    mat4 t;
+    mat4_transpose(m, &t);
+    mat4_transform(p, &t, out);
+}
+
+static bool m_vec4_near(const vec4 *a, float x, float y, float z, float w, float tol)
+{
+    return m_near(a->x, x, tol) && m_near(a->y, y, tol) && m_near(a->z, z, tol) && m_near(a->w, w, tol);
+}
+
+///////////////////////////////////////////////////////////////
+// Fns
+
+static const char *test_deg_to_rad(void)
+{
+    r2_assert("deg_to_rad 0 is wrong", r2_equals(deg_to_rad(0.f), 0.f));
+    r2_assert("deg_to_rad 180 is wrong", m_near(deg_to_rad(180.f), (float)M_PI, 1e-6f));
+    r2_assert("deg_to_rad -90 is wrong", m_near(deg_to_rad(-90.f), (float)(-M_PI / 2), 1e-6f));
+    return 0;
+}
+
+static const char *test_r2_equals_epsilon(void)
+{
+    r2_assert("r2_equals same", r2_equals(1.f, 1.f));
+    r2_assert("r2_equals inside eps", r2_equals(1.f, 1.f + 0.0000005f));
+    r2_assert("r2_equals outside eps", !r2_equals(1.f, 1.00001f));
+    r2_assert("r2_equals NaN", !r2_equals(NAN, NAN));
+    return 0;
+}
+
+///////////////////////////////////////////////////////////////
+// Vec2 (the remaining functions)
+
+static const char *test_vec2_zero_set_equals(void)
+{
+    vec2 a = {.x = 5.f, .y = 6.f};
+    vec2 b = {0};
+    vec2_zero(&a);
+    r2_assert("vec2 zero is wrong", a.x == 0.f && a.y == 0.f);
+    vec2_set(1.f, -2.f, &a);
+    r2_assert("vec2 set is wrong", a.x == 1.f && a.y == -2.f);
+    vec2_set(1.f, -2.f, &b);
+    r2_assert("vec2 equals same is wrong", vec2_equals(&a, &b));
+    b.y = -2.1f;
+    r2_assert("vec2 equals diff is wrong", !vec2_equals(&a, &b));
+    return 0;
+}
+
+static const char *test_vec2_mul(void)
+{
+    vec2 a = {.x = 2.f, .y = -3.f};
+    vec2 b = {.x = 4.f, .y = 5.f};
+    vec2 out = {0};
+    vec2_mul(&a, 2.5f, &out);
+    r2_assert("vec2 mul is wrong", out.x == 5.f && out.y == -7.5f);
+    vec2_mul_vec2(&a, &b, &out);
+    r2_assert("vec2 mul_vec2 is wrong", out.x == 8.f && out.y == -15.f);
+    vec2_pow(&b, 2.f, &out);
+    r2_assert("vec2 pow is wrong", r2_equals(out.x, 16.f) && r2_equals(out.y, 25.f));
+    return 0;
+}
+
+static const char *test_vec2_length_dist(void)
+{
+    vec2 a = {.x = 3.f, .y = 4.f};
+    vec2 b = {.x = 6.f, .y = 8.f};
+    r2_assert("vec2 length_sqrd is wrong", vec2_length_sqrd(&a) == 25.f);
+    r2_assert("vec2 length is wrong", vec2_length(&a) == 5.f);
+    r2_assert("vec2 dist_sqrd is wrong", vec2_dist_sqrd(&a, &b) == 25.f);
+    r2_assert("vec2 dist is wrong", vec2_dist(&a, &b) == 5.f);
+    r2_assert("vec2 dist symmetric is wrong", vec2_dist(&b, &a) == 5.f);
+    return 0;
+}
+
+static const char *test_vec2_normalize(void)
+{
+    vec2 a = {.x = 3.f, .y = 4.f};
+    vec2 z = {0};
+    vec2 out = {.x = 9.f, .y = 9.f};
+    vec2_normalize(&a, &out);
+    r2_assert("vec2 normalize is wrong", r2_equals(out.x, 0.6f) && r2_equals(out.y, 0.8f));
+    vec2_normalize(&z, &out);
+    r2_assert("vec2 normalize zero is wrong", out.x == 0.f && out.y == 0.f);
+    return 0;
+}
+
+static const char *test_vec2_edge_cross(void)
+{
+    /* Twice the signed area of abc: positive counter-clockwise */
+    vec2 a = {.x = 0.f, .y = 0.f};
+    vec2 b = {.x = 4.f, .y = 0.f};
+    vec2 c = {.x = 0.f, .y = 3.f};
+    r2_assert("edge_cross ccw is wrong", vec2_edge_cross(&a, &b, &c) == 12.f);
+    r2_assert("edge_cross cw is wrong", vec2_edge_cross(&a, &c, &b) == -12.f);
+    r2_assert("edge_cross collinear is wrong", vec2_edge_cross(&a, &b, &b) == 0.f);
+    return 0;
+}
+
+static const char *test_vec2_to_array(void)
+{
+    vec2 a = {.x = 1.5f, .y = -2.5f};
+    float out[2] = {0};
+    vec2_to_array(&a, out);
+    r2_assert("vec2 to_array is wrong", out[0] == 1.5f && out[1] == -2.5f);
+    return 0;
+}
+
+///////////////////////////////////////////////////////////////
+// Vec3 (the remaining functions)
+
+static const char *test_vec3_zero_set(void)
+{
+    vec3 a = {.x = 5.f, .y = 6.f, .z = 7.f};
+    vec3_zero(&a);
+    r2_assert("vec3 zero is wrong", a.x == 0.f && a.y == 0.f && a.z == 0.f);
+    vec3_set(1.f, 2.f, 3.f, &a);
+    r2_assert("vec3 set is wrong", a.x == 1.f && a.y == 2.f && a.z == 3.f);
+    return 0;
+}
+
+static const char *test_vec3_sub_div_mul(void)
+{
+    vec3 a = {.x = 6.f, .y = -4.f, .z = 2.f};
+    vec3 b = {.x = 2.f, .y = 2.f, .z = 0.f};
+    vec3 out = {0};
+    vec3_sub(&a, &b, &out);
+    r2_assert("vec3 sub is wrong", out.x == 4.f && out.y == -6.f && out.z == 2.f);
+    vec3_div(&a, 2.f, &out);
+    r2_assert("vec3 div is wrong", out.x == 3.f && out.y == -2.f && out.z == 1.f);
+    vec3_div(&a, 0.f, &out);
+    r2_assert("vec3 div zero is wrong", out.x == 6.f && out.y == -4.f && out.z == 2.f);
+    vec3_div_vec3(&a, &b, &out);
+    r2_assert("vec3 div_vec3 (zero lane) is wrong", out.x == 3.f && out.y == -2.f && out.z == 2.f);
+    vec3_mul_vec3(&a, &b, &out);
+    r2_assert("vec3 mul_vec3 is wrong", out.x == 12.f && out.y == -8.f && out.z == 0.f);
+    vec3_pow(&b, 3.f, &out);
+    r2_assert("vec3 pow is wrong", r2_equals(out.x, 8.f) && r2_equals(out.y, 8.f) && out.z == 0.f);
+    return 0;
+}
+
+static const char *test_vec3_dot_length_dist(void)
+{
+    vec3 a = {.x = 1.f, .y = 2.f, .z = 2.f};
+    vec3 b = {.x = 4.f, .y = 6.f, .z = 2.f};
+    r2_assert("vec3 dot is wrong", vec3_dot(&a, &b) == 20.f);
+    r2_assert("vec3 length_sqrd is wrong", vec3_length_sqrd(&a) == 9.f);
+    r2_assert("vec3 dist_sqrd is wrong", vec3_dist_sqrd(&a, &b) == 25.f);
+    r2_assert("vec3 dist is wrong", vec3_dist(&a, &b) == 5.f);
+    return 0;
+}
+
+static const char *test_vec3_ignores_w(void)
+{
+    /* vec3 shares storage with vec4; the vec3_ functions must not let a
+       stray w leak into the result */
+    vec3 a = {.x = 1.f, .y = 2.f, .z = 2.f, .w = 100.f};
+    vec3 b = {.x = 1.f, .y = 2.f, .z = 2.f, .w = -50.f};
+    r2_assert("vec3 length used w", vec3_length(&a) == 3.f);
+    r2_assert("vec3 dot used w", vec3_dot(&a, &b) == 9.f);
+    r2_assert("vec3 equals used w", vec3_equals(&a, &b));
+    r2_assert("vec3 dist used w", vec3_dist(&a, &b) == 0.f);
+    return 0;
+}
+
+static const char *test_vec3_cross_properties(void)
+{
+    vec3 x = {.x = 1.f}, y = {.y = 1.f}, z = {0};
+    vec3 a, b, axb, bxa;
+    vec3_cross(&x, &y, &z);
+    r2_assert("cross x*y should be z (right handed)", z.x == 0.f && z.y == 0.f && z.z == 1.f);
+    for (int i = 0; i < 100; i++)
+    {
+        vec3_set(m_rand(), m_rand(), m_rand(), &a);
+        vec3_set(m_rand(), m_rand(), m_rand(), &b);
+        vec3_cross(&a, &b, &axb);
+        vec3_cross(&b, &a, &bxa);
+        r2_assert("cross not orthogonal to a", m_near(vec3_dot(&axb, &a), 0.f, 1e-5f));
+        r2_assert("cross not orthogonal to b", m_near(vec3_dot(&axb, &b), 0.f, 1e-5f));
+        /* not exact: the compiler may fuse a*b - c*d into an fma */
+        r2_assert("cross not anti-commutative",
+                  m_near(axb.x, -bxa.x, 1e-6f) && m_near(axb.y, -bxa.y, 1e-6f) && m_near(axb.z, -bxa.z, 1e-6f));
+    }
+    return 0;
+}
+
+static const char *test_vec3_normalize_zero(void)
+{
+    vec3 z = {0};
+    vec3 out = {.x = 9.f, .y = 9.f, .z = 9.f};
+    vec3_normalize(&z, &out);
+    r2_assert("vec3 normalize zero is wrong", out.x == 0.f && out.y == 0.f && out.z == 0.f);
+    return 0;
+}
+
+///////////////////////////////////////////////////////////////
+// Vec4 (the remaining functions)
+
+static const char *test_vec4_zero_set_equals(void)
+{
+    float ary[4] = {1.f, 2.f, 3.f, 4.f};
+    vec4 a = {0}, b = {0};
+    vec4_set(ary, &a);
+    r2_assert("vec4 set is wrong", a.x == 1.f && a.y == 2.f && a.z == 3.f && a.w == 4.f);
+    vec4_set(ary, &b);
+    r2_assert("vec4 equals same is wrong", vec4_equals(&a, &b));
+    b.w = 4.01f;
+    r2_assert("vec4 equals diff w is wrong", !vec4_equals(&a, &b));
+    vec4_zero(&a);
+    r2_assert("vec4 zero is wrong", a.x == 0.f && a.y == 0.f && a.z == 0.f && a.w == 0.f);
+    return 0;
+}
+
+static const char *test_vec4_add_sub_mul(void)
+{
+    vec4 a = {.x = 1.f, .y = -2.f, .z = 3.f, .w = -4.f};
+    vec4 b = {.x = 2.f, .y = 2.f, .z = 2.f, .w = 2.f};
+    vec4 out = {0};
+    vec4_add(&a, &b, &out);
+    r2_assert("vec4 add is wrong", m_vec4_near(&out, 3.f, 0.f, 5.f, -2.f, 0.f));
+    vec4_sub(&a, &b, &out);
+    r2_assert("vec4 sub is wrong", m_vec4_near(&out, -1.f, -4.f, 1.f, -6.f, 0.f));
+    vec4_mul(&a, -1.f, &out);
+    r2_assert("vec4 mul is wrong", m_vec4_near(&out, -1.f, 2.f, -3.f, 4.f, 0.f));
+    vec4_mul_vec4(&a, &b, &out);
+    r2_assert("vec4 mul_vec4 is wrong", m_vec4_near(&out, 2.f, -4.f, 6.f, -8.f, 0.f));
+    vec4_abs(&a, &out);
+    r2_assert("vec4 abs is wrong", m_vec4_near(&out, 1.f, 2.f, 3.f, 4.f, 0.f));
+    vec4_pow(&b, 3.f, &out);
+    r2_assert("vec4 pow is wrong", m_vec4_near(&out, 8.f, 8.f, 8.f, 8.f, 1e-5f));
+    return 0;
+}
+
+static const char *test_vec4_sqrt_dot_length(void)
+{
+    vec4 a = {.x = 4.f, .y = 9.f, .z = 16.f, .w = 25.f};
+    vec4 b = {.x = 1.f, .y = 1.f, .z = 1.f, .w = 1.f};
+    vec4 out = {0};
+    vec4_sqrt(&a, &out);
+    r2_assert("vec4 sqrt is wrong", m_vec4_near(&out, 2.f, 3.f, 4.f, 5.f, 0.f));
+    r2_assert("vec4 dot is wrong", vec4_dot(&a, &b) == 54.f);
+    r2_assert("vec4 length_sqrd is wrong", vec4_length_sqrd(&b) == 4.f);
+    r2_assert("vec4 length is wrong", vec4_length(&b) == 2.f);
+    return 0;
+}
+
+static const char *test_vec4_normalize_random(void)
+{
+    vec4 a, out;
+    for (int i = 0; i < 100; i++)
+    {
+        a.x = m_rand() * 100.f;
+        a.y = m_rand() * 100.f;
+        a.z = m_rand() * 100.f;
+        a.w = m_rand() * 100.f;
+        vec4_normalize(&a, &out);
+        r2_assert("vec4 normalize not unit length", m_near(vec4_length(&out), 1.f, 1e-5f));
+        r2_assert("vec4 normalize changed direction", vec4_dot(&a, &out) > 0.f);
+    }
+    return 0;
+}
+
+static const char *test_vecn_equals_zero_n(void)
+{
+    float a[1] = {1.f}, b[1] = {2.f};
+    r2_assert("vecn equals n=0 should be true", vecn_equals(a, b, 0));
+    r2_assert("vecn dot n=0 should be 0", vecn_dot(a, b, 0) == 0.f);
+    return 0;
+}
+
+///////////////////////////////////////////////////////////////
+// Quat (the remaining functions, plus algebraic properties)
+
+static const char *test_quat_zero_identity(void)
+{
+    quat q = {.x = 1.f, .y = 2.f, .z = 3.f, .w = 4.f};
+    quat_zero(&q);
+    r2_assert("quat zero is wrong", m_vec4_near(&q, 0.f, 0.f, 0.f, 0.f, 0.f));
+    quat_identity(&q);
+    r2_assert("quat identity is wrong", m_vec4_near(&q, 0.f, 0.f, 0.f, 1.f, 0.f));
+    return 0;
+}
+
+static const char *test_quat_add_sub_dot_magnitude(void)
+{
+    quat a = {.x = 1.f, .y = 2.f, .z = 3.f, .w = 4.f};
+    quat b = {.x = 1.f, .y = 1.f, .z = 1.f, .w = 1.f};
+    quat out = {0};
+    quat_add(&a, &b, &out);
+    r2_assert("quat add is wrong", m_vec4_near(&out, 2.f, 3.f, 4.f, 5.f, 0.f));
+    quat_sub(&a, &b, &out);
+    r2_assert("quat sub is wrong", m_vec4_near(&out, 0.f, 1.f, 2.f, 3.f, 0.f));
+    r2_assert("quat dot is wrong", quat_dot(&a, &b) == 10.f);
+    r2_assert("quat magnitude is wrong", quat_magnitude(&b) == 2.f);
+    r2_assert("quat magnitude != length", quat_magnitude(&a) == quat_length(&a));
+    return 0;
+}
+
+static const char *test_quat_mul_identity_and_conj(void)
+{
+    quat id, q, out, conj;
+    quat_identity(&id);
+    for (int i = 0; i < 100; i++)
+    {
+        q.x = m_rand();
+        q.y = m_rand();
+        q.z = m_rand();
+        q.w = m_rand();
+        quat_mul_quat(&q, &id, &out);
+        r2_assert("q * 1 != q", m_vec4_near(&out, q.x, q.y, q.z, q.w, 0.f));
+        quat_mul_quat(&id, &q, &out);
+        r2_assert("1 * q != q", m_vec4_near(&out, q.x, q.y, q.z, q.w, 0.f));
+        /* q * conj(q) = |q|^2, a real number */
+        quat_conj(&q, &conj);
+        quat_mul_quat(&q, &conj, &out);
+        r2_assert("q * conj(q) != |q|^2", m_vec4_near(&out, 0.f, 0.f, 0.f, quat_dot(&q, &q), 1e-5f));
+    }
+    return 0;
+}
+
+static const char *test_quat_mul_associative(void)
+{
+    quat a, b, c, ab, bc, ab_c, a_bc;
+    for (int i = 0; i < 100; i++)
+    {
+        a = (quat){.x = m_rand(), .y = m_rand(), .z = m_rand(), .w = m_rand()};
+        b = (quat){.x = m_rand(), .y = m_rand(), .z = m_rand(), .w = m_rand()};
+        c = (quat){.x = m_rand(), .y = m_rand(), .z = m_rand(), .w = m_rand()};
+        quat_mul_quat(&a, &b, &ab);
+        quat_mul_quat(&ab, &c, &ab_c);
+        quat_mul_quat(&b, &c, &bc);
+        quat_mul_quat(&a, &bc, &a_bc);
+        r2_assert("quat mul not associative", m_vec4_near(&ab_c, a_bc.x, a_bc.y, a_bc.z, a_bc.w, 1e-5f));
+    }
+    return 0;
+}
+
+static const char *test_quat_ijk(void)
+{
+    /* Hamilton: ij = k, jk = i, ki = j, ji = -k */
+    quat i = {.x = 1.f}, j = {.y = 1.f}, k = {.z = 1.f}, out;
+    quat_mul_quat(&i, &j, &out);
+    r2_assert("ij != k", m_vec4_near(&out, 0.f, 0.f, 1.f, 0.f, 0.f));
+    quat_mul_quat(&j, &k, &out);
+    r2_assert("jk != i", m_vec4_near(&out, 1.f, 0.f, 0.f, 0.f, 0.f));
+    quat_mul_quat(&k, &i, &out);
+    r2_assert("ki != j", m_vec4_near(&out, 0.f, 1.f, 0.f, 0.f, 0.f));
+    quat_mul_quat(&j, &i, &out);
+    r2_assert("ji != -k", m_vec4_near(&out, 0.f, 0.f, -1.f, 0.f, 0.f));
+    quat_mul_quat(&i, &i, &out);
+    r2_assert("ii != -1", m_vec4_near(&out, 0.f, 0.f, 0.f, -1.f, 0.f));
+    return 0;
+}
+
+static const char *test_quat_rotation_preserves_length(void)
+{
+    quat q, qn;
+    vec3 v, out;
+    for (int i = 0; i < 100; i++)
+    {
+        q = (quat){.x = m_rand(), .y = m_rand(), .z = m_rand(), .w = m_rand()};
+        quat_normalize(&q, &qn);
+        v = (vec3){.x = m_rand(), .y = m_rand(), .z = m_rand(), .w = 0.f};
+        quat_mul_vec3(&qn, &v, &out);
+        r2_assert("rotation changed length", m_near(vec3_length(&out), vec3_length(&v), 1e-5f));
+        r2_assert("rotation left a real part", m_near(out.w, 0.f, 1e-5f));
+    }
+    return 0;
+}
+
+static const char *test_quat_rot2q_composes(void)
+{
+    /* two 90 degree turns about z = one 180 degree turn */
+    vec3 axis = {.z = 1.f};
+    vec3 x = {.x = 1.f};
+    quat q90, q180, qq;
+    vec3 out;
+    quat_rot2q(&axis, (float)M_PI / 2.f, &q90);
+    quat_rot2q(&axis, (float)M_PI, &q180);
+    quat_mul_quat(&q90, &q90, &qq);
+    r2_assert("90*90 != 180", m_vec4_near(&qq, q180.x, q180.y, q180.z, q180.w, 1e-6f));
+    quat_mul_vec3(&q90, &x, &out);
+    r2_assert("90 about z should take x to y", m_near(out.x, 0.f, 1e-6f) && m_near(out.y, 1.f, 1e-6f));
+    return 0;
+}
+
+static const char *test_quat_from_euler_matches_rot2q(void)
+{
+    /* a single euler angle is a rotation about that one axis */
+    vec3 axes[3] = {{.x = 1.f}, {.y = 1.f}, {.z = 1.f}};
+    for (int a = 0; a < 3; a++)
+    {
+        for (int i = 0; i < 20; i++)
+        {
+            float theta = m_rand() * (float)M_PI;
+            vec3 euler = {0};
+            quat qe, qa;
+            euler.a_vec[a] = theta;
+            quat_from_euler(&euler, &qe);
+            quat_rot2q(&axes[a], theta, &qa);
+            r2_assert("from_euler != rot2q on one axis", m_vec4_near(&qe, qa.x, qa.y, qa.z, qa.w, 1e-6f));
+        }
+    }
+    return 0;
+}
+
+///////////////////////////////////////////////////////////////
+// Matrices (the remaining functions, plus algebraic properties)
+
+static const char *test_mat_transpose(void)
+{
+    // 2x3 -> 3x2
+    static const float a[6] = {1, 2, 3, 4, 5, 6};
+    float t[6] = {0}, back[6] = {0};
+    mat_transpose(a, 2, 3, t);
+    r2_assert("mat_transpose is wrong",
+              t[0] == 1 && t[1] == 4 && t[2] == 2 && t[3] == 5 && t[4] == 3 && t[5] == 6);
+    mat_transpose(t, 3, 2, back);
+    for (int i = 0; i < 6; i++)
+        r2_assert("mat_transpose twice is wrong", back[i] == a[i]);
+    return 0;
+}
+
+static const char *test_mat_transpose_matches_mat4(void)
+{
+    mat4 m, t;
+    float g[16];
+    for (int i = 0; i < 16; i++)
+        m.a_mat4[i] = (float)i;
+    mat4_transpose(&m, &t);
+    mat_transpose(m.a_mat4, 4, 4, g);
+    for (int i = 0; i < 16; i++)
+        r2_assert("mat_transpose differs from mat4_transpose", g[i] == t.a_mat4[i]);
+    return 0;
+}
+
+#ifndef HAVE_BLAS
+static const char *test_mat_mul_size_mismatch(void)
+{
+    /* c1 != r2: out is left alone (and an error is printed) */
+    static const float a[6] = {1, 2, 3, 4, 5, 6};
+    float out[4] = {-1, -1, -1, -1};
+    fprintf(stderr, "(expected error follows) ");
+    mat_mul(a, a, 2, 3, 2, 3, out);
+    r2_assert("mat_mul size mismatch wrote output",
+              out[0] == -1 && out[1] == -1 && out[2] == -1 && out[3] == -1);
+    return 0;
+}
+#endif
+
+static const char *test_mat4_set_layout(void)
+{
+    /* mat4_set copies the rows straight into a_mat4 */
+    float ary[16];
+    mat4 m;
+    for (int i = 0; i < 16; i++)
+        ary[i] = (float)i;
+    mat4_set(ary, &m);
+    for (int i = 0; i < 16; i++)
+        r2_assert("mat4_set layout is wrong", m.a_mat4[i] == ary[i]);
+    return 0;
+}
+
+static const char *test_mat4_mul_properties(void)
+{
+    mat4 a, b, c, ab, ab_c, bc, a_bc, abt, at, bt, btat;
+    for (int n = 0; n < 50; n++)
+    {
+        for (int i = 0; i < 16; i++)
+        {
+            a.a_mat4[i] = m_rand();
+            b.a_mat4[i] = m_rand();
+            c.a_mat4[i] = m_rand();
+        }
+        mat4_mul(&a, &b, &ab);
+        mat4_mul(&ab, &c, &ab_c);
+        mat4_mul(&b, &c, &bc);
+        mat4_mul(&a, &bc, &a_bc);
+        /* (AB)^T = B^T A^T */
+        mat4_transpose(&ab, &abt);
+        mat4_transpose(&a, &at);
+        mat4_transpose(&b, &bt);
+        mat4_mul(&bt, &at, &btat);
+        for (int i = 0; i < 16; i++)
+        {
+            r2_assert("mat4 mul not associative", m_near(ab_c.a_mat4[i], a_bc.a_mat4[i], 1e-5f));
+            r2_assert("(AB)^T != B^T A^T", m_near(abt.a_mat4[i], btat.a_mat4[i], 1e-5f));
+        }
+    }
+    return 0;
+}
+
+static const char *test_mat3_mul_matches_mat_mul(void)
+{
+    mat3 a, b, out;
+    float g[9];
+    for (int i = 0; i < 9; i++)
+    {
+        a.a_mat3[i] = m_rand();
+        b.a_mat3[i] = m_rand();
+    }
+    mat3_mul(&a, &b, &out);
+    mat_mul(a.a_mat3, b.a_mat3, 3, 3, 3, 3, g);
+    for (int i = 0; i < 9; i++)
+        r2_assert("mat3_mul differs from mat_mul", out.a_mat3[i] == g[i]);
+    return 0;
+}
+
+static const char *test_mat4_perspective(void)
+{
+    /* OpenGL clip space: the near plane maps to z/w = -1, far to +1, and
+       the edge of the field of view to x/w or y/w = +-1 */
+    float fov = (float)M_PI / 2.f, aspect = 2.f, n = 0.5f, f = 100.f;
+    mat4 p;
+    vec4 near_c = {.z = -n, .w = 1.f};
+    vec4 far_c = {.z = -f, .w = 1.f};
+    vec4 top = {.y = n * tanf(fov / 2.f), .z = -n, .w = 1.f};
+    vec4 right = {.x = n * tanf(fov / 2.f) * aspect, .z = -n, .w = 1.f};
+    vec4 out;
+    mat4_perspective(fov, aspect, n, f, &p);
+
+    m_apply(&p, &near_c, &out);
+    r2_assert("perspective near plane is wrong", m_near(out.z / out.w, -1.f, 1e-5f));
+    m_apply(&p, &far_c, &out);
+    r2_assert("perspective far plane is wrong", m_near(out.z / out.w, 1.f, 1e-4f));
+    r2_assert("perspective w should be -z", m_near(out.w, f, 1e-4f));
+    m_apply(&p, &top, &out);
+    r2_assert("perspective top edge is wrong", m_near(out.y / out.w, 1.f, 1e-5f));
+    m_apply(&p, &right, &out);
+    r2_assert("perspective right edge is wrong", m_near(out.x / out.w, 1.f, 1e-5f));
+    return 0;
+}
+
+static const char *test_mat4_lookat_eye_to_origin(void)
+{
+    /* A view matrix moves the eye to the origin, and a point straight
+       ahead at distance d to (0, 0, -d) */
+    vec4 pos = {.x = 0, .y = 0, .z = 10, .w = 1};
+    vec4 fwd = {.x = 0, .y = 0, .z = -1};
+    vec4 up = {.x = 0, .y = 1, .z = 0};
+    vec4 ahead = {.x = 0, .y = 0, .z = 7, .w = 1};
+    vec4 out;
+    mat4 view;
+    mat4_lookat(&pos, &fwd, &up, &view);
+
+    m_apply(&view, &pos, &out);
+    r2_assert("lookat: eye does not map to origin", m_vec4_near(&out, 0.f, 0.f, 0.f, 1.f, 1e-6f));
+    m_apply(&view, &ahead, &out);
+    r2_assert("lookat: point ahead is wrong", m_vec4_near(&out, 0.f, 0.f, -3.f, 1.f, 1e-6f));
+    return 0;
+}
+
+static const char *test_mat4_lookat_off_axis(void)
+{
+    /* Camera at (5, 0, 0) looking down +x: the eye still maps to the
+       origin (needs the translation to be -dot(axis, pos), not -pos) */
+    vec4 pos = {.x = 5, .y = 0, .z = 0, .w = 1};
+    vec4 fwd = {.x = 1, .y = 0, .z = 0};
+    vec4 up = {.x = 0, .y = 1, .z = 0};
+    vec4 ahead = {.x = 9, .y = 0, .z = 0, .w = 1};
+    vec4 out;
+    mat4 view;
+    mat4_lookat(&pos, &fwd, &up, &view);
+
+    m_apply(&view, &pos, &out);
+    r2_assert("lookat off-axis: eye does not map to origin", m_vec4_near(&out, 0.f, 0.f, 0.f, 1.f, 1e-6f));
+    m_apply(&view, &ahead, &out);
+    r2_assert("lookat off-axis: point ahead is wrong", m_vec4_near(&out, 0.f, 0.f, -4.f, 1.f, 1e-6f));
+    return 0;
+}
+
+static const char *test_mat4_lookat_random(void)
+{
+    /* Any orthonormal camera: eye -> origin, eye + d*fwd -> (0, 0, -d),
+       eye + up -> (0, 1, 0) */
+    for (int n = 0; n < 100; n++)
+    {
+        vec4 fwd = {0}, up = {0}, side = {0}, tmp = {0}, pos, p, out;
+        mat4 view;
+        tmp = (vec4){.x = m_rand(), .y = m_rand(), .z = m_rand()};
+        vec3_normalize(&tmp, &fwd);
+        tmp = (vec4){.x = m_rand(), .y = m_rand(), .z = m_rand()};
+        vec3_cross(&fwd, &tmp, &side);
+        vec3_cross(&side, &fwd, &tmp);
+        vec3_normalize(&tmp, &up);
+        pos = (vec4){.x = m_rand() * 50.f, .y = m_rand() * 50.f, .z = m_rand() * 50.f, .w = 1.f};
+        mat4_lookat(&pos, &fwd, &up, &view);
+
+        m_apply(&view, &pos, &out);
+        r2_assert("lookat random: eye not at origin", m_vec4_near(&out, 0.f, 0.f, 0.f, 1.f, 1e-4f));
+        p = (vec4){.x = pos.x + 3.f * fwd.x, .y = pos.y + 3.f * fwd.y, .z = pos.z + 3.f * fwd.z, .w = 1.f};
+        m_apply(&view, &p, &out);
+        r2_assert("lookat random: ahead not on -z", m_vec4_near(&out, 0.f, 0.f, -3.f, 1.f, 1e-4f));
+        p = (vec4){.x = pos.x + up.x, .y = pos.y + up.y, .z = pos.z + up.z, .w = 1.f};
+        m_apply(&view, &p, &out);
+        r2_assert("lookat random: up not on +y", m_vec4_near(&out, 0.f, 1.f, 0.f, 1.f, 1e-4f));
+    }
+    return 0;
+}
+
+///////////////////////////////////////////////////////////////
+// *_tos exact output
+
+static const char *test_tos_exact(void)
+{
+    vec4 v = {.x = 1.f, .y = -2.f, .z = 0.5f, .w = 4.f};
+    mat3 m3;
+    mat4 m4;
+    char buf[R2_MAT4_TOS_BUF_SIZE];
+    vec4_tos(&v, buf, R2_VEC4_TOS_BUF_SIZE);
+    r2_assert("vec4_tos text is wrong", strcmp(buf, "(1.000000, -2.000000, 0.500000, 4.000000)\n") == 0);
+    quat_tos(&v, buf, R2_QUAT_TOS_BUF_SIZE);
+    r2_assert("quat_tos text is wrong",
+              strcmp(buf, "[4.000000 + 1.000000i + -2.000000j + 0.500000k]\n") == 0);
+    mat3_identity(&m3);
+    mat3_tos(&m3, buf, R2_MAT3_TOS_BUF_SIZE);
+    r2_assert("mat3_tos text is wrong",
+              strcmp(buf, "[\n 1.000000, 0.000000, 0.000000 \n 0.000000, 1.000000, 0.000000 \n"
+                          " 0.000000, 0.000000, 1.000000 \n]\n") == 0);
+    mat4_identity(&m4);
+    mat4_tos(&m4, buf, R2_MAT4_TOS_BUF_SIZE);
+    r2_assert("mat4_tos text is wrong",
+              strcmp(buf, "[\n 1.000000, 0.000000, 0.000000, 0.000000 \n"
+                          " 0.000000, 1.000000, 0.000000, 0.000000 \n"
+                          " 0.000000, 0.000000, 1.000000, 0.000000 \n"
+                          " 0.000000, 0.000000, 0.000000, 1.000000 \n]\n") == 0);
+    return 0;
+}
+
+static const char *test_tos_buf_sizes_fit_large_values(void)
+{
+    /* The suggested buffer sizes should hold "typical" big values
+       (-99999.999999 everywhere) without truncating */
+    vec4 v = {.x = -99999.f, .y = -99999.f, .z = -99999.f, .w = -99999.f};
+    mat3 m3;
+    mat4 m4;
+    char buf[1024];
+    for (int i = 0; i < 9; i++)
+        m3.a_mat3[i] = -99999.f;
+    for (int i = 0; i < 16; i++)
+        m4.a_mat4[i] = -99999.f;
+    vec4_tos(&v, buf, sizeof(buf));
+    r2_assert("R2_VEC4_TOS_BUF_SIZE too small", strlen(buf) < R2_VEC4_TOS_BUF_SIZE);
+    quat_tos(&v, buf, sizeof(buf));
+    r2_assert("R2_QUAT_TOS_BUF_SIZE too small", strlen(buf) < R2_QUAT_TOS_BUF_SIZE);
+    mat3_tos(&m3, buf, sizeof(buf));
+    r2_assert("R2_MAT3_TOS_BUF_SIZE too small", strlen(buf) < R2_MAT3_TOS_BUF_SIZE);
+    mat4_tos(&m4, buf, sizeof(buf));
+    r2_assert("R2_MAT4_TOS_BUF_SIZE too small", strlen(buf) < R2_MAT4_TOS_BUF_SIZE);
+    return 0;
+}
+
 static const char *r2_maths_test(void)
 {
     // v2
@@ -1184,6 +1858,59 @@ static const char *r2_maths_test(void)
     r2_run_test(test_quat_tos);
     r2_run_test(test_mat3_tos);
     r2_run_test(test_mat4_tos);
+    r2_run_test(test_tos_exact);
+    r2_run_test(test_tos_buf_sizes_fit_large_values);
+
+    // fns
+    r2_run_test(test_deg_to_rad);
+    r2_run_test(test_r2_equals_epsilon);
+
+    // v2 (rest)
+    r2_run_test(test_vec2_zero_set_equals);
+    r2_run_test(test_vec2_mul);
+    r2_run_test(test_vec2_length_dist);
+    r2_run_test(test_vec2_normalize);
+    r2_run_test(test_vec2_edge_cross);
+    r2_run_test(test_vec2_to_array);
+
+    // v3 (rest)
+    r2_run_test(test_vec3_zero_set);
+    r2_run_test(test_vec3_sub_div_mul);
+    r2_run_test(test_vec3_dot_length_dist);
+    r2_run_test(test_vec3_ignores_w);
+    r2_run_test(test_vec3_cross_properties);
+    r2_run_test(test_vec3_normalize_zero);
+
+    // v4 (rest)
+    r2_run_test(test_vec4_zero_set_equals);
+    r2_run_test(test_vec4_add_sub_mul);
+    r2_run_test(test_vec4_sqrt_dot_length);
+    r2_run_test(test_vec4_normalize_random);
+    r2_run_test(test_vecn_equals_zero_n);
+
+    // quat (rest + properties)
+    r2_run_test(test_quat_zero_identity);
+    r2_run_test(test_quat_add_sub_dot_magnitude);
+    r2_run_test(test_quat_mul_identity_and_conj);
+    r2_run_test(test_quat_mul_associative);
+    r2_run_test(test_quat_ijk);
+    r2_run_test(test_quat_rotation_preserves_length);
+    r2_run_test(test_quat_rot2q_composes);
+    r2_run_test(test_quat_from_euler_matches_rot2q);
+
+    // matrices (rest + properties)
+    r2_run_test(test_mat_transpose);
+    r2_run_test(test_mat_transpose_matches_mat4);
+#ifndef HAVE_BLAS
+    r2_run_test(test_mat_mul_size_mismatch);
+#endif
+    r2_run_test(test_mat4_set_layout);
+    r2_run_test(test_mat4_mul_properties);
+    r2_run_test(test_mat3_mul_matches_mat_mul);
+    r2_run_test(test_mat4_perspective);
+    r2_run_test(test_mat4_lookat_eye_to_origin);
+    r2_run_test(test_mat4_lookat_off_axis);
+    r2_run_test(test_mat4_lookat_random);
 
     return 0;
 }

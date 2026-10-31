@@ -188,7 +188,9 @@ extern "C"
     static void mat4_perspective(float fov, float aspect, float z_near, float z_far, mat4 *out);
     /**
      * Useful for view matrix for opengl (set transpose to true)
-     * target and up should be normalized
+     * target is the direction to look in (not a point); target and up
+     * should be normalized and perpendicular. Maps pos to the origin
+     * looking down -z.
      */
     static void mat4_lookat(const vec4 *pos, const vec4 *target, const vec4 *up, mat4 *out);
     static void mat4_transpose(const mat4 *m1, mat4 *m2);
@@ -948,6 +950,9 @@ extern "C"
          *  | ry  uy  fy  0 | ∙  | 0  1  0  -py |
          *  | rz  uz  fz  0 |    | 0  0  1  -pz |
          *  ⌊ 0   0   0   1 ⌋    ⌊ 0  0  0   1  ⌋
+         *
+         *  rows are r, u and -f, so the translation column is
+         *  (-r∙pos, -u∙pos, f∙pos)
          */
         vec4 right = {.x = 0, .y = 0, .z = 0, .w = 0};
         vec3_cross(target, up, &right);
@@ -957,9 +962,9 @@ extern "C"
         const vec4 *f = target;
         const vec4 *r = &right;
         // clang-format off
-        out->m00 =  r->x; out->m10 =  r->y; out->m20 = r->z; out->m30 = -pos->x;
-        out->m01 =  u->x; out->m11 =  u->y; out->m21 = u->z; out->m31 = -pos->y;
-        out->m02 = -f->x; out->m12 = -f->y; out->m22 = f->z; out->m32 = -pos->z;
+        out->m00 =  r->x; out->m10 =  r->y; out->m20 =  r->z; out->m30 = -vec3_dot(r, pos);
+        out->m01 =  u->x; out->m11 =  u->y; out->m21 =  u->z; out->m31 = -vec3_dot(u, pos);
+        out->m02 = -f->x; out->m12 = -f->y; out->m22 = -f->z; out->m32 =  vec3_dot(f, pos);
         out->m03 = 0;    out->m13 = 0;    out->m23 = 0;    out->m33 = 1;
         // clang-format on
     }

@@ -1,16 +1,11 @@
-/* r2_strings - v0.0 - public domain very basic, utf8 string library
+/* r2_strings - v0.1 - public domain very basic, utf8 string library
     no warranty implied; use at your own risk
-
-    !!NOTE!! this code was **heavily** influenced by the code here:
-    https://rosettacode.org/wiki/UTF-8_encode_and_decode#C
-    It's hard to find a license on that site for the code, but the whole site
-    is release under the "GNU Free Documentation License 1.2" which is
-    unclear if that applies to just learning from the code. For my part
-    the license below applies, but *use at your own risk*.
 
     Built in the style of: https://github.com/nothings/stb
 
-    This is written with game development in mind.
+    This is written with game development and small embedded targets in
+    mind: no allocation, no libc beyond <stdint.h>, never reads past the
+    length it is given.
 
     Do this:
        #define R2_STRINGS_IMPLEMENTATION
@@ -27,50 +22,55 @@
     You can then include without the define to just use the types
 
 OVERVIEW
-    The main type is s8, a UTF-8 string view. It has four fields:
+    The main type is s8: a run of bytes and a length.
 
-        data      - pointer to the original string bytes (see OWNERSHIP below)
-        rune      - heap-allocated array of codepoints (uint32_t), one per
-                    UTF-8 character; always zero-terminated
-        cap       - size of the string in *bytes*
-        len       - length of the string in *runes* (codepoints)
+        data      - pointer to the bytes (see OWNERSHIP below)
+        len       - length in *bytes*
 
-    Use `len` when iterating characters, `cap` when working with raw bytes:
+    The bytes are not NUL-terminated and may contain 0x00, so an s8 can hold
+    any binary payload (a radio packet, a file block) as well as text. Text
+    is UTF-8; runes (codepoints) are decoded on demand while iterating, so
+    nothing is allocated:
 
-        s8 str = S("café");
-        str.cap == 5   // c(1) + a(1) + f(1) + é(2)
-        str.len == 4   // four visible characters
+        s8 str = S8("café");
+        str.len == 5                 // c(1) + a(1) + f(1) + é(2)
+        s8_rune_count(str) == 4      // four codepoints
 
-    Call free_S() when you are done with the string to release the rune array.
-
-OWNERSHIP
-    s8 is a *borrowing* view: S() stores a pointer to the source string
-    without copying it. The caller is responsible for keeping the source
-    memory alive for at least as long as the s8 is in use.
-
-    This is safe with string literals (static lifetime):
-
-        s8 str = S("Hello");   // fine, literal lives forever
-
-    This is safe when the source buffer outlives the s8:
-
-        char buf[64];
-        snprintf(buf, sizeof(buf), "Hello, %s", name);
-        s8 str = S(buf);
-        // use str here, while buf is still in scope
-        free_S(str);
-
-    This is NOT safe -- do not return an s8 that points into a local buffer:
-
-        s8 bad(void) {
-            char buf[64];
-            snprintf(buf, sizeof(buf), "oops");
-            return S(buf);   // buf dies here; str.data is a dangling pointer
+        uint32_t at = 0;
+        rune r;
+        while (s8_next_rune(str, &at, &r))
+        {
+            // r = 'c', 'a', 'f', 0xE9
         }
 
-    The rune array (str.rune) is heap-allocated by S() and is owned by
-    the s8. Always call free_S() to release it. Freeing the source string
-    does not free the rune array, and vice versa.
+    Invalid UTF-8 (a stray continuation byte, a sequence cut off by the end
+    of the string, an overlong form, a surrogate, anything past U+10FFFF)
+    decodes as U+FFFD, one replacement per "maximal subpart" as the Unicode
+    standard recommends (ch. 3.9, "U+FFFD Substitution of Maximal
+    Subparts"). Decoding always consumes at least one byte, so loops over
+    corrupt input still finish.
+
+    Need random access to codepoints? s8_to_runes() decodes into a buffer
+    you provide.
+
+OWNERSHIP
+    s8 is a *borrowing* view: it stores a pointer to the bytes without
+    copying them. The caller keeps that memory alive for as long as the s8
+    is in use. There is nothing to free.
+
+        s8 a = S8("Hello");              // literal: lives forever
+        s8 b = s8_from_cstr(buf);        // valid while buf is
+        s8 c = s8_from_bytes(pkt, n);    // valid while pkt is
+
+CHANGES
+    v0.1  s8 is now { data, len (bytes) }; the heap-allocated rune array,
+          S() and free_S() are gone (decode on demand instead). No libc
+          dependency. Decoder rewritten against the Unicode well-formed
+          byte table (Table 3-7): v0.0 hung on a stray continuation byte,
+          read past its table on bytes 0xF8-0xFF, and read past the input
+          on a sequence truncated by the end of the string.
+    v0.0  first version, influenced by
+          https://rosettacode.org/wiki/UTF-8_encode_and_decode#C
 
 LICENSE
     See end of file for license information.
@@ -84,174 +84,308 @@ extern "C"
 #endif
 
 #include <stdint.h>
-#include <string.h>
 
     typedef uint32_t rune;
 
+#define R2_RUNE_REPLACEMENT 0xFFFDu
+#define R2_RUNE_MAX 0x10FFFFu
+
     /**
-     * This represents a string of char bytes that can be 
-     * represented by UTF-8. When you create this struct
-     * by doing `s8 str = S("👋World")` the resulting struct
-     * has both the raw byte data and a parsed array of "runes"
-     * aka single UTF8 code points.
-     * *Note*: not all runes are printable, and some runes are
-     * modifiers (like joiner sequences). So take care when 
-     * displaying runes in, say a terminal. Displaying 3 runes
-     * might not always take 3 text spaces, it might only take 
-     * 1 for example.
+     * A run of bytes (usually UTF-8 text) and its length in bytes.
+     * Not NUL-terminated; may contain 0x00.
      */
     typedef struct s8
     {
-        // The string data a raw bytes
-        char *data;
-        // The integer representation of the bytes as utf8
-        rune *rune;
-        // The capacity of the string (in bytes)
-        unsigned int cap;
-        // The length of the string (in runes)
-        unsigned long len;
+        const uint8_t *data;
+        uint32_t len;
     } s8;
 
-    /**
-     * Create a utf8 string struct from a char array (has size and
-     * utf8 string length properties).
-     * 
-     * Note: use free_S() when done with the string.
-     */
-    s8 S(const char *);
+/**
+ * s8 for a string literal, without a strlen at run time.
+ * Only for literals / char arrays: sizeof on a pointer is wrong.
+ */
+#define S8(literal) s8_from_bytes((literal), (uint32_t)(sizeof(literal) - 1))
+
+    /** View of len bytes at data. */
+    static inline s8 s8_from_bytes(const void *data, uint32_t len);
+
+    /** View of a NUL-terminated string (the terminator is not included). */
+    static inline s8 s8_from_cstr(const char *str);
 
     /**
-     * Frees an allocated S
+     * Decode one rune from data[0 .. len). Writes the codepoint, or
+     * R2_RUNE_REPLACEMENT for invalid input, to *out and returns the number
+     * of bytes consumed: 1..4, and never more than len. Returns 0 only when
+     * len is 0.
      */
-    void free_S(s8 s);
+    static inline uint32_t utf8_decode(const uint8_t *data, uint32_t len, rune *out);
+
+    /**
+     * Encode r as UTF-8 into out, returning the number of bytes written
+     * (1..4). Surrogates and values past U+10FFFF encode U+FFFD.
+     */
+    static inline uint32_t utf8_encode(rune r, uint8_t out[4]);
+
+    /**
+     * Iterate: decode the rune at *offset, advance *offset past it.
+     * Returns 1 while there was a rune, 0 at the end of the string.
+     */
+    static inline int s8_next_rune(s8 str, uint32_t *offset, rune *out);
+
+    /** Number of runes (invalid sequences count as one U+FFFD each). */
+    static inline uint32_t s8_rune_count(s8 str);
+
+    /** 1 if every byte is part of well-formed UTF-8, else 0. */
+    static inline int s8_is_valid_utf8(s8 str);
+
+    /** 1 if both hold the same bytes. */
+    static inline int s8_equal(s8 a, s8 b);
+
+    /**
+     * Sub-view of len bytes from byte start, clamped to the string.
+     * Byte offsets: a slice can split a multi-byte rune, which then
+     * decodes as U+FFFD.
+     */
+    static inline s8 s8_slice(s8 str, uint32_t start, uint32_t len);
+
+    /**
+     * Decode into dest (at most dest_cap runes). Returns the number
+     * written; compare with s8_rune_count() to detect truncation.
+     */
+    static inline uint32_t s8_to_runes(s8 str, rune *dest, uint32_t dest_cap);
 
 /* implementation */
 #ifdef R2_STRINGS_IMPLEMENTATION
 
-#include <stdio.h>
-#include <stdlib.h>
-
-    typedef struct
+    static inline s8 s8_from_bytes(const void *data, uint32_t len)
     {
-        char mask;       /* char data will be bitwise AND with this */
-        char lead;       /* start bytes of current char in utf-8 encoded character */
-        uint32_t beg;    /* beginning of codepoint range */
-        uint32_t end;    /* end of codepoint range */
-        int bits_stored; /* the number of bits from the codepoint that fits in char */
-    } utf_t;
-
-    utf_t *utf[] = {
-        // clang-format off
-        /*             mask        lead        beg      end       bits */
-        [0] = &(utf_t){(char)0x3F, (char)0x80, 0,       0,        6},
-        [1] = &(utf_t){(char)0x7F, (char)0x00, 0,       0x7F,     7},
-        [2] = &(utf_t){(char)0x1F, (char)0xC0, 0x80,    0x7FF,    5},
-        [3] = &(utf_t){(char)0x0F, (char)0xE0, 0x800,   0xFFFF,   4},
-        [4] = &(utf_t){(char)0x07, (char)0xF0, 0x10000, 0x10FFFF, 3},
-              &(utf_t){0},
-        // clang-format on
-    };
-
-    /**
-     * Using the first char of a utf8 char, get the length
-     * lengths are in the number of bytes.
-     * For example:
-     *  1110xxxxx would return 3
-     */
-    int utf8_len(const char ch)
-    {
-        int len = 0;
-        for (utf_t **u = utf; *u; ++u)
-        {
-            if ((ch & ~(*u)->mask) == (*u)->lead)
-            {
-                break;
-            }
-            ++len;
-        }
-        return len;
+        s8 str;
+        str.data = (const uint8_t *)data;
+        str.len = data ? len : 0;
+        return str;
     }
 
-    rune to_rune(const char chr[4])
+    static inline s8 s8_from_cstr(const char *str)
     {
-        int bytes = utf8_len(*chr);
-        int shift = utf[0]->bits_stored * (bytes - 1);
-        rune cp = (*chr++ & utf[bytes]->mask) << shift;
-        for (int i = 1; i < bytes; ++i, ++chr)
+        uint32_t len = 0;
+        if (str)
         {
-            shift -= utf[0]->bits_stored;
-            cp |= ((char)*chr & utf[0]->mask) << shift;
-        }
-        return cp;
-    }
-
-    /**
-     * Given an array of chars, create a utf8 array of runes.
-     * In other words, given an array of bytes that might have
-     * utf8 chars in it, return an array of integers that can
-     * be used for display.
-     *
-     * Returns the new array length as it might be different from
-     * the initial src_size.
-     */
-    unsigned long str_to_utf8(const char *str, int src_size, rune *dest)
-    {
-        char tmp[5] = {0};
-        int srci = 0;
-        int len = 0;
-        while (srci < src_size && str[srci] != 0)
-        {
-            // look at the first char to see if the bytes
-            // say this rune is more than one byte
-            int plen = utf8_len(str[srci]);
-            if (plen > 1)
+            while (str[len] != '\0')
             {
-                // turn multibyte into a single int
-                for (int c = 0; c < plen; c++)
-                {
-                    tmp[c] = str[srci + c];
-                }
-                rune r = to_rune(tmp);
-                dest[len] = r;
                 len++;
             }
-            else
-            {
-                // it's just one byte
-                dest[len] = str[srci];
-                len++;
-            }
-            // move the source pointer based on
-            // the number of utf8 bytes.
-            srci += plen;
         }
-        return len;
+        return s8_from_bytes(str, len);
     }
 
-    s8 S(const char *s)
+    static inline int r2_is_continuation(uint8_t byte)
     {
-        if (s == NULL)
-            return (s8){(char *)"", NULL, 0, 0};
+        return (byte & 0xC0u) == 0x80u;
+    }
 
-        // string length in bytes
-        unsigned long l = strlen(s);
-        if (l == 0)
-            return (s8){(char *)s, NULL, 0, 0};
+    static inline uint32_t utf8_decode(const uint8_t *data, uint32_t len, rune *out)
+    {
+        uint8_t lead;
+        uint32_t need;  /* total bytes in the sequence */
+        uint8_t low;    /* allowed range for the second byte */
+        uint8_t high;
+        rune value;
+        uint32_t idx;
 
-        // string as an array of integers
-        rune *i = calloc(l, sizeof(rune));
-        if (!i)
+        if (len == 0)
         {
-            printf("mem failure, exiting \n");
-            exit(EXIT_FAILURE);
+            *out = R2_RUNE_REPLACEMENT;
+            return 0;
         }
-        unsigned long u8l = str_to_utf8(s, l, i);
-        return (s8){(char *)s, i, l, u8l};
+        lead = data[0];
+
+        /* Unicode Table 3-7, well-formed UTF-8 byte sequences */
+        if (lead < 0x80u)
+        {
+            *out = lead;
+            return 1;
+        }
+        else if (lead >= 0xC2u && lead <= 0xDFu)
+        {
+            need = 2; low = 0x80u; high = 0xBFu;
+            value = lead & 0x1Fu;
+        }
+        else if (lead == 0xE0u)
+        {
+            need = 3; low = 0xA0u; high = 0xBFu; /* no overlongs */
+            value = lead & 0x0Fu;
+        }
+        else if (lead == 0xEDu)
+        {
+            need = 3; low = 0x80u; high = 0x9Fu; /* no surrogates */
+            value = lead & 0x0Fu;
+        }
+        else if (lead >= 0xE1u && lead <= 0xEFu)
+        {
+            need = 3; low = 0x80u; high = 0xBFu;
+            value = lead & 0x0Fu;
+        }
+        else if (lead == 0xF0u)
+        {
+            need = 4; low = 0x90u; high = 0xBFu; /* no overlongs */
+            value = lead & 0x07u;
+        }
+        else if (lead >= 0xF1u && lead <= 0xF3u)
+        {
+            need = 4; low = 0x80u; high = 0xBFu;
+            value = lead & 0x07u;
+        }
+        else if (lead == 0xF4u)
+        {
+            need = 4; low = 0x80u; high = 0x8Fu; /* <= U+10FFFF */
+            value = lead & 0x07u;
+        }
+        else
+        {
+            /* 80..BF stray continuation, C0/C1 overlong, F5..FF */
+            *out = R2_RUNE_REPLACEMENT;
+            return 1;
+        }
+
+        /* Maximal subpart: on a bad or missing byte, replace everything
+           consumed so far and resume at the bad byte. */
+        if (len < 2 || data[1] < low || data[1] > high)
+        {
+            *out = R2_RUNE_REPLACEMENT;
+            return 1;
+        }
+        value = (value << 6) | (data[1] & 0x3Fu);
+        for (idx = 2; idx < need; idx++)
+        {
+            if (idx >= len || !r2_is_continuation(data[idx]))
+            {
+                *out = R2_RUNE_REPLACEMENT;
+                return idx;
+            }
+            value = (value << 6) | (data[idx] & 0x3Fu);
+        }
+        *out = value;
+        return need;
     }
 
-    void free_S(s8 s)
+    static inline uint32_t utf8_encode(rune r, uint8_t out[4])
     {
-        free(s.rune);
+        if (r > R2_RUNE_MAX || (r >= 0xD800u && r <= 0xDFFFu))
+        {
+            r = R2_RUNE_REPLACEMENT;
+        }
+        if (r < 0x80u)
+        {
+            out[0] = (uint8_t)r;
+            return 1;
+        }
+        if (r < 0x800u)
+        {
+            out[0] = (uint8_t)(0xC0u | (r >> 6));
+            out[1] = (uint8_t)(0x80u | (r & 0x3Fu));
+            return 2;
+        }
+        if (r < 0x10000u)
+        {
+            out[0] = (uint8_t)(0xE0u | (r >> 12));
+            out[1] = (uint8_t)(0x80u | ((r >> 6) & 0x3Fu));
+            out[2] = (uint8_t)(0x80u | (r & 0x3Fu));
+            return 3;
+        }
+        out[0] = (uint8_t)(0xF0u | (r >> 18));
+        out[1] = (uint8_t)(0x80u | ((r >> 12) & 0x3Fu));
+        out[2] = (uint8_t)(0x80u | ((r >> 6) & 0x3Fu));
+        out[3] = (uint8_t)(0x80u | (r & 0x3Fu));
+        return 4;
+    }
+
+    static inline int s8_next_rune(s8 str, uint32_t *offset, rune *out)
+    {
+        uint32_t used;
+        if (*offset >= str.len)
+        {
+            return 0;
+        }
+        used = utf8_decode(str.data + *offset, str.len - *offset, out);
+        *offset += used;
+        return 1;
+    }
+
+    static inline uint32_t s8_rune_count(s8 str)
+    {
+        uint32_t offset = 0;
+        uint32_t count = 0;
+        rune r;
+        while (s8_next_rune(str, &offset, &r))
+        {
+            count++;
+        }
+        return count;
+    }
+
+    static inline int s8_is_valid_utf8(s8 str)
+    {
+        uint32_t offset = 0;
+        while (offset < str.len)
+        {
+            rune r;
+            uint32_t used = utf8_decode(str.data + offset, str.len - offset, &r);
+            /* A real U+FFFD in the text is 3 bytes (EF BF BD); a
+               replacement for bad input never consumes 3 valid bytes
+               that decode to it, so check the bytes, not just r. */
+            if (r == R2_RUNE_REPLACEMENT &&
+                !(used == 3 && str.data[offset] == 0xEFu &&
+                  str.data[offset + 1] == 0xBFu &&
+                  str.data[offset + 2] == 0xBDu))
+            {
+                return 0;
+            }
+            offset += used;
+        }
+        return 1;
+    }
+
+    static inline int s8_equal(s8 a, s8 b)
+    {
+        uint32_t idx;
+        if (a.len != b.len)
+        {
+            return 0;
+        }
+        for (idx = 0; idx < a.len; idx++)
+        {
+            if (a.data[idx] != b.data[idx])
+            {
+                return 0;
+            }
+        }
+        return 1;
+    }
+
+    static inline s8 s8_slice(s8 str, uint32_t start, uint32_t len)
+    {
+        if (start > str.len)
+        {
+            start = str.len;
+        }
+        if (len > str.len - start)
+        {
+            len = str.len - start;
+        }
+        return s8_from_bytes(str.data + start, len);
+    }
+
+    static inline uint32_t s8_to_runes(s8 str, rune *dest, uint32_t dest_cap)
+    {
+        uint32_t offset = 0;
+        uint32_t count = 0;
+        rune r;
+        while (count < dest_cap && s8_next_rune(str, &offset, &r))
+        {
+            dest[count] = r;
+            count++;
+        }
+        return count;
     }
 
 #endif
