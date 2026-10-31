@@ -1746,6 +1746,418 @@ static const char *test_wm_random_keys(void)
     return 0;
 }
 
+///////////////////////////////////////////////////////////////
+// Widgets
+
+typedef struct wform
+{
+    char name[16];
+    int wrap, indent, sel;
+    int changed, submits, toggles, radios, list_changes, list_submits, oks, cancels, extra;
+    int gone; /* hide the checkbox */
+    int dup;  /* two buttons with the same label */
+    int dup_hits[2];
+} wform;
+
+static const char *const wf_items[] = {"apple", "banana", "cherry", "date", "elderberry", "fig", "grape", "honeydew"};
+
+static void wform_ui(tui *t, tui_window *w, void *user)
+{
+    wform *f = (wform *)user;
+    unsigned r;
+    (void)w;
+    tui_at(t, 1, 0);
+    tui_label(t, "~N~ame:");
+    tui_same_line(t);
+    r = tui_input(t, "~N~ame##name", f->name, sizeof(f->name), 10);
+    if (r & TUI_CHANGED)
+        f->changed++;
+    if (r & TUI_SUBMIT)
+        f->submits++;
+    if (!f->gone && tui_checkbox(t, "~W~rap", &f->wrap))
+        f->toggles++;
+    if (f->gone)
+        tui_space(t, 1);
+    if (tui_radio(t, "~S~paces", &f->indent, 0))
+        f->radios++;
+    tui_same_line(t);
+    if (tui_radio(t, "~T~abs", &f->indent, 1))
+        f->radios++;
+    r = tui_list(t, "fruit", wf_items, 8, &f->sel, 14, 4);
+    if (r & TUI_CHANGED)
+        f->list_changes++;
+    if (r & TUI_SUBMIT)
+        f->list_submits++;
+    if (tui_button(t, "~O~K"))
+        f->oks++;
+    tui_same_line(t);
+    if (tui_button(t, "~C~ancel"))
+        f->cancels++;
+    if (f->dup)
+    {
+        if (tui_button(t, "Go"))
+            f->dup_hits[0]++;
+        tui_same_line(t);
+        if (tui_button(t, "Go"))
+            f->dup_hits[1]++;
+    }
+}
+
+/* client area of the form window starts at (3, 3) */
+#define WF(x, y) wm_at(&t, 3 + (x), 3 + (y))
+
+static const char *test_widgets_layout(void)
+{
+    tui t;
+    wform f = {.wrap = 0};
+    tui_test_init(&t, VT_COLS, VT_ROWS);
+    tui_window *w = tui_window_open(&t, "Form", (tui_rect){2, 2, 40, 13}, TUI_WIN_DIALOG, wform_ui, &f);
+    w->rect = (tui_rect){2, 2, 40, 13}; /* not centred: easier to read */
+    tui_update(&t, wm_now);
+    r2_assert("label", WF(1, 0) == 'N' && WF(5, 0) == ':');
+    r2_assert("input beside the label",
+              TUI_CELL_STYLE(tui_get_cell(&t, 3 + 7, 3)) == t.theme->input_focus);
+    r2_assert("checkbox", WF(1, 1) == '[' && WF(2, 1) == ' ' && WF(3, 1) == ']' && WF(5, 1) == 'W');
+    r2_assert("radios side by side", WF(1, 2) == '(' && WF(2, 2) == 0x2022 && WF(12, 2) == '(' && WF(16, 2) == 'T');
+    r2_assert("list", WF(2, 3) == 'a' && WF(2, 6) == 'd' && WF(14, 3) == 0x2588);
+    r2_assert("buttons", WF(1, 7) == '[' && WF(3, 7) == 'O' && WF(8, 7) == '[' && WF(10, 7) == 'C');
+    r2_assert("first widget has focus, cursor in it", w->focus_kind == R2__TUI_W_TEXT && t.cur_visible &&
+                                                          t.cur_x == 3 + 7 && t.cur_y == 3);
+    r2_assert("hot letter styled", TUI_STYLE_FG(TUI_CELL_STYLE(tui_get_cell(&t, 3 + 5, 4))) == TUI_STYLE_FG(t.theme->hot));
+    vt_flush(&t, 1);
+    r2_assert(vt_err ? vt_err : "render", !vt_err && vt_matches(&t));
+    return 0;
+}
+
+static const char *test_widgets_input(void)
+{
+    tui t;
+    wform f = {.wrap = 0};
+    tui_test_init(&t, VT_COLS, VT_ROWS);
+    tui_window_open(&t, "Form", (tui_rect){2, 2, 40, 13}, 0, wform_ui, &f);
+    tui_update(&t, wm_now);
+    wm_keys(&t, "h\xC3\xA9llo");
+    r2_assert("typed", strcmp(f.name, "h\xC3\xA9llo") == 0 && f.changed == 5);
+    r2_assert("cursor after the text", t.cur_x == 3 + 7 + 5);
+    wm_keys(&t, "\x1b[D\x1b[D\x7f");
+    r2_assert("left, left, backspace", strcmp(f.name, "h\xC3\xA9lo") == 0);
+    wm_keys(&t, "\x7f"); /* the cursor is right after the 2 byte "é" */
+    r2_assert("backspace takes a whole UTF-8 character", strcmp(f.name, "hlo") == 0);
+    wm_keys(&t, "\x01"); /* Ctrl+A */
+    wm_keys(&t, "\x04"); /* Ctrl+D */
+    r2_assert("Ctrl+A, Ctrl+D", strcmp(f.name, "lo") == 0);
+    wm_keys(&t, "\x05X"); /* Ctrl+E, X */
+    r2_assert("Ctrl+E", strcmp(f.name, "loX") == 0);
+    wm_keys(&t, "\x02\x02\x0b"); /* Ctrl+B Ctrl+B Ctrl+K */
+    r2_assert("Ctrl+B, Ctrl+K", strcmp(f.name, "l") == 0);
+    wm_keys(&t, "\x1b[H\x1b[3~");
+    r2_assert("Home, Delete", f.name[0] == 0);
+    wm_keys(&t, "aaaaaaaaaaaaaa");
+    wm_keys(&t, "\xC3\xA9");
+    r2_assert("full: a 2 byte character does not fit", strlen(f.name) == 14);
+    wm_keys(&t, "b");
+    r2_assert("one byte does", strlen(f.name) == 15);
+    wm_keys(&t, "c");
+    r2_assert("cap holds", strlen(f.name) == 15);
+    r2_assert("scrolled sideways: cursor still in the field", t.cur_x >= 3 + 7 && t.cur_x <= 3 + 7 + 9);
+    r2_assert("the end of the text is visible", WF(7 + 8, 0) == 'b');
+    wm_keys(&t, "\x1b[H");
+    r2_assert("Home scrolls back", t.cur_x == 3 + 7 && WF(7, 0) == 'a');
+    wm_keys(&t, "\r");
+    r2_assert("Enter submits", f.submits == 1);
+    /* the text changed by the program: the cursor stays valid */
+    strcpy(f.name, "\xE4\xB8\xAD");
+    tui_window_invalidate(&t, tui_focused_window(&t));
+    wm_keys(&t, "\x1b[F");
+    wm_keys(&t, "!");
+    r2_assert("cursor clamped to the new text", strcmp(f.name, "\xE4\xB8\xAD!") == 0);
+    r2_assert("wide text: cursor after 2 columns", t.cur_x == 3 + 7 + 3);
+    return 0;
+}
+
+static const char *test_widgets_focus_and_keys(void)
+{
+    tui t;
+    wform f = {.wrap = 0};
+    tui_test_init(&t, VT_COLS, VT_ROWS);
+    tui_window *w = tui_window_open(&t, "Form", (tui_rect){2, 2, 40, 13}, 0, wform_ui, &f);
+    tui_update(&t, wm_now);
+    wm_keys(&t, "\t");
+    r2_assert("Tab to the checkbox", w->focus_kind == R2__TUI_W_CHECK && t.cur_x == 3 + 2 && t.cur_y == 4);
+    wm_keys(&t, " ");
+    r2_assert("Space toggles", f.wrap == 1 && f.toggles == 1);
+    wm_keys(&t, "w");
+    r2_assert("hot letter toggles", f.wrap == 0 && f.toggles == 2);
+    wm_keys(&t, "\t\t ");
+    r2_assert("Tab, Tab, Space: Tabs radio", f.indent == 1 && f.radios == 1);
+    wm_keys(&t, " ");
+    r2_assert("choosing the chosen radio again is not a change", f.radios == 1);
+    wm_keys(&t, "s");
+    r2_assert("hot letter radio", f.indent == 0 && f.radios == 2);
+    r2_assert("hot letter moved focus there", w->focus_kind == R2__TUI_W_RADIO && t.cur_y == 5 && t.cur_x == 3 + 2);
+    wm_keys(&t, "\t\t");
+    r2_assert("on the list", w->focus_kind == R2__TUI_W_LIST);
+    wm_keys(&t, "\x1b[B");
+    r2_assert("Down", f.sel == 1 && f.list_changes == 1);
+    wm_keys(&t, "\x1b[F");
+    r2_assert("End scrolls the list", f.sel == 7 && WF(2, 3) == 'e' && WF(2, 6) == 'h');
+    r2_assert("scrollbar thumb at the bottom", WF(14, 6) == 0x2588);
+    wm_keys(&t, "b");
+    r2_assert("letter jumps", f.sel == 1 && WF(2, 3) == 'b');
+    wm_keys(&t, "o");
+    r2_assert("the list takes letters: o is not OK", f.oks == 0);
+    wm_keys(&t, "w");
+    r2_assert("nor w the checkbox drawn before the list", f.toggles == 2);
+    wm_keys(&t, "\033o");
+    r2_assert("Alt+O is", f.oks == 1);
+    wm_keys(&t, "\r");
+    r2_assert("Enter on OK (focus moved there)", f.oks == 2);
+    wm_keys(&t, "\x1b[Z");
+    wm_keys(&t, "\r");
+    r2_assert("Shift+Tab back to the list, Enter submits it", f.list_submits == 1);
+    wm_keys(&t, "\t\t ");
+    r2_assert("Space presses Cancel", f.cancels == 1);
+    wm_keys(&t, "\t");
+    r2_assert("Tab wraps to the first widget", w->focus_kind == R2__TUI_W_TEXT);
+    wm_keys(&t, "\x1b[Z");
+    wm_keys(&t, "c");
+    r2_assert("Shift+Tab wraps to the last; c presses Cancel", f.cancels == 2);
+    /* the focused widget disappears: focus goes to one that exists */
+    tui_window_focus(&t, w);
+    wm_keys(&t, "\x1b[Z\x1b[Z\x1b[Z\x1b[Z\x1b[Z");
+    r2_assert("on the checkbox", w->focus_kind == R2__TUI_W_CHECK);
+    f.gone = 1;
+    tui_window_invalidate(&t, w);
+    tui_update(&t, wm_now);
+    r2_assert("focus moved off the missing checkbox", w->focus_kind == R2__TUI_W_TEXT);
+    /* same label twice: two widgets */
+    f.dup = 1;
+    tui_window_invalidate(&t, w);
+    tui_update(&t, wm_now);
+    wm_keys(&t, "\x1b[Z\r");
+    r2_assert("second Go", f.dup_hits[1] == 1 && f.dup_hits[0] == 0);
+    wm_keys(&t, "\x1b[Z\r");
+    r2_assert("first Go", f.dup_hits[0] == 1 && f.dup_hits[1] == 1);
+    return 0;
+}
+
+static const char *test_widgets_only_focused_window(void)
+{
+    tui t;
+    wform a = {.wrap = 0}, b = {.wrap = 0};
+    tui_test_init(&t, VT_COLS, VT_ROWS);
+    tui_window *wa = tui_window_open(&t, "A", (tui_rect){0, 1, 30, 13}, 0, wform_ui, &a);
+    tui_window_open(&t, "B", (tui_rect){30, 1, 30, 13}, 0, wform_ui, &b);
+    tui_update(&t, wm_now);
+    wm_keys(&t, "xyz");
+    r2_assert("keys go to the focused window's widgets", strcmp(b.name, "xyz") == 0 && a.name[0] == 0);
+    tui_window_focus(&t, wa);
+    wm_keys(&t, "q");
+    r2_assert("and follow focus", strcmp(a.name, "q") == 0 && strcmp(b.name, "xyz") == 0);
+    r2_assert("only the focused window shows a focused widget",
+              TUI_CELL_STYLE(tui_get_cell(&t, 30 + 1 + 7, 2)) == t.theme->input);
+    return 0;
+}
+
+static int wsv_lines = 30;
+static void wscroll_ui(tui *t, tui_window *w, void *user)
+{
+    char line[32];
+    (void)w;
+    (void)user;
+    tui_at(t, 0, 0);
+    tui_label(t, "above");
+    tui_scroll_begin(t, "~V~iew", 20, 5, wsv_lines);
+    for (int i = 0; i < wsv_lines; i++)
+    {
+        snprintf(line, sizeof(line), "line %02d", i);
+        tui_text(t, 0, i, s8_from_cstr(line), TUI_DEFAULT);
+    }
+    tui_scroll_end(t);
+    tui_label(t, "below");
+    tui_button(t, "~B~utton");
+}
+
+static const char *test_widgets_scroll_view(void)
+{
+    tui t;
+    tui_test_init(&t, VT_COLS, VT_ROWS);
+    tui_window_open(&t, "S", (tui_rect){2, 2, 30, 12}, 0, wscroll_ui, 0);
+    tui_update(&t, wm_now);
+    /* client at (3, 3): "above" row 0, view rows 1-5, "below" row 6 */
+    r2_assert("label above", WF(0, 0) == 'a');
+    r2_assert("first lines shown", WF(5, 1) == '0' && WF(6, 1) == '0' && WF(6, 5) == '4');
+    r2_assert("content clipped to the view",
+              WF(0, 6) == 'b' && !wm_has(&t, "line 05") && !wm_has(&t, "line 07") && !wm_has(&t, "line 08"));
+    r2_assert("layout continues below the view", WF(0, 6) == 'b' && WF(1, 7) == ' ' && WF(2, 7) == 'B');
+    r2_assert("scrollbar", WF(19, 1) == 0x2588 && WF(19, 3) == 0x2591);
+    wm_keys(&t, "\x1b[B");
+    r2_assert("Down scrolls one line", WF(6, 1) == '1' && WF(6, 5) == '5');
+    wm_keys(&t, "\x1b[6~");
+    r2_assert("PgDn scrolls a page", WF(6, 1) == '5');
+    wm_keys(&t, "\x1b[F");
+    r2_assert("End: the last lines", WF(5, 5) == '2' && WF(6, 5) == '9' && WF(19, 5) == 0x2588);
+    for (int i = 0; i < 5; i++)
+        wm_keys(&t, "\x1b[B");
+    r2_assert("cannot scroll past the end", WF(6, 5) == '9');
+    wm_keys(&t, "\x1b[H");
+    r2_assert("Home", WF(6, 1) == '0');
+    wsv_lines = 3;
+    tui_window_invalidate(&t, tui_focused_window(&t));
+    tui_update(&t, wm_now);
+    r2_assert("short content: no scrollbar", WF(19, 1) == ' ' && WF(6, 3) == '2');
+    wsv_lines = 30;
+    vt_flush(&t, 1);
+    r2_assert(vt_err ? vt_err : "render", !vt_err && vt_matches(&t));
+    return 0;
+}
+
+typedef struct wib
+{
+    char text[24];
+    int asking;
+    unsigned answer;
+} wib;
+
+static void wib_ui(tui *t, tui_window *w, void *user)
+{
+    wib *b = (wib *)user;
+    (void)w;
+    tui_text(t, 0, 0, s8_from_cstr(b->text), TUI_DEFAULT);
+    if (b->asking)
+    {
+        unsigned r = tui_input_box(t, "Rename", "New ~n~ame:", b->text, sizeof(b->text));
+        if (r)
+        {
+            b->answer = r;
+            b->asking = 0;
+        }
+    }
+}
+
+static const char *test_widgets_input_box(void)
+{
+    tui t;
+    wib b = {"old", 0, 0};
+    tui_test_init(&t, VT_COLS, VT_ROWS);
+    tui_window *w = tui_window_open(&t, "W", (tui_rect){2, 2, 30, 8}, 0, wib_ui, &b);
+    tui_update(&t, wm_now);
+    b.asking = 1;
+    tui_window_invalidate(&t, w);
+    tui_update(&t, wm_now);
+    r2_assert("box shown", wm_has(&t, " Rename ") && wm_has(&t, "New name:") && wm_has(&t, "[ OK ]") &&
+                               wm_has(&t, "[ Cancel ]"));
+    r2_assert("prefilled", wm_has(&t, "old"));
+    wm_keys(&t, "er");
+    r2_assert("typed at the end", wm_has(&t, "older") && b.answer == 0);
+    r2_assert("caller's text untouched until OK", strcmp(b.text, "old") == 0);
+    wm_keys(&t, "\r");
+    r2_assert("Enter: OK, text copied", b.answer == TUI_MB_OK && strcmp(b.text, "older") == 0);
+    r2_assert("box gone, focus back", !wm_has(&t, " Rename ") && tui_focused_window(&t) == w);
+    b.asking = 1;
+    tui_window_invalidate(&t, w);
+    tui_update(&t, wm_now);
+    wm_keys(&t, "xyz");
+    wm_keys(&t, "\x1b");
+    r2_assert("Esc: Cancel, text untouched", b.answer == TUI_MB_CANCEL && strcmp(b.text, "older") == 0);
+    b.asking = 1;
+    tui_window_invalidate(&t, w);
+    tui_update(&t, wm_now);
+    wm_keys(&t, "\x15!"); /* Ctrl+U is not an input key: ignored */
+    wm_keys(&t, "\t\t\r");
+    r2_assert("Tab, Tab, Enter: Cancel button", b.answer == TUI_MB_CANCEL && strcmp(b.text, "older") == 0);
+    b.asking = 1;
+    tui_window_invalidate(&t, w);
+    tui_update(&t, wm_now);
+    wm_keys(&t, "\t\r");
+    r2_assert("Tab, Enter: OK button (the cancelled \"older!\" is gone)", b.answer == TUI_MB_OK && strcmp(b.text, "older") == 0);
+    /* the box's text fits the caller's buffer */
+    char tiny[4] = "ab";
+    b.asking = 0;
+    tui_input_box(&t, "Tiny", "x", tiny, sizeof(tiny));
+    tui_update(&t, wm_now);
+    wm_keys(&t, "cdef\r");
+    r2_assert("answer for an outside caller", tui_input_box(&t, "Tiny", "x", tiny, sizeof(tiny)) == TUI_MB_OK);
+    r2_assert("cut to the caller's buffer", strcmp(tiny, "abc") == 0);
+    return 0;
+}
+
+static const char *test_widgets_state_pool(void)
+{
+    tui t;
+    tui_test_init(&t, VT_COLS, VT_ROWS);
+    for (uint32_t id = 1; id <= R2_TUI_STATE_SLOTS; id++)
+    {
+        t.frame++;
+        tui_wstate *st = r2__tui_state(&t, id);
+        st->a = st->b = 99;
+    }
+    t.frame++;
+    r2_assert("existing state found again", r2__tui_state(&t, 5)->a == 99);
+    t.frame++;
+    tui_wstate *fresh = r2__tui_state(&t, 1000);
+    r2_assert("a recycled slot starts clean", fresh->a == 0 && fresh->b == 0);
+    r2_assert("the least recently used slot went", r2__tui_state(&t, 5)->a == 99 && r2__tui_state(&t, 1)->a == 0);
+    return 0;
+}
+
+static void wmany_ui(tui *t, tui_window *w, void *user)
+{
+    static char bufs[40][8];
+    char label[16];
+    (void)w;
+    (void)user;
+    for (int i = 0; i < 40; i++)
+    {
+        snprintf(label, sizeof(label), "##in%d", i);
+        tui_at(t, (i % 4) * 9, i / 4);
+        tui_input(t, label, bufs[i], sizeof(bufs[i]), 8);
+    }
+}
+
+static const char *test_widgets_many(void)
+{
+    /* more widgets with state than R2_TUI_STATE_SLOTS: no crash, still usable */
+    tui t;
+    tui_test_init(&t, VT_COLS, VT_ROWS);
+    tui_window_open(&t, "Many", (tui_rect){0, 1, 40, 14}, 0, wmany_ui, 0);
+    tui_update(&t, wm_now);
+    for (int i = 0; i < 40; i++)
+        wm_keys(&t, "ab\t");
+    vt_flush(&t, 1);
+    r2_assert(vt_err ? vt_err : "render", !vt_err && vt_matches(&t));
+    r2_assert("every input took its text", wm_has(&t, "ab       ab       ab       ab"));
+    return 0;
+}
+
+static const char *test_widgets_random(void)
+{
+    static const char *const keys[] = {"\t", "\x1b[Z", " ", "\r", "a", "\xC3\xA9", "\xE4\xB8\xAD", "\x7f", "\x1b[3~",
+                                       "\x1b[D", "\x1b[C", "\x1b[H", "\x1b[F", "\x1b[A", "\x1b[B", "\x1b[5~",
+                                       "\x1b[6~", "w", "s", "t", "o", "c", "\033o", "\033n", "\x0b", "\x01", "\x05"};
+    tui t;
+    wform f = {.wrap = 0};
+    tui_test_init(&t, VT_COLS, VT_ROWS);
+    tui_window_open(&t, "Form", (tui_rect){2, 2, 40, 13}, 0, wform_ui, &f);
+    tui_window_open(&t, "S", (tui_rect){20, 4, 30, 12}, 0, wscroll_ui, 0);
+    for (int iter = 0; iter < 5000; iter++)
+    {
+        if (tui_rand() % 40 == 0)
+            wm_keys(&t, "\x1b[17~");
+        wm_keys(&t, keys[tui_rand() % (sizeof(keys) / sizeof(keys[0]))]);
+        r2_assert("name stays valid UTF-8", s8_is_valid_utf8(s8_from_cstr(f.name)));
+        r2_assert("name fits", strlen(f.name) < sizeof(f.name));
+        r2_assert("selection in range", f.sel >= 0 && f.sel < 8);
+        r2_assert("radio value valid", f.indent == 0 || f.indent == 1);
+        if (iter % 100 == 0)
+        {
+            vt_flush(&t, 1);
+            r2_assert(vt_err ? vt_err : "random widgets render", !vt_err && vt_matches(&t));
+        }
+    }
+    return 0;
+}
+
 ////////////////////////////////////////////
 
 static const char *r2_tui_test(void)
@@ -1792,6 +2204,17 @@ static const char *r2_tui_test(void)
     r2_run_test(test_palette);
     r2_run_test(test_palette_desktop_and_modal);
     r2_run_test(test_palette_from_controller);
+
+    // widgets
+    r2_run_test(test_widgets_layout);
+    r2_run_test(test_widgets_input);
+    r2_run_test(test_widgets_focus_and_keys);
+    r2_run_test(test_widgets_only_focused_window);
+    r2_run_test(test_widgets_scroll_view);
+    r2_run_test(test_widgets_input_box);
+    r2_run_test(test_widgets_state_pool);
+    r2_run_test(test_widgets_many);
+    r2_run_test(test_widgets_random);
     r2_run_test(test_wm_prefix);
     r2_run_test(test_wm_prefix_config);
     r2_run_test(test_wm_prefix_modal_and_dock);

@@ -1,4 +1,4 @@
-.PHONY: all test test_strings test_maths test_quant test_tui test_clang test_wasm demo clean build help
+.PHONY: all test test_strings test_maths test_quant test_tui test_edit test_clang wasm demo clean build help
 
 help:
 	@echo "Available targets:"
@@ -8,8 +8,9 @@ help:
 	@echo "  test_maths   - build and run only the maths test suite with gcc"
 	@echo "  test_quant   - build and run only the quantized-math test suite with gcc"
 	@echo "  test_tui     - build and run only the terminal UI test suite with gcc"
+	@echo "  test_edit    - build and run only the text editor widget suite with gcc"
 	@echo "  test_clang   - build and run all tests with clang"
-	@echo "  test_wasm    - build and run all tests with emcc (needs emsdk env)"
+	@echo "  wasm         - check the freestanding headers build for wasm32 with clang (no libc)"
 	@echo "  demo         - build the terminal UI demo (bin/tui_demo)"
 	@echo "  check        - run static analysis / lint (check.sh)"
 	@echo "  perf         - run perf stat on the test binary (Linux only, run as sudo)"
@@ -95,6 +96,9 @@ test_term: build_tests
 test_tui: build_tests
 	./bin/run_tests tui
 
+test_edit: build_tests
+	./bin/run_tests edit
+
 # Nothing here uses OpenMP pragmas, so clang builds without OMP_FLAGS
 # (clang's -fopenmp needs libomp, which isn't always installed).
 test_clang: clean
@@ -105,14 +109,15 @@ test_clang: clean
 	./test.sh
 	./bin/run_tests_clang
 
-# Needs an activated emsdk (emcc) and node.
-test_wasm: clean
+# clang only (no emcc, no libc): strings, quant and tui must build for
+# wasm32 with nothing imported. wasm-ld fails on any missing function.
+# Needs clang with the WebAssembly target and wasm-ld (lld).
+wasm:
 	mkdir -p bin
-	CC=emcc OUT=./bin/run_tests.js \
-	CFLAGS='-std=c11 $(C_ERRS) -O2 -DR2_SIMD_FORCE_SCALAR' \
-	LDFLAGS='-sALLOW_MEMORY_GROWTH=1' \
-	./test.sh
-	node ./bin/run_tests.js
+	clang --target=wasm32 -std=c11 $(C_ERRS) -O2 -ffreestanding -nostdlib \
+		-c tools/wasm_check.c -o bin/wasm_check.o
+	wasm-ld --no-entry bin/wasm_check.o -o bin/r2.wasm
+	@echo "bin/r2.wasm: freestanding build OK"
 
 demo:
 	mkdir -p bin

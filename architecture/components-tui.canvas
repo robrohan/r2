@@ -5,7 +5,7 @@
 		{"id":"c-input","type":"text","text":"## Input parser\n*[Component: r2_tui.h:1343]*\nBytes → key events: CSI/SS3 (xterm, vt100, Linux), modifiers, Alt as ESC prefix, lone-ESC timeout, cursor-position reply for size.\nKey: `tui_feed`, `tui_step`, `tui_poll`\nCode: [[..]]","x":21,"y":79,"width":300,"height":200,"color":"4"},
 		{"id":"c-route","type":"text","text":"## Update loop & compositor\n*[Component: r2_tui.h:3687, 3943]*\n`tui_update`: routes each key (palette, menu, move mode, modal, prefix, shortcuts, window), runs dirty controllers, paints desktop, docks, z-order, bar, status.\nCode: [[..]]","x":450,"y":286,"width":300,"height":200,"color":"4"},
 		{"id":"c-wm","type":"text","text":"## Window manager\n*[Component: r2_tui.h:1685-2560]*\nWindows, z-order, focus, docking layout, zoom/minimize. Controllers run immediate mode; their drawing is recorded in a shared command pool and replayed.\nKey: `tui_window_open`, `tui_text`\nCode: [[..]]","x":1008,"y":44,"width":300,"height":200,"color":"4"},
-		{"id":"c-dialogs","type":"text","text":"## Message boxes\n*[Component: r2_tui.h:3067]*\n`tui_message`: modal Yes/No/OK/Cancel box with word wrap; the answer goes back to the controller that asked.\nCode: [[..]]","x":1588,"y":45,"width":300,"height":200,"color":"4"},
+		{"id":"c-dialogs","type":"text","text":"## Message boxes\n*[Component: r2_tui.h:3067]*\n`tui_message` (Yes/No/OK/Cancel, word wrap) and `tui_input_box` (a line of text); the answer goes back to the controller that asked.\nCode: [[..]]","x":1588,"y":45,"width":300,"height":200,"color":"4"},
 		{"id":"c-palette","type":"text","text":"## Prefix & command palette\n*[Component: r2_tui.h:3239, 3960]*\nCtrl+\\ then a key (menus, windows 1-9, max/min, move, close). Ctrl+Space fuzzy-searches menu items, window commands and windows.\nCode: [[..]]","x":25,"y":520,"width":300,"height":200,"color":"4"},
 		{"id":"c-menus","type":"text","text":"## Menu bar & system menu\n*[Component: r2_tui.h:2559-3066]*\nMenus declared by the focused window's controller (Mac style); shortcuts; ≡ system menu; move/size mode.\nKey: `tui_menu_begin`, `tui_menu_item`\nCode: [[..]]","x":451,"y":779,"width":300,"height":200,"color":"4"},
 		{"id":"c-cells","type":"text","text":"## Cells & drawing\n*[Component: r2_tui.h:761-1133]*\nBack buffer of 4-byte cells; text/fill/box/shadow with clipping; wide chars, combining marks; control chars drawn as `?`.\nKey: `tui_draw_text`\nCode: [[..]]","x":1601,"y":501,"width":300,"height":200,"color":"4"},
@@ -19,7 +19,8 @@
 		{"id":"w-tests","type":"file","file":"containers.canvas","subpath":"#tool-tests","x":1581,"y":-332,"width":306,"height":226},
 		{"id":"w-strings","type":"file","file":"containers.canvas","subpath":"#ctr-strings","x":2140,"y":480,"width":313,"height":236},
 		{"id":"w-posix","type":"file","file":"root.canvas","subpath":"#ext-posix","x":361,"y":1536,"width":306,"height":203},
-		{"id":"w-terminal","type":"file","file":"root.canvas","subpath":"#ext-terminal","x":1593,"y":1520,"width":304,"height":201}
+		{"id":"w-terminal","type":"file","file":"root.canvas","subpath":"#ext-terminal","x":1593,"y":1520,"width":304,"height":201},
+		{"id":"c-widgets","type":"text","text":"## Widgets\n*[Component: r2_tui.h, widgets section]*\nImmediate-mode label, button, checkbox, radio, text input (Emacs keys), list and scroll view, placed by a layout cursor; Tab focus and hot letters; per-widget state in a small LRU pool.\nKey: `tui_button`, `tui_input`, `tui_list`\nCode: [[..]]","x":2540,"y":80,"width":300,"height":240,"color":"4"}
 	],
 	"edges":[
 		{"id":"e-w-demo-c-route","fromNode":"w-demo","fromSide":"bottom","toNode":"c-route","toSide":"top","label":"Updates each loop [tui_update]"},
@@ -42,6 +43,8 @@
 		{"id":"e-c-render-c-termui","fromNode":"c-render","fromSide":"left","toNode":"c-termui","toSide":"right","label":"Uses sequences"},
 		{"id":"e-c-render-w-terminal","fromNode":"c-render","fromSide":"bottom","toNode":"w-terminal","toSide":"top","label":"Sends changed cells [escape codes]"},
 		{"id":"e-c-posix-c-termui","fromNode":"c-posix","fromSide":"right","toNode":"c-termui","toSide":"left","label":"Alt screen, reset [ESC_ALT_SCREEN_ON]"},
-		{"id":"e-c-posix-w-posix","fromNode":"c-posix","fromSide":"bottom","toNode":"w-posix","toSide":"top","label":"Raw mode, size, reads [termios, ioctl, poll]"}
+		{"id":"e-c-posix-w-posix","fromNode":"c-posix","fromSide":"bottom","toNode":"w-posix","toSide":"top","label":"Raw mode, size, reads [termios, ioctl, poll]"},
+		{"id":"e-c-wm-c-widgets","fromNode":"c-wm","fromSide":"right","toNode":"c-widgets","toSide":"left","label":"Controllers call [tui_button, tui_input, ...]"},
+		{"id":"e-c-dialogs-c-widgets","fromNode":"c-dialogs","fromSide":"right","toNode":"c-widgets","toSide":"left","label":"Input box is built from [tui_input, tui_button]"}
 	]
 }

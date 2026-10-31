@@ -51,6 +51,8 @@ OVERVIEW
     escape sequence.
 
 CHANGES
+    v0.4  immediate-mode widgets (label, button, checkbox, radio, text input,
+          list, scroll view) with Tab focus and hot letters; tui_input_box
     v0.3  window command prefix (Ctrl+\\ then a key), minimize, and a fuzzy
           command palette (Ctrl+Space) over menus, window commands and windows
     v0.2  window manager: overlapping and docked windows, z-order, focus,
@@ -226,6 +228,18 @@ extern "C"
 #ifndef R2_TUI_PREFIX_MS
 #define R2_TUI_PREFIX_MS 2000
 #endif
+/* focusable widgets one window can have (more still draw, but Tab skips them) */
+#ifndef R2_TUI_MAX_WIDGETS
+#define R2_TUI_MAX_WIDGETS 64
+#endif
+/* widget state kept between runs (text cursors, scroll positions), least recently used goes */
+#ifndef R2_TUI_STATE_SLOTS
+#define R2_TUI_STATE_SLOTS 32
+#endif
+/* longest text tui_input_box edits */
+#ifndef R2_TUI_INPUT_MAX
+#define R2_TUI_INPUT_MAX 128
+#endif
 /* the key that opens the command palette; see tui_set_palette_key */
 #ifndef R2_TUI_PALETTE_KEY
 #define R2_TUI_PALETTE_KEY "Ctrl+Space"
@@ -281,6 +295,8 @@ extern "C"
         void *user;
         uint32_t cmd_off, cmd_len;
         uint32_t runs; /* times the controller ran */
+        uint32_t focus_id;  /* the focused widget */
+        uint8_t focus_kind; /* and what kind it is */
         char title[R2_TUI_TITLE_MAX];
         char status[R2_TUI_STATUS_MAX];
     };
@@ -295,6 +311,11 @@ extern "C"
         tui_style dialog_frame, dialog_body;
         tui_style status, status_hot;
         tui_style button, button_focus, button_hot;
+        /* widgets; for hot and focus only the foreground is used (on the window's background) */
+        tui_style hot, focus;
+        tui_style input, input_focus;
+        tui_style list, list_sel, list_sel_focus;
+        tui_style scrollbar;
     } tui_theme;
 
     typedef struct tui_menu_rec
@@ -322,6 +343,18 @@ extern "C"
         int8_t open;  /* menu being declared, -1 none */
         uint8_t full; /* ran out of room: record nothing more this run */
     } tui_menubar;
+
+    /* state a widget keeps between runs */
+    typedef struct tui_wstate
+    {
+        uint32_t id;
+        int32_t a, b;
+        uint32_t touched;
+    } tui_wstate;
+
+    /* widget results */
+#define TUI_CHANGED 1u
+#define TUI_SUBMIT 2u
 
     /* one command palette result */
     typedef struct tui_pal_entry
@@ -413,6 +446,18 @@ extern "C"
         char pal_query[64];
         int pal_n, pal_sel, pal_top;
         tui_pal_entry pal[R2_TUI_PALETTE_MAX];
+        /* widgets: the focusable ones seen in this run, layout cursor, scroll view */
+        uint32_t wid[R2_TUI_MAX_WIDGETS];
+        uint8_t wkind[R2_TUI_MAX_WIDGETS];
+        int nwid;
+        int lay_x, lay_y, lay_lx, lay_ly, lay_lw, lay_same;
+        int org_x, org_y;
+        int sv_on, sv_x, sv_y, sv_w, sv_h, sv_content, sv_focused, sv_lx, sv_ly;
+        int32_t sv_scroll;
+        tui_wstate wstate[R2_TUI_STATE_SLOTS];
+        uint32_t frame;
+        uint8_t mb_kind, ib_fresh;
+        char mb_edit[R2_TUI_INPUT_MAX];
         uint32_t mb_hash;
         char mb_text[R2_TUI_MESSAGE_MAX];
     };
@@ -592,6 +637,52 @@ extern "C"
      * the box is up and the chosen button once. Text wraps; '\n' breaks.
      */
     R2_TUI_DEF unsigned tui_message(tui *t, const char *title, const char *text, unsigned buttons);
+    /**
+     * Ask for a line of text in a modal box. Like tui_message: call it on
+     * every run while you want the answer; 0 while the box is up, then
+     * TUI_MB_OK (buf now holds the text) or TUI_MB_CANCEL (buf untouched).
+     */
+    R2_TUI_DEF unsigned tui_input_box(tui *t, const char *title, const char *prompt, char *buf, size_t cap);
+
+    /* ---- widgets (inside a controller) ----
+
+    Immediate mode: call them every run, they draw themselves and report
+    what happened. They are placed by a layout cursor: tui_at() moves it,
+    each widget goes below the last one, tui_same_line() puts the next one
+    beside it. Tab / Shift+Tab move focus in call order. ~ marks the hot
+    letter: alone it works unless the focused widget takes letters (text
+    input, list); with Alt it always works. Labels must be unique within a
+    window, or add "##something" (not shown) to tell them apart. */
+
+    R2_TUI_DEF void tui_at(tui *t, int x, int y);
+    R2_TUI_DEF void tui_same_line(tui *t);
+    R2_TUI_DEF void tui_space(tui *t, int lines);
+    R2_TUI_DEF void tui_label(tui *t, const char *text);
+    /** 1 when pressed (Enter or Space when focused, or its hot letter). */
+    R2_TUI_DEF int tui_button(tui *t, const char *label);
+    /** 1 when toggled (Space, or its hot letter). */
+    R2_TUI_DEF int tui_checkbox(tui *t, const char *label, int *value);
+    /** Sets *value to option when chosen; 1 then. Radios sharing value form a group. */
+    R2_TUI_DEF int tui_radio(tui *t, const char *label, int *value, int option);
+    /**
+     * One line of editable UTF-8 text in buf (cap bytes, NUL terminated), w
+     * columns wide. Arrows, Home/End, Backspace/Delete, and Emacs keys:
+     * Ctrl+A/E/B/F/D/K. Returns TUI_CHANGED and/or TUI_SUBMIT (Enter).
+     */
+    R2_TUI_DEF unsigned tui_input(tui *t, const char *label, char *buf, size_t cap, int w);
+    /**
+     * A w x h list of count items; *selected moves with Up/Down/PgUp/PgDn/
+     * Home/End or the first letter. Returns TUI_CHANGED and/or TUI_SUBMIT.
+     */
+    R2_TUI_DEF unsigned tui_list(tui *t, const char *label, const char *const *items, int count, int *selected, int w,
+                                 int h);
+    /**
+     * A w x h view onto content_h lines; draw the content between begin and
+     * end at y 0..content_h (it is clipped and scrolled). Focus it to scroll
+     * with the arrows and PgUp/PgDn. Views don't nest.
+     */
+    R2_TUI_DEF void tui_scroll_begin(tui *t, const char *label, int w, int h, int content_h);
+    R2_TUI_DEF void tui_scroll_end(tui *t);
 
 /* ================================================================== */
 #ifdef R2_TUI_IMPLEMENTATION
@@ -784,6 +875,14 @@ extern "C"
         TUI_STYLE(TUI_BLACK, TUI_GREEN, 0),                        /* button */
         TUI_STYLE(TUI_BRIGHT_WHITE, TUI_GREEN, 0),                 /* button_focus */
         TUI_STYLE(TUI_BRIGHT_YELLOW, TUI_GREEN, 0),                /* button_hot */
+        TUI_STYLE(TUI_RED, TUI_WHITE, 0),                          /* hot (foreground) */
+        TUI_STYLE(TUI_BRIGHT_WHITE, TUI_WHITE, 0),                 /* focus (foreground) */
+        TUI_STYLE(TUI_WHITE, TUI_BLUE, 0),                         /* input */
+        TUI_STYLE(TUI_BRIGHT_WHITE, TUI_BLUE, 0),                  /* input_focus */
+        TUI_STYLE(TUI_BLACK, TUI_CYAN, 0),                         /* list */
+        TUI_STYLE(TUI_BLACK, TUI_GREEN, 0),                        /* list_sel */
+        TUI_STYLE(TUI_BRIGHT_WHITE, TUI_GREEN, 0),                 /* list_sel_focus */
+        TUI_STYLE(TUI_BLUE, TUI_CYAN, 0),                          /* scrollbar */
     };
 
     static void r2__tui_blank(tui *t)
@@ -1695,7 +1794,8 @@ extern "C"
         R2__TUI_CMD_TEXT = 1,
         R2__TUI_CMD_FILL,
         R2__TUI_CMD_BOX,
-        R2__TUI_CMD_CURSOR
+        R2__TUI_CMD_CURSOR,
+        R2__TUI_CMD_CLIP
     };
 
     enum
@@ -1707,6 +1807,7 @@ extern "C"
 
     static void r2__tui_layout(tui *t);
     static void r2__tui_mb_idle(tui *t);
+    static void r2__tui_settle_focus(tui *t, int slot);
     static void r2__tui_pal_refresh(tui *t, int keep_sel);
 
     /* copy a string into dst (cap bytes), never cutting a UTF-8 character in half */
@@ -1757,10 +1858,19 @@ extern "C"
         return 0;
     }
 
-    /* width of a label without its ~ marks */
+    /* bytes of a label before its "##id" part */
+    static uint32_t r2__tui_shown_len(const char *s)
+    {
+        uint32_t n = 0;
+        while (s && s[n] && !(s[n] == '#' && s[n + 1] == '#'))
+            n++;
+        return n;
+    }
+
+    /* width of a label without its ~ marks or "##id" */
     static int r2__tui_label_width(const char *s)
     {
-        s8 str = s8_from_cstr(s);
+        s8 str = s8_from_bytes(s, r2__tui_shown_len(s));
         uint32_t at = 0;
         rune r;
         int w = 0;
@@ -1949,8 +2059,8 @@ extern "C"
         if (!p)
             return;
         p[0] = R2__TUI_CMD_TEXT;
-        r2__tui_put16(p + 1, x);
-        r2__tui_put16(p + 3, y);
+        r2__tui_put16(p + 1, x + t->org_x);
+        r2__tui_put16(p + 3, y + t->org_y);
         r2__tui_put16(p + 5, s);
         r2__tui_put16(p + 7, (int)len);
         for (i = 0; i < len; i++)
@@ -1963,12 +2073,14 @@ extern "C"
         int cx = x, is_hot = 0;
         for (;; s++)
         {
-            if (*s == '~' || *s == '\0')
+            int end = *s == '\0' || (s[0] == '#' && s[1] == '#');
+            if (*s == '~' || end)
             {
                 s8 part = s8_from_bytes(run, (uint32_t)(s - run));
-                tui_text(t, cx, y, part, is_hot ? hot : normal);
+                if (part.len)
+                    tui_text(t, cx, y, part, is_hot ? hot : normal);
                 cx += tui_text_width(part);
-                if (*s == '\0')
+                if (end)
                     break;
                 is_hot = !is_hot;
                 run = s + 1;
@@ -1983,8 +2095,8 @@ extern "C"
         if (!p)
             return;
         p[0] = R2__TUI_CMD_FILL;
-        r2__tui_put16(p + 1, r.x);
-        r2__tui_put16(p + 3, r.y);
+        r2__tui_put16(p + 1, r.x + t->org_x);
+        r2__tui_put16(p + 3, r.y + t->org_y);
         r2__tui_put16(p + 5, r.w);
         r2__tui_put16(p + 7, r.h);
         r2__tui_put16(p + 9, s);
@@ -1998,8 +2110,8 @@ extern "C"
         if (!p)
             return;
         p[0] = R2__TUI_CMD_BOX;
-        r2__tui_put16(p + 1, r.x);
-        r2__tui_put16(p + 3, r.y);
+        r2__tui_put16(p + 1, r.x + t->org_x);
+        r2__tui_put16(p + 3, r.y + t->org_y);
         r2__tui_put16(p + 5, r.w);
         r2__tui_put16(p + 7, r.h);
         r2__tui_put16(p + 9, s);
@@ -2012,8 +2124,30 @@ extern "C"
         if (!p)
             return;
         p[0] = R2__TUI_CMD_CURSOR;
+        r2__tui_put16(p + 1, x + t->org_x);
+        r2__tui_put16(p + 3, y + t->org_y);
+    }
+
+    /* limit the following commands to r (inside coordinates); w < 0 lifts it */
+    static void r2__tui_clip_cmd(tui *t, int x, int y, int w, int h)
+    {
+        uint8_t *p = r2__tui_cmd(t, 9);
+        if (!p)
+            return;
+        p[0] = R2__TUI_CMD_CLIP;
         r2__tui_put16(p + 1, x);
         r2__tui_put16(p + 3, y);
+        r2__tui_put16(p + 5, w);
+        r2__tui_put16(p + 7, h);
+    }
+
+    static tui_rect r2__tui_isect(tui_rect a, tui_rect b)
+    {
+        int x0 = a.x > b.x ? a.x : b.x, y0 = a.y > b.y ? a.y : b.y;
+        int x1 = a.x + a.w < b.x + b.w ? a.x + a.w : b.x + b.w;
+        int y1 = a.y + a.h < b.y + b.h ? a.y + a.h : b.y + b.h;
+        tui_rect r = {x0, y0, x1 > x0 ? x1 - x0 : 0, y1 > y0 ? y1 - y0 : 0};
+        return r;
     }
 
     /* inside of a window on screen */
@@ -2049,10 +2183,11 @@ extern "C"
         const uint8_t *p = t->cmd_pool + w->cmd_off;
         const uint8_t *end = p + w->cmd_len;
         int has_cursor = 0;
+        tui_rect cr = c;
         while (p < end)
         {
             int x = c.x + r2__tui_get16(p + 1), y = c.y + r2__tui_get16(p + 3);
-            tui_clip(t, c);
+            tui_clip(t, cr);
             switch (p[0])
             {
             case R2__TUI_CMD_TEXT:
@@ -2080,8 +2215,15 @@ extern "C"
                 p += 12;
                 break;
             }
+            case R2__TUI_CMD_CLIP:
+            {
+                tui_rect r = {x, y, r2__tui_get16(p + 5), r2__tui_get16(p + 7)};
+                cr = r.w < 0 ? c : r2__tui_isect(c, r);
+                p += 9;
+                break;
+            }
             case R2__TUI_CMD_CURSOR:
-                if (x >= c.x && y >= c.y && x < c.x + c.w && y < c.y + c.h)
+                if (x >= cr.x && y >= cr.y && x < cr.x + cr.w && y < cr.y + cr.h)
                 {
                     *cx = x;
                     *cy = y;
@@ -2335,7 +2477,10 @@ extern "C"
 
     R2_TUI_DEF void tui_set_theme(tui *t, const tui_theme *theme)
     {
+        int i;
         t->theme = theme ? theme : &r2__tui_theme_borland;
+        for (i = 0; i < R2__TUI_SLOTS; i++)
+            t->win[i].dirty = t->win[i].used; /* widgets record colours when they run */
         t->compose_dirty = 1;
     }
 
@@ -2498,8 +2643,14 @@ extern "C"
         w->overflow = 0;
         w->dirty = 0;
         w->runs++;
+        t->nwid = 0;
+        t->lay_x = t->lay_y = t->lay_lx = t->lay_ly = t->lay_lw = t->lay_same = 0;
+        t->org_x = t->org_y = 0;
+        t->sv_on = 0;
+        t->frame++;
         r2__tui_cmd_begin(t, slot);
         w->ui(t, w, w->user);
+        r2__tui_settle_focus(t, slot);
         w->closing = 0;
         /* an answer its asker didn't collect is dropped */
         if (t->mb_state == R2__TUI_MB_ANSWERED && t->mb_owner == slot)
@@ -3192,7 +3343,7 @@ extern "C"
         uint32_t starts[16], lens[16];
         uint32_t hash = r2__tui_hash(title, t->cur);
         int lines, width = 0, i, bw = 0, tw;
-        if (t->mb_state == R2__TUI_MB_ANSWERED && t->mb_hash == hash && t->mb_owner == t->cur)
+        if (t->mb_state == R2__TUI_MB_ANSWERED && t->mb_hash == hash && t->mb_owner == t->cur && t->mb_kind == 0)
         {
             r2__tui_mb_idle(t);
             return t->mb_result;
@@ -3210,6 +3361,7 @@ extern "C"
         r2__tui_copy(t->mb_text, sizeof(t->mb_text), text);
         t->mb_buttons = (uint8_t)buttons;
         t->mb_focus = 0;
+        t->mb_kind = 0;
         t->mb_hash = hash;
         t->mb_owner = t->cur;
         t->mb_state = R2__TUI_MB_OPEN;
@@ -3233,6 +3385,698 @@ extern "C"
             width = r2__tui_label_width(title) + 4;
         r2__tui_open_slot(t, R2__TUI_MSGBOX, title, (tui_rect){0, 0, width + 4, lines + 4},
                           TUI_WIN_DIALOG | TUI_WIN_MODAL | TUI_WIN_NO_RESIZE, r2__tui_mb_ui, 0);
+        return 0;
+    }
+
+    /* ---------------- widgets ---------------- */
+
+    enum
+    {
+        R2__TUI_W_NONE,
+        R2__TUI_W_BUTTON,
+        R2__TUI_W_CHECK,
+        R2__TUI_W_RADIO,
+        R2__TUI_W_TEXT,
+        R2__TUI_W_LIST,
+        R2__TUI_W_SCROLL
+    };
+
+    /* widgets that take plain letters as input (so hot letters need Alt) */
+    static int r2__tui_eats_letters(uint8_t kind)
+    {
+        return kind == R2__TUI_W_TEXT || kind == R2__TUI_W_LIST;
+    }
+
+    /* a widget's id: its label (all of it, "##id" too) in this window; the
+       same label twice in one run gets a different id the second time */
+    static uint32_t r2__tui_wid(tui *t, const char *label)
+    {
+        uint32_t h = 0x811C9DC5u ^ ((uint32_t)(t->cur + 1) * 0x9E3779B9u);
+        int i;
+        for (; label && *label; label++)
+            h = (h ^ (uint8_t)*label) * 0x01000193u;
+        for (i = 0; i < t->nwid; i++)
+            if (t->wid[i] == h || h == 0)
+            {
+                h = h * 31u + 7u;
+                i = -1;
+            }
+        return h;
+    }
+
+    /* note a focusable widget; 1 if it has the keyboard */
+    static int r2__tui_wreg(tui *t, uint32_t id, uint8_t kind)
+    {
+        if (t->cur < 0)
+            return 0;
+        if (t->nwid < R2_TUI_MAX_WIDGETS)
+        {
+            t->wid[t->nwid] = id;
+            t->wkind[t->nwid] = kind;
+            t->nwid++;
+        }
+        return t->cur == t->focus && t->win[t->cur].focus_id == id;
+    }
+
+    /* move focus to a widget (it is drawn focused on the next run) */
+    static void r2__tui_wfocus(tui *t, uint32_t id, uint8_t kind)
+    {
+        tui_window *w = &t->win[t->cur];
+        if (w->focus_id != id)
+        {
+            w->focus_id = id;
+            w->focus_kind = kind;
+            w->dirty = 1;
+        }
+    }
+
+    /* the label's hot letter was typed: Alt+letter always, the letter alone
+       unless the focused widget takes letters */
+    static int r2__tui_hot_hit(tui *t, const char *label)
+    {
+        const tui_event *ev = tui_key(t);
+        rune hot = r2__tui_hot(label);
+        if (!ev || !hot || ev->key != TUI_KEY_RUNE || t->cur != t->focus)
+            return 0;
+        if (!(ev->mods == TUI_MOD_ALT || (ev->mods == 0 && !r2__tui_eats_letters(t->win[t->cur].focus_kind))))
+            return 0;
+        if (r2__tui_lower(ev->ch) != hot)
+            return 0;
+        tui_use_key(t);
+        return 1;
+    }
+
+    static tui_wstate *r2__tui_state(tui *t, uint32_t id)
+    {
+        int i, oldest = 0;
+        for (i = 0; i < R2_TUI_STATE_SLOTS; i++)
+            if (t->wstate[i].id == id)
+            {
+                t->wstate[i].touched = t->frame;
+                return &t->wstate[i];
+            }
+        for (i = 1; i < R2_TUI_STATE_SLOTS; i++)
+            if (t->wstate[i].touched < t->wstate[oldest].touched)
+                oldest = i;
+        t->wstate[oldest].id = id;
+        t->wstate[oldest].a = t->wstate[oldest].b = 0;
+        t->wstate[oldest].touched = t->frame;
+        return &t->wstate[oldest];
+    }
+
+    /* After a controller ran: Tab / Shift+Tab move focus, and focus always
+       sits on a widget that exists. A change re-runs the window so it draws. */
+    static void r2__tui_settle_focus(tui *t, int slot)
+    {
+        tui_window *w = &t->win[slot];
+        int i, at = -1, n = t->nwid;
+        const tui_event *ev = t->cur_ev;
+        if (n == 0)
+        {
+            w->focus_id = 0;
+            w->focus_kind = R2__TUI_W_NONE;
+            return;
+        }
+        for (i = 0; i < n; i++)
+            if (t->wid[i] == w->focus_id)
+                at = i;
+        if (slot == t->focus && ev && !t->ev_used && ev->type == TUI_EV_KEY && ev->key == TUI_KEY_TAB &&
+            (ev->mods == 0 || ev->mods == TUI_MOD_SHIFT))
+        {
+            t->ev_used = 1;
+            if (ev->mods == TUI_MOD_SHIFT)
+                at = at <= 0 ? n - 1 : at - 1;
+            else
+                at = (at + 1) % n;
+        }
+        else if (at < 0)
+            at = 0;
+        if (w->focus_id != t->wid[at])
+        {
+            w->focus_id = t->wid[at];
+            w->focus_kind = t->wkind[at];
+            w->dirty = 1;
+        }
+        else
+            w->focus_kind = t->wkind[at];
+    }
+
+    /* where the next widget goes (and remember it for tui_same_line) */
+    static void r2__tui_place(tui *t, int w, int h, int *x, int *y)
+    {
+        if (t->lay_same)
+        {
+            *x = t->lay_lx + t->lay_lw + 1;
+            *y = t->lay_ly;
+            t->lay_same = 0;
+        }
+        else
+        {
+            *x = t->lay_x;
+            *y = t->lay_y;
+        }
+        t->lay_lx = *x;
+        t->lay_ly = *y;
+        t->lay_lw = w;
+        if (*y + h > t->lay_y)
+            t->lay_y = *y + h;
+    }
+
+    R2_TUI_DEF void tui_at(tui *t, int x, int y)
+    {
+        t->lay_x = x;
+        t->lay_y = y;
+        t->lay_same = 0;
+    }
+
+    R2_TUI_DEF void tui_same_line(tui *t)
+    {
+        t->lay_same = 1;
+    }
+
+    R2_TUI_DEF void tui_space(tui *t, int lines)
+    {
+        t->lay_y += lines;
+    }
+
+    /* the window's background with a theme foreground */
+    static tui_style r2__tui_on_body(const tui *t, tui_style fg)
+    {
+        tui_style body = t->cur >= 0 ? r2__tui_body(t, t->cur) : t->theme->body;
+        return TUI_STYLE(TUI_STYLE_FG(fg), TUI_STYLE_BG(body), TUI_STYLE_ATTR(fg));
+    }
+
+    /* record the start of text that fits in max columns */
+    static void r2__tui_text_fit(tui *t, int x, int y, s8 str, int max, tui_style s)
+    {
+        uint32_t at = 0, end = 0;
+        int w = 0;
+        rune r;
+        while (s8_next_rune(str, &at, &r))
+        {
+            int rw = r2__tui_is_control(r) ? 1 : tui_rune_width(r);
+            if (w + rw > max)
+                break;
+            w += rw;
+            end = at;
+        }
+        if (end)
+            tui_text(t, x, y, s8_slice(str, 0, end), s);
+    }
+
+    R2_TUI_DEF void tui_label(tui *t, const char *text)
+    {
+        int x, y;
+        r2__tui_place(t, r2__tui_label_width(text), 1, &x, &y);
+        r2__tui_rec_label(t, x, y, text, TUI_DEFAULT, r2__tui_on_body(t, t->theme->hot));
+    }
+
+    R2_TUI_DEF int tui_button(tui *t, const char *label)
+    {
+        uint32_t id = r2__tui_wid(t, label);
+        int focused = r2__tui_wreg(t, id, R2__TUI_W_BUTTON);
+        int lw = r2__tui_label_width(label), x, y, pressed = 0;
+        const tui_event *ev = tui_key(t);
+        tui_style s;
+        if (focused && ev && !ev->mods && (ev->key == TUI_KEY_ENTER || (ev->key == TUI_KEY_RUNE && ev->ch == ' ')))
+        {
+            tui_use_key(t);
+            pressed = 1;
+        }
+        else if (r2__tui_hot_hit(t, label))
+        {
+            pressed = 1;
+            r2__tui_wfocus(t, id, R2__TUI_W_BUTTON);
+        }
+        r2__tui_place(t, lw + 4, 1, &x, &y);
+        s = focused ? t->theme->button_focus : t->theme->button;
+        tui_fill(t, (tui_rect){x, y, lw + 4, 1}, ' ', s);
+        tui_text(t, x, y, S8("["), s);
+        tui_text(t, x + lw + 3, y, S8("]"), s);
+        r2__tui_rec_label(t, x + 2, y, label, s,
+                          TUI_STYLE(TUI_STYLE_FG(t->theme->button_hot), TUI_STYLE_BG(s), 0));
+        return pressed;
+    }
+
+    /* "[X] label" / "(•) label" */
+    static void r2__tui_mark_label(tui *t, int x, int y, const char *open_close, rune mark, const char *label,
+                                   int focused)
+    {
+        tui_style s = focused ? r2__tui_on_body(t, t->theme->focus) : TUI_DEFAULT;
+        uint8_t m[4];
+        tui_text(t, x, y, s8_from_bytes(open_close, 1), s);
+        tui_text(t, x + 1, y, s8_from_bytes(m, utf8_encode(mark, m)), s);
+        tui_text(t, x + 2, y, s8_from_bytes(open_close + 1, 1), s);
+        r2__tui_rec_label(t, x + 4, y, label, s, r2__tui_on_body(t, t->theme->hot));
+        if (focused)
+            tui_cursor(t, x + 1, y);
+    }
+
+    R2_TUI_DEF int tui_checkbox(tui *t, const char *label, int *value)
+    {
+        uint32_t id = r2__tui_wid(t, label);
+        int focused = r2__tui_wreg(t, id, R2__TUI_W_CHECK);
+        int x, y, hit = 0;
+        const tui_event *ev = tui_key(t);
+        if (focused && ev && !ev->mods && ev->key == TUI_KEY_RUNE && ev->ch == ' ')
+        {
+            tui_use_key(t);
+            hit = 1;
+        }
+        else if (r2__tui_hot_hit(t, label))
+        {
+            hit = 1;
+            r2__tui_wfocus(t, id, R2__TUI_W_CHECK);
+        }
+        if (hit)
+            *value = !*value;
+        r2__tui_place(t, r2__tui_label_width(label) + 4, 1, &x, &y);
+        r2__tui_mark_label(t, x, y, "[]", *value ? 'X' : ' ', label, focused);
+        return hit;
+    }
+
+    R2_TUI_DEF int tui_radio(tui *t, const char *label, int *value, int option)
+    {
+        uint32_t id = r2__tui_wid(t, label);
+        int focused = r2__tui_wreg(t, id, R2__TUI_W_RADIO);
+        int x, y, hit = 0;
+        const tui_event *ev = tui_key(t);
+        if (focused && ev && !ev->mods && ev->key == TUI_KEY_RUNE && ev->ch == ' ')
+        {
+            tui_use_key(t);
+            hit = 1;
+        }
+        else if (r2__tui_hot_hit(t, label))
+        {
+            hit = 1;
+            r2__tui_wfocus(t, id, R2__TUI_W_RADIO);
+        }
+        hit = hit && *value != option;
+        if (hit)
+            *value = option;
+        r2__tui_place(t, r2__tui_label_width(label) + 4, 1, &x, &y);
+        r2__tui_mark_label(t, x, y, "()", *value == option ? 0x2022 : ' ', label, focused);
+        return hit;
+    }
+
+    /* byte offset of the rune before / after at */
+    static uint32_t r2__tui_prev(const char *s, uint32_t at)
+    {
+        if (at == 0)
+            return 0;
+        at--;
+        while (at > 0 && ((uint8_t)s[at] & 0xC0u) == 0x80u)
+            at--;
+        return at;
+    }
+
+    static uint32_t r2__tui_next(const char *s, uint32_t len, uint32_t at)
+    {
+        rune r;
+        if (at >= len)
+            return len;
+        return at + utf8_decode((const uint8_t *)s + at, len - at, &r);
+    }
+
+    static uint32_t r2__tui_strlen(const char *s)
+    {
+        uint32_t n = 0;
+        while (s[n])
+            n++;
+        return n;
+    }
+
+    /* edit buf (cap bytes) for one key; returns TUI_CHANGED / TUI_SUBMIT, *used if it took the key */
+    static unsigned r2__tui_edit_key(char *buf, size_t cap, int32_t *cursor, const tui_event *ev, int *used)
+    {
+        uint32_t len = r2__tui_strlen(buf), at = (uint32_t)*cursor, k;
+        unsigned res = 0;
+        int ctrl = ev->key == TUI_KEY_RUNE && ev->mods == TUI_MOD_CTRL;
+        *used = 1;
+        if (ev->key == TUI_KEY_LEFT || (ctrl && ev->ch == 'b'))
+            at = r2__tui_prev(buf, at);
+        else if (ev->key == TUI_KEY_RIGHT || (ctrl && ev->ch == 'f'))
+            at = r2__tui_next(buf, len, at);
+        else if (ev->key == TUI_KEY_HOME || (ctrl && ev->ch == 'a'))
+            at = 0;
+        else if (ev->key == TUI_KEY_END || (ctrl && ev->ch == 'e'))
+            at = len;
+        else if (ev->key == TUI_KEY_ENTER && !ev->mods)
+            res = TUI_SUBMIT;
+        else if (ev->key == TUI_KEY_BACKSPACE || ev->key == TUI_KEY_DELETE || (ctrl && ev->ch == 'd'))
+        {
+            uint32_t from = at, to = at;
+            if (ev->key == TUI_KEY_BACKSPACE)
+                from = r2__tui_prev(buf, at);
+            else
+                to = r2__tui_next(buf, len, at);
+            if (to > from)
+            {
+                for (k = to; k <= len; k++)
+                    buf[from + k - to] = buf[k];
+                at = from;
+                res = TUI_CHANGED;
+            }
+        }
+        else if (ctrl && ev->ch == 'k')
+        {
+            if (at < len)
+            {
+                buf[at] = '\0';
+                res = TUI_CHANGED;
+            }
+        }
+        else if (ev->key == TUI_KEY_RUNE && !(ev->mods & (TUI_MOD_CTRL | TUI_MOD_ALT)) && !r2__tui_is_control(ev->ch))
+        {
+            uint8_t enc[4];
+            uint32_t n = utf8_encode(ev->ch, enc);
+            if (len + n < cap)
+            {
+                for (k = len + 1; k-- > at;)
+                    buf[k + n] = buf[k];
+                for (k = 0; k < n; k++)
+                    buf[at + k] = (char)enc[k];
+                at += n;
+                res = TUI_CHANGED;
+            }
+        }
+        else
+            *used = 0;
+        *cursor = (int32_t)at;
+        return res;
+    }
+
+    R2_TUI_DEF unsigned tui_input(tui *t, const char *label, char *buf, size_t cap, int w)
+    {
+        uint32_t id = r2__tui_wid(t, label);
+        int focused = r2__tui_wreg(t, id, R2__TUI_W_TEXT);
+        tui_wstate *st = r2__tui_state(t, id);
+        const tui_event *ev = tui_key(t);
+        uint32_t len = r2__tui_strlen(buf), at, start, end;
+        unsigned res = 0;
+        int x, y, col = 0, c = 0, used;
+        tui_style s;
+        s8 str;
+        rune r;
+        if (w < 2)
+            w = 2;
+        if (r2__tui_hot_hit(t, label))
+            r2__tui_wfocus(t, id, R2__TUI_W_TEXT);
+        /* the text may have changed under us: keep the cursor on a character */
+        if ((uint32_t)st->a > len)
+            st->a = (int32_t)len;
+        while (st->a > 0 && ((uint8_t)buf[st->a] & 0xC0u) == 0x80u)
+            st->a--;
+        if (focused && ev)
+        {
+            res = r2__tui_edit_key(buf, cap, &st->a, ev, &used);
+            if (used)
+                tui_use_key(t);
+        }
+        /* scroll sideways so the cursor shows */
+        str = s8_from_cstr(buf);
+        col = tui_text_width(s8_slice(str, 0, (uint32_t)st->a));
+        if (col < st->b)
+            st->b = col;
+        if (col > st->b + w - 1)
+            st->b = col - (w - 1);
+        /* the visible part: whole characters from column b */
+        start = end = str.len;
+        for (at = 0;;)
+        {
+            uint32_t before = at;
+            int rw;
+            if (!s8_next_rune(str, &at, &r))
+                break;
+            rw = r2__tui_is_control(r) ? 1 : tui_rune_width(r);
+            if (c >= st->b && start == str.len)
+                start = before;
+            if (c + rw > st->b + w)
+            {
+                end = before;
+                break;
+            }
+            c += rw;
+        }
+        if (start > end)
+            start = end;
+        r2__tui_place(t, w, 1, &x, &y);
+        s = focused ? t->theme->input_focus : t->theme->input;
+        tui_fill(t, (tui_rect){x, y, w, 1}, ' ', s);
+        if (end > start)
+            tui_text(t, x + tui_text_width(s8_slice(str, 0, start)) - st->b, y, s8_slice(str, start, end - start), s);
+        if (focused)
+            tui_cursor(t, x + col - st->b, y);
+        return res;
+    }
+
+    R2_TUI_DEF unsigned tui_list(tui *t, const char *label, const char *const *items, int count, int *selected, int w,
+                                 int h)
+    {
+        uint32_t id = r2__tui_wid(t, label);
+        int focused = r2__tui_wreg(t, id, R2__TUI_W_LIST);
+        tui_wstate *st = r2__tui_state(t, id);
+        const tui_event *ev = tui_key(t);
+        int x, y, i, sel = *selected, bar = count > h, tw;
+        unsigned res = 0;
+        if (w < 3)
+            w = 3;
+        if (h < 1)
+            h = 1;
+        if (r2__tui_hot_hit(t, label))
+            r2__tui_wfocus(t, id, R2__TUI_W_LIST);
+        if (focused && ev && count > 0)
+        {
+            int used = 1;
+            if (ev->key == TUI_KEY_UP)
+                sel--;
+            else if (ev->key == TUI_KEY_DOWN)
+                sel++;
+            else if (ev->key == TUI_KEY_PGUP)
+                sel -= h - 1 > 0 ? h - 1 : 1;
+            else if (ev->key == TUI_KEY_PGDN)
+                sel += h - 1 > 0 ? h - 1 : 1;
+            else if (ev->key == TUI_KEY_HOME)
+                sel = 0;
+            else if (ev->key == TUI_KEY_END)
+                sel = count - 1;
+            else if (ev->key == TUI_KEY_ENTER && !ev->mods)
+                res |= TUI_SUBMIT;
+            else if (ev->key == TUI_KEY_RUNE && !ev->mods && ev->ch > ' ')
+            {
+                /* jump to the next item starting with that letter */
+                for (i = 1; i <= count; i++)
+                {
+                    int k = (sel + i) % count;
+                    rune first = 0;
+                    if (items[k])
+                        utf8_decode((const uint8_t *)items[k], 4, &first);
+                    if (items[k] && items[k][0] && r2__tui_lower(first) == r2__tui_lower(ev->ch))
+                    {
+                        sel = k;
+                        break;
+                    }
+                }
+            }
+            else
+                used = 0;
+            if (used)
+                tui_use_key(t);
+        }
+        if (sel >= count)
+            sel = count - 1;
+        if (sel < 0)
+            sel = 0;
+        if (count > 0 && sel != *selected)
+        {
+            *selected = sel;
+            res |= TUI_CHANGED;
+        }
+        /* keep the selection in view */
+        if (sel < st->a)
+            st->a = sel;
+        if (sel >= st->a + h)
+            st->a = sel - h + 1;
+        if (st->a > (count > h ? count - h : 0))
+            st->a = count > h ? count - h : 0;
+        if (st->a < 0)
+            st->a = 0;
+        r2__tui_place(t, w, h, &x, &y);
+        tui_fill(t, (tui_rect){x, y, w, h}, ' ', t->theme->list);
+        tw = w - 2 - (bar ? 1 : 0);
+        for (i = 0; i < h && st->a + i < count; i++)
+        {
+            int k = st->a + i;
+            if (k == sel)
+            {
+                tui_style s = focused ? t->theme->list_sel_focus : t->theme->list_sel;
+                tui_fill(t, (tui_rect){x, y + i, w - (bar ? 1 : 0), 1}, ' ', s);
+                r2__tui_text_fit(t, x + 1, y + i, s8_from_cstr(items[k] ? items[k] : ""), tw, s);
+            }
+            else
+                r2__tui_text_fit(t, x + 1, y + i, s8_from_cstr(items[k] ? items[k] : ""), tw, t->theme->list);
+        }
+        if (bar)
+        {
+            int thumb = (h - 1) * st->a / (count - h);
+            for (i = 0; i < h; i++)
+                tui_text(t, x + w - 1, y + i, i == thumb ? S8("\xE2\x96\x88") : S8("\xE2\x96\x91"), t->theme->scrollbar);
+        }
+        return res;
+    }
+
+    R2_TUI_DEF void tui_scroll_begin(tui *t, const char *label, int w, int h, int content_h)
+    {
+        uint32_t id = r2__tui_wid(t, label);
+        int focused = r2__tui_wreg(t, id, R2__TUI_W_SCROLL);
+        tui_wstate *st = r2__tui_state(t, id);
+        const tui_event *ev = tui_key(t);
+        int max = content_h > h ? content_h - h : 0, x, y;
+        if (t->sv_on)
+            return; /* no nesting */
+        if (r2__tui_hot_hit(t, label))
+            r2__tui_wfocus(t, id, R2__TUI_W_SCROLL);
+        if (focused && ev)
+        {
+            int used = 1, page = h - 1 > 0 ? h - 1 : 1;
+            if (ev->key == TUI_KEY_UP)
+                st->a--;
+            else if (ev->key == TUI_KEY_DOWN)
+                st->a++;
+            else if (ev->key == TUI_KEY_PGUP)
+                st->a -= page;
+            else if (ev->key == TUI_KEY_PGDN || (ev->key == TUI_KEY_RUNE && ev->ch == ' ' && !ev->mods))
+                st->a += page;
+            else if (ev->key == TUI_KEY_HOME)
+                st->a = 0;
+            else if (ev->key == TUI_KEY_END)
+                st->a = max;
+            else
+                used = 0;
+            if (used)
+                tui_use_key(t);
+        }
+        if (st->a > max)
+            st->a = max;
+        if (st->a < 0)
+            st->a = 0;
+        r2__tui_place(t, w, h, &x, &y);
+        t->sv_on = 1;
+        t->sv_x = x;
+        t->sv_y = y;
+        t->sv_w = w;
+        t->sv_h = h;
+        t->sv_content = content_h;
+        t->sv_scroll = st->a;
+        t->sv_focused = focused;
+        t->sv_lx = t->lay_x;
+        t->sv_ly = t->lay_y;
+        r2__tui_clip_cmd(t, x, y, w - 1, h);
+        t->org_x = x;
+        t->org_y = y - st->a;
+        t->lay_x = t->lay_y = 0;
+        t->lay_same = 0;
+    }
+
+    R2_TUI_DEF void tui_scroll_end(tui *t)
+    {
+        int i, x, y, h;
+        if (!t->sv_on)
+            return;
+        t->sv_on = 0;
+        t->org_x = t->org_y = 0;
+        r2__tui_clip_cmd(t, 0, 0, -1, -1);
+        x = t->sv_x;
+        y = t->sv_y;
+        h = t->sv_h;
+        t->lay_x = t->sv_lx;
+        t->lay_y = t->sv_ly;
+        t->lay_same = 0;
+        if (t->sv_content > h)
+        {
+            int max = t->sv_content - h;
+            int thumb = (h - 1) * t->sv_scroll / max;
+            tui_style s = t->sv_focused ? t->theme->list_sel_focus : t->theme->scrollbar;
+            for (i = 0; i < h; i++)
+                tui_text(t, x + t->sv_w - 1, y + i, i == thumb ? S8("\xE2\x96\x88") : S8("\xE2\x96\x91"),
+                         i == thumb ? s : t->theme->scrollbar);
+        }
+    }
+
+    /* ---------------- input box ---------------- */
+
+    static void r2__tui_ib_ui(tui *t, tui_window *w, void *user)
+    {
+        int cw, ch, ok, cancel = 0;
+        unsigned r;
+        const tui_event *ev;
+        (void)user;
+        tui_size(t, &cw, &ch);
+        if (t->ib_fresh)
+        {
+            /* start with the cursor at the end of the text */
+            r2__tui_state(t, r2__tui_wid(t, "##r2_input_box"))->a = (int32_t)r2__tui_strlen(t->mb_edit);
+            t->ib_fresh = 0;
+        }
+        tui_at(t, 1, 0);
+        tui_label(t, t->mb_text);
+        tui_at(t, 1, 1);
+        r = tui_input(t, "##r2_input_box", t->mb_edit, sizeof(t->mb_edit), cw - 2);
+        tui_at(t, (cw - 17) / 2, ch - 1); /* "[ OK ] [ Cancel ]" */
+        ok = tui_button(t, "~O~K");
+        tui_same_line(t);
+        cancel = tui_button(t, "~C~ancel");
+        ev = tui_key(t);
+        if (ev && ev->key == TUI_KEY_ESC)
+        {
+            tui_use_key(t);
+            cancel = 1;
+        }
+        if ((r & TUI_SUBMIT) || ok || cancel)
+        {
+            t->mb_result = cancel && !ok && !(r & TUI_SUBMIT) ? TUI_MB_CANCEL : TUI_MB_OK;
+            t->mb_state = R2__TUI_MB_ANSWERED;
+            if (t->mb_owner >= 0 && t->win[t->mb_owner].used)
+                t->win[t->mb_owner].dirty = 1;
+            tui_window_close(t, w);
+        }
+    }
+
+    R2_TUI_DEF unsigned tui_input_box(tui *t, const char *title, const char *prompt, char *buf, size_t cap)
+    {
+        uint32_t hash = r2__tui_hash(title, t->cur) ^ 0x5A5A5A5Au;
+        int width;
+        if (t->mb_state == R2__TUI_MB_ANSWERED && t->mb_hash == hash && t->mb_owner == t->cur &&
+            t->mb_kind == 1)
+        {
+            unsigned r = t->mb_result;
+            if (r == TUI_MB_OK)
+                r2__tui_copy(buf, cap, t->mb_edit);
+            r2__tui_mb_idle(t);
+            return r;
+        }
+        if (t->mb_state != R2__TUI_MB_IDLE)
+        {
+            if (t->cur >= 0)
+                t->mb_waiting |= 1u << t->cur;
+            return 0;
+        }
+        r2__tui_copy(t->mb_text, sizeof(t->mb_text), prompt);
+        r2__tui_copy(t->mb_edit, cap < sizeof(t->mb_edit) ? cap : sizeof(t->mb_edit), buf);
+        t->mb_kind = 1;
+        t->mb_hash = hash;
+        t->mb_owner = t->cur;
+        t->mb_state = R2__TUI_MB_OPEN;
+        t->ib_fresh = 1;
+        width = r2__tui_label_width(prompt) + 4;
+        if (width < 40)
+            width = 40;
+        if (r2__tui_label_width(title) + 8 > width)
+            width = r2__tui_label_width(title) + 8;
+        if (width > t->desk.w - 4)
+            width = t->desk.w - 4;
+        r2__tui_open_slot(t, R2__TUI_MSGBOX, title, (tui_rect){0, 0, width, 6},
+                          TUI_WIN_DIALOG | TUI_WIN_MODAL | TUI_WIN_NO_RESIZE, r2__tui_ib_ui, 0);
         return 0;
     }
 

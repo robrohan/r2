@@ -9,8 +9,6 @@
 CC=${CC:-gcc}
 #############################
 # -O0 for debug
-# -Os (or -O3) for build (emcc)
-# -g preserves debug information; -g4 generates source maps (emcc)
 #############################
 
 CFLAGS=${CFLAGS:- -std=c11 -Wall -Werror -Wno-unused -g3 -v -O3 -funroll-loops -msse4.1 -fopenmp }
