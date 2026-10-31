@@ -1620,6 +1620,49 @@ static const char *test_wm_menu_overflow(void)
     return 0;
 }
 
+/* menus declared before the key that changes them is handled */
+static int wm_armed, wm_fired;
+static void wm_late_key_ui(tui *t, tui_window *w, void *user)
+{
+    const tui_event *ev;
+    (void)w;
+    (void)user;
+    tui_menu_begin(t, "~F~ile");
+    if (tui_menu_item_flags(t, "~F~ire", "Ctrl+R", wm_armed ? 0 : TUI_ITEM_DISABLED))
+        wm_fired++;
+    if (tui_menu_item(t, "~A~rm", "Ctrl+A"))
+        wm_armed = 1;
+    tui_menu_end(t);
+    ev = tui_key(t);
+    if (ev && ev->key == TUI_KEY_RUNE && ev->ch == 'a' && !ev->mods)
+    {
+        wm_armed = 1;
+        tui_use_key(t);
+    }
+}
+
+static const char *test_wm_menus_follow_keys(void)
+{
+    tui t;
+    tui_test_init(&t, VT_COLS, VT_ROWS);
+    wm_armed = wm_fired = 0;
+    tui_window_open(&t, "W", (tui_rect){2, 2, 30, 8}, 0, wm_late_key_ui, 0);
+    tui_update(&t, wm_now);
+    wm_keys(&t, "\x12");
+    r2_assert("disabled shortcut does nothing", wm_fired == 0);
+    wm_keys(&t, "a");
+    wm_keys(&t, "\x12");
+    r2_assert("enabled by the key: the shortcut works at once", wm_fired == 1);
+    /* and when a chosen menu item changes them: "Arm" enables "Fire" above it */
+    wm_armed = 0;
+    tui_window_invalidate(&t, tui_focused_window(&t));
+    tui_update(&t, wm_now);
+    wm_keys(&t, "\x01"); /* Ctrl+A: the Arm item */
+    wm_keys(&t, "\x12");
+    r2_assert("enabled by a menu item: the shortcut works at once", wm_fired == 2);
+    return 0;
+}
+
 static const char *test_wm_no_controller_window(void)
 {
     /* a window without a controller (nothing to draw, no menus) must not
@@ -2222,6 +2265,7 @@ static const char *r2_tui_test(void)
     r2_run_test(test_wm_message_box);
     r2_run_test(test_wm_open_from_menu_mid_run);
     r2_run_test(test_wm_menu_overflow);
+    r2_run_test(test_wm_menus_follow_keys);
     r2_run_test(test_wm_no_controller_window);
     r2_run_test(test_wm_limits);
     r2_run_test(test_wm_resize);

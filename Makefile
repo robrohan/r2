@@ -103,7 +103,7 @@ test_edit: build_tests
 # the editor suite with each feature compiled out (r2_tui_edit.h -D switches)
 test_edit_flags:
 	mkdir -p bin
-	@for f in "" -DR2_TUI_EDIT_NO_SELECTION -DR2_TUI_EDIT_NO_CLIPBOARD -DR2_TUI_EDIT_MINIMAL; do \
+	@for f in "" -DR2_TUI_EDIT_NO_SELECTION -DR2_TUI_EDIT_NO_CLIPBOARD -DR2_TUI_EDIT_NO_UNDO -DR2_TUI_EDIT_MINIMAL; do \
 		echo "== edit suite $${f:-(all features)}"; \
 		$(CC) -std=c11 $(C_ERRS) -O2 $$f tests.c tests/*.c -lm -o bin/run_tests_edit && ./bin/run_tests_edit edit | tail -2 || exit 1; \
 	done

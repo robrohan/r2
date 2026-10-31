@@ -53,6 +53,8 @@ OVERVIEW
 CHANGES
     v0.4  immediate-mode widgets (label, button, checkbox, radio, text input,
           list, scroll view) with Tab focus and hot letters; tui_input_box
+    v0.6  after handling a key or a menu choice a window runs once more, so
+          menus and status declared before the change show the new state
     v0.5  the command palette moves to Ctrl+] (Ctrl+Space is set-mark in the editor)
     v0.3  window command prefix (Ctrl+\\ then a key), minimize, and a fuzzy
           command palette over menus, window commands and windows
@@ -2620,6 +2622,7 @@ extern "C"
     {
         tui_window *w = &t->win[slot];
         tui_menubar *bar = 0;
+        int chosen;
         if (!w->used || !w->ui)
         {
             w->dirty = 0;
@@ -2636,6 +2639,7 @@ extern "C"
             bar->open = -1;
             bar->full = 0;
         }
+        chosen = t->menu_act >= 0;
         t->rec_bar = bar;
         t->item_seq = 0;
         t->item_seq_on = 0;
@@ -2669,6 +2673,11 @@ extern "C"
         if (t->pal_open)
             r2__tui_pal_refresh(t, 1);
         t->compose_dirty = 1;
+        /* A key or a chosen menu item may have changed things this run
+           already declared or drew before handling it (menu items enabled,
+           the status line, ...): run once more, so it all shows the new state. */
+        if ((ev && ev->type == TUI_EV_KEY) || chosen)
+            w->dirty = 1;
         if (w->dead)
             r2__tui_finish_close(t, slot);
     }

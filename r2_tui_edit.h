@@ -41,6 +41,11 @@
     (Emacs); Shift+movement selects too, and then a plain move clears it
     and typing replaces it (CUA). Ctrl+G or Esc Esc clears it.
 
+    Undo (give the editor history memory with tui_edit_undo_init): Ctrl+/
+    (the same key as Ctrl+_ in a terminal) or Ctrl+Z undoes; Esc Ctrl+/
+    redoes (Emacs' C-M-_). Typing undoes up to 20 characters at a time,
+    anything else one key at a time.
+
     Clipboard (give the editor a tui_clipboard, see below): Ctrl+W kill (cut) the
     region, Ctrl+Y yank (paste), Esc w copy; Ctrl+K, Esc d and
     Esc Backspace kill into it too, and kills in a row join up. Borland
@@ -55,7 +60,7 @@ FEATURES
 
         R2_TUI_EDIT_NO_SELECTION    mark and Shift selection
         R2_TUI_EDIT_NO_CLIPBOARD    kill / yank / cut / copy / paste
-        R2_TUI_EDIT_NO_UNDO         undo / redo ring             (next)
+        R2_TUI_EDIT_NO_UNDO         undo / redo
         R2_TUI_EDIT_NO_SEARCH       find / replace               (next)
         R2_TUI_EDIT_NO_HIGHLIGHT    per-line colouring callback  (next)
         R2_TUI_EDIT_MINIMAL         all of the above off
@@ -63,6 +68,7 @@ FEATURES
     The features marked (next) are not written yet.
 
 CHANGES
+    v0.3  undo / redo (Ctrl+/ or Ctrl+_ or Ctrl+Z; Esc Ctrl+/ redoes)
     v0.2  selection (mark, Shift), clipboard and kills, Esc as Meta
     v0.1  gap buffer, movement, editing, scrolling, line numbers
 
@@ -132,6 +138,12 @@ extern "C"
         uint8_t last_kill;  /* the last key killed text (the next kill joins it) */
         uint32_t mark;
         tui_clipboard *clip;     /* where kills and copies go; 0 for none */
+        char *ubuf;         /* undo history: records [0, upos) can be undone, [upos, ulen) redone */
+        uint32_t ucap, ulen, upos;
+        uint32_t ugroup;    /* changes with the same group undo together */
+        uint8_t undoing;    /* applying history: don't record it */
+        uint8_t typing;     /* the last key typed a character (typing groups up) */
+        uint8_t typed;      /* characters typed in this group */
     } tui_edit;
 
     /** Use buf (cap bytes) for the text; starts empty. */
@@ -158,6 +170,13 @@ extern "C"
     R2_TUI_DEF void tui_edit_copy(tui_edit *e);
     R2_TUI_DEF void tui_edit_cut(tui_edit *e);
     R2_TUI_DEF int tui_edit_paste(tui_edit *e);
+    /** Keep undo history in buf (cap bytes); when it fills, the oldest goes. */
+    R2_TUI_DEF void tui_edit_undo_init(tui_edit *e, char *buf, uint32_t cap);
+    /** Undo / redo one step; 1 if there was something to undo / redo. */
+    R2_TUI_DEF int tui_edit_undo(tui_edit *e);
+    R2_TUI_DEF int tui_edit_redo(tui_edit *e);
+    /** Start a new undo step (so the next changes don't undo with the last ones). */
+    R2_TUI_DEF void tui_edit_undo_group(tui_edit *e);
     /**
      * The editor widget, w x h cells at the layout cursor. Handles the keys
      * above while it has focus. Returns TUI_CHANGED when the text changed.
@@ -357,9 +376,13 @@ extern "C"
         e->cursor = offset;
     }
 
+    static void r2__ed_record(tui_edit *e, uint8_t kind, uint32_t pos, uint32_t len);
+#define R2__ED_INSERT 1
+#define R2__ED_DELETE 2
+
     R2_TUI_DEF int tui_edit_insert(tui_edit *e, s8 text)
     {
-        uint32_t i, k = 0;
+        uint32_t i, k = 0, at = e->cursor;
         if (text.len > r2__ed_gap(e))
             return 0;
         r2__ed_move_gap(e, e->cursor);
@@ -379,6 +402,8 @@ extern "C"
         e->line += k;
         e->lines += k;
         e->modified = 1;
+        if (text.len)
+            r2__ed_record(e, R2__ED_INSERT, at, text.len);
         return 1;
     }
 
@@ -391,6 +416,7 @@ extern "C"
             return;
         n = to - from;
         k = r2__ed_newlines(e, from, to);
+        r2__ed_record(e, R2__ED_DELETE, from, n); /* while the text is still there */
         /* the cursor and the top line keep their places in the text */
         if (e->cursor >= to)
         {
@@ -433,7 +459,10 @@ extern "C"
         e->mark_on = e->meta = e->last_kill = 0;
         e->lines = 1;
         e->goal = -1;
+        e->undoing = 1; /* a new text has no history */
         tui_edit_insert(e, text);
+        e->undoing = 0;
+        e->ulen = e->upos = 0;
         tui_edit_goto(e, 0);
         e->modified = 0;
         return 1;
@@ -576,6 +605,7 @@ extern "C"
     R2_TUI_DEF void tui_edit_cut(tui_edit *e)
     {
         uint32_t from, to;
+        tui_edit_undo_group(e);
         if (!(e->flags & TUI_EDIT_READ_ONLY) && tui_edit_selection(e, &from, &to))
         {
             r2__ed_clip_put(e, from, to, 0);
@@ -590,11 +620,166 @@ extern "C"
         if (e->clip && e->clip->buf && !(e->flags & TUI_EDIT_READ_ONLY))
         {
             e->mark_on = 0;
+            tui_edit_undo_group(e);
             return tui_edit_insert(e, s8_from_bytes(e->clip->buf, e->clip->len));
         }
 #endif
         (void)e;
         return 0;
+    }
+
+    /* ---------------- undo ----------------
+
+    History is a log of records, oldest first:
+        kind (1) | pos (4) | len (4) | group (4) | the text (len) | size (4)
+    The size at the end lets undo walk backwards. An insert records the text
+    it put in, a delete the text it took out. */
+
+#define R2__ED_HDR 13u
+
+    R2_TUI_DEF void r2__ed_put32(char *p, uint32_t v) /* (unused without undo) */
+    {
+        p[0] = (char)(v & 0xFFu);
+        p[1] = (char)((v >> 8) & 0xFFu);
+        p[2] = (char)((v >> 16) & 0xFFu);
+        p[3] = (char)(v >> 24);
+    }
+
+    static uint32_t r2__ed_get32(const char *p)
+    {
+        const uint8_t *b = (const uint8_t *)p;
+        return (uint32_t)b[0] | ((uint32_t)b[1] << 8) | ((uint32_t)b[2] << 16) | ((uint32_t)b[3] << 24);
+    }
+
+    R2_TUI_DEF void tui_edit_undo_init(tui_edit *e, char *buf, uint32_t cap)
+    {
+        e->ubuf = buf;
+        e->ucap = cap;
+        e->ulen = e->upos = 0;
+    }
+
+    R2_TUI_DEF void tui_edit_undo_group(tui_edit *e)
+    {
+        e->ugroup++;
+        e->typing = 0;
+        e->typed = 0;
+    }
+
+    static void r2__ed_record(tui_edit *e, uint8_t kind, uint32_t pos, uint32_t len)
+    {
+#ifndef R2_TUI_EDIT_NO_UNDO
+        uint32_t need = R2__ED_HDR + len + 4u, i;
+        char *r;
+        if (!e->ubuf || e->undoing)
+            return;
+        e->ulen = e->upos; /* a new change ends redo */
+        if (need > e->ucap)
+        {
+            e->ulen = e->upos = 0; /* too big to keep: the history before it is useless now */
+            return;
+        }
+        /* typing right after typing in the same group: grow that record */
+        if (kind == R2__ED_INSERT && e->ulen > 0)
+        {
+            uint32_t size = r2__ed_get32(e->ubuf + e->ulen - 4), start = e->ulen - size;
+            char *last = e->ubuf + start;
+            if ((uint8_t)last[0] == R2__ED_INSERT && r2__ed_get32(last + 9) == e->ugroup &&
+                r2__ed_get32(last + 1) + r2__ed_get32(last + 5) == pos && e->ulen + len <= e->ucap)
+            {
+                uint32_t old = r2__ed_get32(last + 5);
+                for (i = 0; i < len; i++)
+                    e->ubuf[e->ulen - 4 + i] = (char)r2__ed_at(e, pos + i);
+                r2__ed_put32(last + 5, old + len);
+                e->ulen += len;
+                r2__ed_put32(e->ubuf + e->ulen - 4, size + len);
+                e->upos = e->ulen;
+                return;
+            }
+        }
+        /* make room: drop the oldest steps, whole (undoing part of a step
+           would make text that never existed) */
+        while (e->ulen > 0 && e->ulen + need > e->ucap)
+        {
+            uint32_t group = r2__ed_get32(e->ubuf + 9), first = 0;
+            while (first < e->ulen && r2__ed_get32(e->ubuf + first + 9) == group)
+                first += R2__ED_HDR + r2__ed_get32(e->ubuf + first + 5) + 4u;
+            for (i = first; i < e->ulen; i++)
+                e->ubuf[i - first] = e->ubuf[i];
+            e->ulen -= first;
+        }
+        r = e->ubuf + e->ulen;
+        r[0] = (char)kind;
+        r2__ed_put32(r + 1, pos);
+        r2__ed_put32(r + 5, len);
+        r2__ed_put32(r + 9, e->ugroup);
+        for (i = 0; i < len; i++)
+            r[R2__ED_HDR + i] = (char)r2__ed_at(e, pos + i);
+        r2__ed_put32(r + R2__ED_HDR + len, need);
+        e->ulen += need;
+        e->upos = e->ulen;
+#else
+        (void)e;
+        (void)kind;
+        (void)pos;
+        (void)len;
+#endif
+    }
+
+    /* apply one record forwards (redo) or backwards (undo) */
+    static void r2__ed_apply(tui_edit *e, const char *r, int forward)
+    {
+        uint32_t pos = r2__ed_get32(r + 1), len = r2__ed_get32(r + 5);
+        int insert = ((uint8_t)r[0] == R2__ED_INSERT) == forward;
+        tui_edit_goto(e, pos);
+        if (insert)
+            tui_edit_insert(e, s8_from_bytes(r + R2__ED_HDR, len));
+        else
+            tui_edit_delete(e, pos, pos + len);
+    }
+
+    R2_TUI_DEF int tui_edit_undo(tui_edit *e)
+    {
+        uint32_t group;
+        int any = 0;
+        if (!e->ubuf || e->upos == 0)
+            return 0;
+        group = r2__ed_get32(e->ubuf + e->upos - r2__ed_get32(e->ubuf + e->upos - 4) + 9);
+        e->undoing = 1;
+        while (e->upos > 0)
+        {
+            uint32_t start = e->upos - r2__ed_get32(e->ubuf + e->upos - 4);
+            if (r2__ed_get32(e->ubuf + start + 9) != group)
+                break;
+            r2__ed_apply(e, e->ubuf + start, 0);
+            e->upos = start;
+            any = 1;
+        }
+        e->undoing = 0;
+        e->mark_on = 0;
+        e->goal = -1;
+        tui_edit_undo_group(e);
+        return any;
+    }
+
+    R2_TUI_DEF int tui_edit_redo(tui_edit *e)
+    {
+        uint32_t group;
+        int any = 0;
+        if (!e->ubuf || e->upos >= e->ulen)
+            return 0;
+        group = r2__ed_get32(e->ubuf + e->upos + 9);
+        e->undoing = 1;
+        while (e->upos < e->ulen && r2__ed_get32(e->ubuf + e->upos + 9) == group)
+        {
+            r2__ed_apply(e, e->ubuf + e->upos, 1);
+            e->upos += R2__ED_HDR + r2__ed_get32(e->ubuf + e->upos + 5) + 4u;
+            any = 1;
+        }
+        e->undoing = 0;
+        e->mark_on = 0;
+        e->goal = -1;
+        tui_edit_undo_group(e);
+        return any;
     }
 
     /* ---------------- the widget ---------------- */
@@ -762,6 +947,16 @@ extern "C"
             e->meta = 1;
             return 0;
         }
+#ifndef R2_TUI_EDIT_NO_UNDO
+        if (r2__ed_is(&ev, TUI_KEY_RUNE, TUI_MOD_CTRL, '_') || r2__ed_is(&ev, TUI_KEY_RUNE, TUI_MOD_CTRL, 'z') ||
+            r2__ed_is(&ev, TUI_KEY_RUNE, TUI_MOD_CTRL | TUI_MOD_ALT, '_'))
+        {
+            e->last_kill = 0;
+            if (!ro && ((ev.mods & TUI_MOD_ALT) ? tui_edit_redo(e) : tui_edit_undo(e)))
+                res = TUI_CHANGED;
+            return res;
+        }
+#endif
         if (r2__ed_is(&ev, TUI_KEY_RUNE, TUI_MOD_CTRL, 'g'))
         {
             e->mark_on = 0;
@@ -971,6 +1166,12 @@ extern "C"
             tw = 1;
         if (focused && ev)
         {
+            int typing = ev->key == TUI_KEY_RUNE && !(ev->mods & (TUI_MOD_CTRL | TUI_MOD_ALT)) && !e->meta;
+            if (!(typing && e->typing && e->typed < 20))
+                tui_edit_undo_group(e);
+            e->typing = (uint8_t)typing;
+            if (typing)
+                e->typed++;
             res = r2__ed_key(e, ev, h > 1 ? h - 1 : 1, &used);
             if (used)
                 tui_use_key(t);

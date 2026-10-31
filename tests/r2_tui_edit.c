@@ -210,6 +210,7 @@ typedef struct ed_app
     int w, h, changes, with_button, presses;
     tui_clipboard clip;
     char clipbuf[256];
+    char hist[4096];
 } ed_app;
 
 static void ed_ui(tui *t, tui_window *w, void *user)
@@ -232,6 +233,7 @@ static tui_window *ed_open(ed_app *a, const char *text, int w, int h)
     tui_edit_set(&a->e, s8_from_cstr(text));
     tui_clipboard_init(&a->clip, a->clipbuf, sizeof(a->clipbuf));
     a->e.clip = &a->clip;
+    tui_edit_undo_init(&a->e, a->hist, sizeof(a->hist));
     a->w = w;
     a->h = h;
     /* the window's inside is (1, 2) .. (1 + w, 2 + h) */
@@ -459,7 +461,8 @@ static const char *test_edit_random_keys(void)
                                        "\x1b[1;5H", "\x1b[1;5F", "\x1b[1;5C", "\x1b[1;5D", "\x01", "\x05",
                                        "\x0b", "\x04", "\x10", "\x0e", " ", "\x1b\x80", "\x1b[1;2C",
                                        "\x1b[1;2D", "\x1b[1;2A", "\x1b[1;2B", "\x1b[1;6C", "\x17", "\x19",
-                                       "\x07", "\x1b", "w", "d", "\x1b[2;5~", "\x1b[2;2~", "\x1b[3;2~"};
+                                       "\x07", "\x1b", "w", "d", "\x1b[2;5~", "\x1b[2;2~", "\x1b[3;2~",
+                                       "\x1f", "\x1a", "\x1f", "\x1b\x1f"};
     static ed_app a;
     ed_open(&a, "start\n\there", 30, 6);
     for (int iter = 0; iter < 20000; iter++)
@@ -648,6 +651,173 @@ static const char *test_edit_paste_full(void)
 }
 #endif
 
+///////////////////////////////////////////////////////////////
+// Undo
+
+#ifndef R2_TUI_EDIT_NO_UNDO
+/* one undo step of 1-3 random edits (always at least one real change) */
+static void ed_random_step(tui_edit *e)
+{
+    static const char *const pieces[] = {"a", "xy", "\n", "\t", "\xC3\xA9", "\xE4\xB8\xAD", "hello\nworld"};
+    int edits = 1 + (int)(ed_rand() % 3);
+    tui_edit_undo_group(e);
+    for (int k = 0; k < edits; k++)
+    {
+        const char *s = ed_text(e);
+        uint32_t len = tui_edit_len(e);
+        uint32_t at = ed_rand() % (len + 1);
+        while (at > 0 && at < len && (s[at] & 0xC0) == 0x80)
+            at--;
+        if (k > 0 && len > 0 && (ed_rand() & 1))
+        {
+            uint32_t to = at + 1 + ed_rand() % 4;
+            if (to > len)
+                to = len;
+            while (to < len && (s[to] & 0xC0) == 0x80)
+                to++;
+            tui_edit_delete(e, at, to);
+        }
+        else
+        {
+            tui_edit_goto(e, at);
+            tui_edit_insert(e, s8_from_cstr(pieces[ed_rand() % (sizeof(pieces) / sizeof(pieces[0]))]));
+        }
+    }
+}
+
+static const char *ed_undo_walk(uint32_t hist_cap, int rounds)
+{
+    static char buf[4096], hist[8192];
+    static char snaps[41][2048];
+    tui_edit e;
+    tui_edit_init(&e, buf, sizeof(buf));
+    for (int round = 0; round < rounds; round++)
+    {
+        int n = 0, idx, oldest = 0;
+        tui_edit_set(&e, S8("start\ntext"));
+        tui_edit_undo_init(&e, hist, hist_cap);
+        strcpy(snaps[0], ed_text(&e));
+        for (n = 1; n <= 40; n++)
+        {
+            ed_random_step(&e);
+            strcpy(snaps[n], ed_text(&e));
+        }
+        idx = 40;
+        for (int k = 0; k < 120; k++)
+        {
+            const char *err;
+            if (ed_rand() % 3)
+            {
+                int did = tui_edit_undo(&e);
+                if (did)
+                    idx--;
+                else
+                {
+                    r2_assert("undo stopped early with a big enough history", hist_cap < 4096 || idx == 0);
+                    oldest = idx;
+                }
+                r2_assert("undo ran past the first step", idx >= 0);
+            }
+            else
+            {
+                int did = tui_edit_redo(&e);
+                if (did)
+                    idx++;
+                r2_assert("redo past the last step", idx <= 40);
+                r2_assert("redo had nothing although steps were undone", did || idx == 40);
+            }
+            r2_assert("text after undo / redo differs from that step", strcmp(ed_text(&e), snaps[idx]) == 0);
+            err = ed_check(&e);
+            r2_assert(err ? err : "", !err);
+        }
+        (void)oldest;
+        /* a new change ends redo */
+        if (idx < 40 && tui_edit_undo(&e))
+        {
+            ed_random_step(&e);
+            r2_assert("redo after a new change", !tui_edit_redo(&e));
+        }
+    }
+    return 0;
+}
+
+static const char *test_edit_undo_model(void)
+{
+    return ed_undo_walk(8192, 300);
+}
+
+static const char *test_edit_undo_small_history(void)
+{
+    /* history too small for all 40 steps: undo stops at an older, correct state */
+    return ed_undo_walk(300, 300);
+}
+
+static const char *test_edit_undo_keys(void)
+{
+    static ed_app a;
+    ed_open(&a, "", 40, 8);
+    tui_edit *e = &a.e;
+    ed_keys("hello world");
+    ed_keys("\x1f");
+    r2_assert("Ctrl+/ undoes the typing in one go", tui_edit_len(e) == 0);
+    ed_keys("\x1b");
+    ed_keys("\x1f");
+    r2_assert("Esc Ctrl+/ redoes it", strcmp(ed_text(e), "hello world") == 0 && e->cursor == 11);
+    ed_keys("\rabcdefghijklmnopqrstuvwxy");
+    ed_keys("\x1a");
+    r2_assert("Ctrl+Z: typing comes off 20 characters at a time", strcmp(ed_text(e), "hello world\nabcdefghijklmnopqrst") == 0);
+    ed_keys("\x1a");
+    r2_assert("then the rest", strcmp(ed_text(e), "hello world\n") == 0);
+    ed_keys("\x1a");
+    r2_assert("Enter is a step of its own", strcmp(ed_text(e), "hello world") == 0);
+#if !defined(R2_TUI_EDIT_NO_SELECTION) && !defined(R2_TUI_EDIT_NO_CLIPBOARD)
+    ed_keys("\x1b[H");
+    ED_CTRL_SPACE();
+    ed_keys("\x06\x06\x06\x06\x06\x17");
+    r2_assert("cut", strcmp(ed_text(e), " world") == 0);
+    ed_keys("\x1f");
+    r2_assert("a cut undoes in one step, cursor back", strcmp(ed_text(e), "hello world") == 0 && e->cursor == 5);
+    ed_keys("\x1b[1;2D\x1b[1;2D\x1b[1;2DZ");
+    r2_assert("typing over a Shift selection", strcmp(ed_text(e), "heZ world") == 0);
+    ed_keys("\x1f");
+    r2_assert("undoes in one step", strcmp(ed_text(e), "hello world") == 0);
+    ed_keys("\x1b[F\x19");
+    r2_assert("paste", strcmp(ed_text(e), "hello worldhello") == 0);
+    ed_keys("\x1f");
+    r2_assert("a paste undoes in one step", strcmp(ed_text(e), "hello world") == 0);
+    /* from a menu (no key): the paste is still its own step, apart from the typing before it */
+    ed_keys("!!");
+    tui_edit_paste(e);
+    r2_assert("typed then pasted", strcmp(ed_text(e), "hello world!!hello") == 0);
+    tui_edit_undo(e);
+    r2_assert("undo takes only the paste", strcmp(ed_text(e), "hello world!!") == 0);
+    tui_edit_undo(e);
+    r2_assert("then the typing", strcmp(ed_text(e), "hello world") == 0);
+#endif
+    ed_keys("\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f");
+    r2_assert("undo back to the beginning", tui_edit_len(e) == 0);
+    ed_keys("\x1b");
+    ed_keys("\x1f");
+    r2_assert("redo again", strcmp(ed_text(e), "hello world") == 0);
+    e->flags |= TUI_EDIT_READ_ONLY;
+    ed_keys("\x1f");
+    r2_assert("read only: no undo", strcmp(ed_text(e), "hello world") == 0);
+    e->flags &= ~TUI_EDIT_READ_ONLY;
+    tui_edit_set(e, S8("fresh"));
+    r2_assert("tui_edit_set starts a new history", !tui_edit_undo(e) && strcmp(ed_text(e), "fresh") == 0);
+    /* a change too big for the history: nothing before it can be undone either */
+    char big[5000];
+    memset(big, 'b', sizeof(big));
+    static char bigbuf[8192];
+    tui_edit_init(e, bigbuf, sizeof(bigbuf));
+    tui_edit_undo_init(e, a.hist, sizeof(a.hist));
+    tui_edit_insert(e, S8("x"));
+    tui_edit_insert(e, s8_from_bytes(big, sizeof(big)));
+    r2_assert("history dropped", !tui_edit_undo(e) && tui_edit_len(e) == 5001);
+    return 0;
+}
+#endif
+
 ////////////////////////////////////////////
 
 static const char *r2_tui_edit_test(void)
@@ -668,6 +838,11 @@ static const char *r2_tui_edit_test(void)
 #if !defined(R2_TUI_EDIT_NO_SELECTION) && !defined(R2_TUI_EDIT_NO_CLIPBOARD)
     r2_run_test(test_edit_clipboard);
     r2_run_test(test_edit_paste_full);
+#endif
+#ifndef R2_TUI_EDIT_NO_UNDO
+    r2_run_test(test_edit_undo_model);
+    r2_run_test(test_edit_undo_small_history);
+    r2_run_test(test_edit_undo_keys);
 #endif
     r2_run_test(test_edit_random_keys);
     return 0;
