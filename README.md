@@ -13,7 +13,9 @@ Current Libraries:
 
 - Vector, matrix and quaternion: [r2_maths.h](./r2_maths.h)
 - UTF-8 String library: [r2_strings.h](./r2_strings.h)
-- Simple ncurses like library thing: [r2_termui.h](./r2_termui.h)
+- Terminal escape codes: [r2_termui.h](./r2_termui.h)
+- Terminal UI (cells, diff renderer, keyboard input; no malloc, never blocks): [r2_tui.h](./r2_tui.h)
+  with a POSIX terminal adapter [r2_tui_posix.h](./r2_tui_posix.h). Try `make demo && ./bin/tui_demo`.
 - Minimal unit testing: [r2_unit.h](./r2_unit.h)
 
 ## Installation

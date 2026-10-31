@@ -24,6 +24,7 @@
 #include "tests/r2_quant.c"
 #include "tests/r2_strings.c"
 #include "tests/r2_termui.c"
+#include "tests/r2_tui.c"
 ///////////////////////////////////////////////
 // Add suites here...
 // Defined in the tests files above
@@ -32,6 +33,7 @@ static struct { const char *name; const char *(*fn)(void); } suites[] = {
     { "maths",   r2_maths_test   },
     { "quant",   r2_quant_test   },
     { "strings", r2_strings_test },
+    { "tui",     r2_tui_test     },
 };
 ///////////////////////////////////////////////
 

@@ -1,4 +1,4 @@
-.PHONY: all test test_strings test_maths test_quant test_clang clean build help
+.PHONY: all test test_strings test_maths test_quant test_tui test_clang test_wasm demo clean build help
 
 help:
 	@echo "Available targets:"
@@ -7,8 +7,10 @@ help:
 	@echo "  test_strings - build and run only the strings test suite with gcc"
 	@echo "  test_maths   - build and run only the maths test suite with gcc"
 	@echo "  test_quant   - build and run only the quantized-math test suite with gcc"
+	@echo "  test_tui     - build and run only the terminal UI test suite with gcc"
 	@echo "  test_clang   - build and run all tests with clang"
 	@echo "  test_wasm    - build and run all tests with emcc (needs emsdk env)"
+	@echo "  demo         - build the terminal UI demo (bin/tui_demo)"
 	@echo "  check        - run static analysis / lint (check.sh)"
 	@echo "  perf         - run perf stat on the test binary (Linux only, run as sudo)"
 	@echo "  clean        - remove build artifacts"
@@ -89,6 +91,32 @@ test_quant: build_tests
 
 test_term: build_tests
 	./bin/run_tests termui
+
+test_tui: build_tests
+	./bin/run_tests tui
+
+# Nothing here uses OpenMP pragmas, so clang builds without OMP_FLAGS
+# (clang's -fopenmp needs libomp, which isn't always installed).
+test_clang: clean
+	mkdir -p bin
+	CC=clang OUT=./bin/run_tests_clang \
+	CFLAGS='-std=c11 $(C_ERRS) -g3 -O3 $(SIMD_FLAGS) $(BLAS_CFLAGS)' \
+	LDFLAGS='$(BLAS_LDFLAGS)' \
+	./test.sh
+	./bin/run_tests_clang
+
+# Needs an activated emsdk (emcc) and node.
+test_wasm: clean
+	mkdir -p bin
+	CC=emcc OUT=./bin/run_tests.js \
+	CFLAGS='-std=c11 $(C_ERRS) -O2 -DR2_SIMD_FORCE_SCALAR' \
+	LDFLAGS='-sALLOW_MEMORY_GROWTH=1' \
+	./test.sh
+	node ./bin/run_tests.js
+
+demo:
+	mkdir -p bin
+	$(CC) -std=c11 $(C_ERRS) -O2 examples/tui_demo.c -o bin/tui_demo
 
 perf:
 #####################################
