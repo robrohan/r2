@@ -462,9 +462,10 @@ static const char *test_edit_random_keys(void)
                                        "\x0b", "\x04", "\x10", "\x0e", " ", "\x1b\x80", "\x1b[1;2C",
                                        "\x1b[1;2D", "\x1b[1;2A", "\x1b[1;2B", "\x1b[1;6C", "\x17", "\x19",
                                        "\x07", "\x1b", "w", "d", "\x1b[2;5~", "\x1b[2;2~", "\x1b[3;2~",
-                                       "\x1f", "\x1a", "\x1f", "\x1b\x1f"};
+                                       "\x1f", "\x1a", "\x1f", "\x1b\x1f", "\x13", "\x12", "\x07", "t",
+                                       "\x1b%", "\r", "y", "!"};
     static ed_app a;
-    ed_open(&a, "start\n\there", 30, 6);
+    tui_window *win = ed_open(&a, "start\n\there", 30, 6);
     for (int iter = 0; iter < 20000; iter++)
     {
         const char *err;
@@ -480,7 +481,9 @@ static const char *test_edit_random_keys(void)
         r2_assert("clipboard holds whole characters", s8_is_valid_utf8(s8_from_bytes(a.clipbuf, a.clip.len)));
         r2_assert(err ? err : "", !err);
         r2_assert("cursor row on screen", a.e.line >= a.e.top_line && a.e.line < a.e.top_line + 6);
-        r2_assert("cursor column on screen", ed_t.cur_x >= 1 && ed_t.cur_x < 1 + 30);
+        /* (a query replace box may have the focus and the cursor) */
+        if (tui_focused_window(&ed_t) == win)
+            r2_assert("cursor column on screen", ed_t.cur_x >= 1 && ed_t.cur_x < 1 + 30);
         r2_assert("text stays valid UTF-8", s8_is_valid_utf8(s8_from_cstr(ed_text(&a.e))));
     }
     return 0;
@@ -818,6 +821,186 @@ static const char *test_edit_undo_keys(void)
 }
 #endif
 
+///////////////////////////////////////////////////////////////
+// Search and replace
+
+#ifndef R2_TUI_EDIT_NO_SEARCH
+/* somewhere on the whole screen */
+static int ed_screen_has(const char *text)
+{
+    for (int y = 0; y < ed_t.rows; y++)
+    {
+        char row[ED_COLS * 4 + 1];
+        size_t n = 0;
+        for (int x = 0; x < ed_t.cols; x++)
+        {
+            rune r = TUI_CELL_RUNE(tui_get_cell(&ed_t, x, y));
+            if (r != TUI_RUNE_CONT)
+                n += utf8_encode(r ? r : ' ', (uint8_t *)row + n);
+        }
+        row[n] = 0;
+        if (strstr(row, text))
+            return 1;
+    }
+    return 0;
+}
+
+static const char *ed_prompt(const tui_edit *e)
+{
+    static char buf[160];
+    if (!tui_edit_prompt(e, buf, sizeof(buf)))
+        return "";
+    return buf;
+}
+
+static const char *test_edit_find(void)
+{
+    char buf[128];
+    tui_edit e;
+    uint32_t at;
+    tui_edit_init(&e, buf, sizeof(buf));
+    tui_edit_set(&e, S8("Hello world, hello WORLD"));
+    r2_assert("lower case ignores case", r2__ed_find(&e, "hello", 0, 0, &at) && at == 0);
+    r2_assert("from 1: the next one", r2__ed_find(&e, "hello", 1, 0, &at) && at == 13);
+    r2_assert("backward from the end", r2__ed_find(&e, "hello", 100, 1, &at) && at == 13);
+    r2_assert("backward from 12", r2__ed_find(&e, "hello", 12, 1, &at) && at == 0);
+    r2_assert("a capital: exact case", r2__ed_find(&e, "Hello", 1, 0, &at) == 0);
+    r2_assert("WORLD exact", r2__ed_find(&e, "WORLD", 0, 0, &at) && at == 19);
+    r2_assert("world either case", r2__ed_find(&e, "world", 7, 0, &at) && at == 19);
+    r2_assert("not there", !r2__ed_find(&e, "xyz", 0, 0, &at) && !r2__ed_find(&e, "", 0, 0, &at));
+    tui_edit_set(&e, S8("a\xE4\xB8\xAD" "b\xE4\xB8\xAD"));
+    r2_assert("UTF-8, never inside a character", r2__ed_find(&e, "\xE4\xB8\xAD", 2, 0, &at) && at == 5);
+    tui_edit_set(&e, S8("one two one"));
+#ifndef R2_TUI_EDIT_NO_SELECTION
+    r2_assert("tui_edit_find selects", tui_edit_find(&e, S8("one"), 0) && e.mark_on && e.mark == 0 && e.cursor == 3);
+    r2_assert("again: the next one", tui_edit_find(&e, S8("one"), 0) && e.mark == 8 && e.cursor == 11);
+    r2_assert("backward: the one before", tui_edit_find(&e, S8("one"), 1) && e.mark == 0);
+#else
+    r2_assert("tui_edit_find moves past", tui_edit_find(&e, S8("one"), 0) && e.cursor == 3);
+    r2_assert("again: the next one", tui_edit_find(&e, S8("one"), 0) && e.cursor == 11);
+    r2_assert("backward: to its start", tui_edit_find(&e, S8("one"), 1) && e.cursor == 8);
+    r2_assert("backward again: the one before", tui_edit_find(&e, S8("one"), 1) && e.cursor == 0);
+#endif
+    r2_assert("not found", !tui_edit_find(&e, S8("zzz"), 0));
+    return 0;
+}
+
+static const char *test_edit_isearch(void)
+{
+    static ed_app a;
+    ed_open(&a, "one two three two one\nfour two", 40, 6);
+    tui_edit *e = &a.e;
+    ed_keys("\x13tw");
+    r2_assert("I-search finds as you type", e->cursor == 6 && strcmp(ed_prompt(e), "I-search: tw") == 0);
+#ifndef R2_TUI_EDIT_NO_SELECTION
+    r2_assert("the match is highlighted", (ed_attr(4, 0) & TUI_REVERSE) && (ed_attr(5, 0) & TUI_REVERSE) &&
+                                              !(ed_attr(6, 0) & TUI_REVERSE));
+#endif
+    ed_keys("\x13");
+    r2_assert("Ctrl+S: the next match", e->cursor == 16);
+    ed_keys("\x13");
+    r2_assert("and the next, on line 2", e->cursor == 29 && e->line == 1);
+    ed_keys("\x13");
+    r2_assert("no more: failing", strcmp(ed_prompt(e), "Failing I-search: tw") == 0 && e->cursor == 29);
+    ed_keys("\x13");
+    r2_assert("again: wraps to the first", e->cursor == 6 && strcmp(ed_prompt(e), "Wrapped I-search: tw") == 0);
+    ed_keys("\r");
+    r2_assert("Enter stays", e->cursor == 6 && ed_prompt(e)[0] == 0 && strcmp(ed_text(e), "one two three two one\nfour two") == 0);
+    ed_keys("\x13\x13");
+    r2_assert("Ctrl+S Ctrl+S: the last search again", e->cursor == 16 && strcmp(ed_prompt(e), "I-search: tw") == 0);
+    ed_keys("\x07");
+    r2_assert("Ctrl+G goes back", e->cursor == 6 && ed_prompt(e)[0] == 0);
+    ed_keys("\x13thx");
+    r2_assert("no thx", strcmp(ed_prompt(e), "Failing I-search: thx") == 0);
+    ed_keys("\x7f");
+    r2_assert("Backspace: th again", strcmp(ed_prompt(e), "I-search: th") == 0 && e->cursor == 10);
+    ed_keys("\x1b[C");
+    r2_assert("another key stops and does its job", ed_prompt(e)[0] == 0 && e->cursor == 11);
+    ed_keys("\x1b[1;5F\x12one");
+    r2_assert("Ctrl+R backward", e->cursor == 18 && strcmp(ed_prompt(e), "I-search backward: one") == 0);
+    ed_keys("\x12");
+    r2_assert("Ctrl+R again: the one before", e->cursor == 0);
+    ed_keys("\x1b");
+    r2_assert("Esc stays", e->cursor == 0 && ed_prompt(e)[0] == 0 && !e->meta);
+    ed_keys("\x13TWO");
+    r2_assert("capitals: exact case", strncmp(ed_prompt(e), "Failing", 7) == 0);
+    ed_keys("\x07");
+    r2_assert("typing in the search never changes the text", strcmp(ed_text(e), "one two three two one\nfour two") == 0);
+    return 0;
+}
+
+static const char *test_edit_replace(void)
+{
+    static ed_app a;
+    ed_open(&a, "a cat and a cat and a cat", 40, 6);
+    tui_edit *e = &a.e;
+    ed_keys("\x1b");
+    ed_keys("%");
+    r2_assert("Esc % asks what to replace", tui_focused_window(&ed_t) != 0 && strstr(ed_row(-1, 40), "") != 0);
+    ed_keys("cat\r");
+    ed_keys("dog\r");
+    r2_assert("asks at the first match", e->match == 2 && strcmp(ed_prompt(e), "Replace \"cat\" with \"dog\"? y n ! . q") == 0);
+    ed_keys("y");
+    r2_assert("y replaces", strcmp(ed_text(e), "a dog and a cat and a cat") == 0 && e->match == 12);
+    ed_keys("n");
+    r2_assert("n skips", e->match == 22);
+    ed_keys("!");
+    r2_assert("! does the rest", strcmp(ed_text(e), "a dog and a cat and a dog") == 0);
+    r2_assert("and says how many", strcmp(ed_prompt(e), "Replaced 2 occurrences") == 0);
+    ed_keys("\x1b[H");
+    r2_assert("the next key clears the note", ed_prompt(e)[0] == 0);
+#ifndef R2_TUI_EDIT_NO_UNDO
+    ed_keys("\x1f");
+    r2_assert("undo: the ! step", strcmp(ed_text(e), "a dog and a cat and a cat") == 0);
+    ed_keys("\x1f");
+    r2_assert("undo: the y step", strcmp(ed_text(e), "a cat and a cat and a cat") == 0);
+#else
+    tui_edit_set(e, S8("a cat and a cat and a cat"));
+#endif
+    ed_keys("\x1b[H\x1b");
+    ed_keys("%");
+    ed_keys("\r"); /* Enter alone: the last search, "cat" */
+    ed_keys("cow\r"); /* the replacement box starts empty */
+    ed_keys(".");
+    r2_assert(". replaces one and stops", strcmp(ed_text(e), "a cow and a cat and a cat") == 0 &&
+                                            strcmp(ed_prompt(e), "Replaced 1 occurrence") == 0);
+    ed_keys("\x1b[H\x1b");
+    ed_keys("%");
+    ed_keys("\r");   /* replace "cat" (the default) */
+    ed_keys("x\r"); /* with "x" */
+    ed_keys("q");
+    r2_assert("q stops, nothing changed", strcmp(ed_text(e), "a cow and a cat and a cat") == 0);
+    ed_keys("\x1b");
+    ed_keys("%");
+    ed_keys("\x1b");
+    r2_assert("Esc in the box cancels", strcmp(ed_text(e), "a cow and a cat and a cat") == 0 && ed_prompt(e)[0] == 0);
+    /* a replacement that contains what it replaces: no endless loop */
+    tui_edit_set(e, S8("a a a"));
+    ed_keys("\x1b");
+    ed_keys("%");
+    ed_keys("a\raa\r!");
+    r2_assert("a -> aa everywhere, once each", strcmp(ed_text(e), "aa aa aa") == 0 && e->replaced == 3);
+    ed_keys("\x1b");
+    ed_keys("%");
+    ed_keys("zzz\r\r");
+    r2_assert("no matches: replaced 0", strcmp(ed_prompt(e), "Replaced 0 occurrences") == 0);
+    /* the box starts empty and names the default; an empty replacement deletes */
+    tui_edit_set(e, S8("x-y-z"));
+    ed_keys("\x1b");
+    ed_keys("%");
+    r2_assert("the default is in the prompt", ed_screen_has("Replace (default zzz):"));
+    ed_keys("-\r\r!");
+    r2_assert("empty replacement deletes the matches", strcmp(ed_text(e), "xyz") == 0);
+    ed_keys("\x1b[H");
+    e->flags |= TUI_EDIT_READ_ONLY;
+    ed_keys("\x1b");
+    ed_keys("%");
+    r2_assert("read only: no replace", ed_prompt(e)[0] == 0 && tui_focused_window(&ed_t)->number != 0);
+    e->flags &= ~TUI_EDIT_READ_ONLY;
+    return 0;
+}
+#endif
+
 ////////////////////////////////////////////
 
 static const char *r2_tui_edit_test(void)
@@ -838,6 +1021,11 @@ static const char *r2_tui_edit_test(void)
 #if !defined(R2_TUI_EDIT_NO_SELECTION) && !defined(R2_TUI_EDIT_NO_CLIPBOARD)
     r2_run_test(test_edit_clipboard);
     r2_run_test(test_edit_paste_full);
+#endif
+#ifndef R2_TUI_EDIT_NO_SEARCH
+    r2_run_test(test_edit_find);
+    r2_run_test(test_edit_isearch);
+    r2_run_test(test_edit_replace);
 #endif
 #ifndef R2_TUI_EDIT_NO_UNDO
     r2_run_test(test_edit_undo_model);

@@ -16,7 +16,8 @@
 
     F8 (File > Editor) opens the text editor widget: arrows, Home/End,
     PgUp/PgDn, Ctrl+Home/End, Ctrl+Left/Right, and Emacs Ctrl+A/E/B/F/P/N/D/K;
-    Ctrl+Space mark, Ctrl+W / Esc w / Ctrl+Y cut / copy / paste, Ctrl+/ undo.
+    Ctrl+Space mark, Ctrl+W / Esc w / Ctrl+Y cut / copy / paste, Ctrl+/ undo,
+    Ctrl+S / Ctrl+R search, Esc % replace.
 
     F9 (File > Preferences) shows the widgets: text input, checkboxes,
     radios, a list, a scrolling view and buttons. Tab moves between them.
@@ -277,7 +278,7 @@ static char undo_buf[8192];
 
 static void editor_ui(tui *tt, tui_window *w, void *user)
 {
-    char status[128];
+    char status[128], line[100];
     int cw, ch;
     uint32_t from, to;
     (void)w;
@@ -307,12 +308,22 @@ static void editor_ui(tui *tt, tui_window *w, void *user)
     if (tui_menu_item_flags(tt, "Read ~o~nly", 0, ed.flags & TUI_EDIT_READ_ONLY ? TUI_ITEM_CHECKED : 0))
         ed.flags ^= TUI_EDIT_READ_ONLY;
     tui_menu_end(tt);
+    tui_menu_begin(tt, "~S~earch");
+    if (tui_menu_item(tt, "~F~ind", "C-s"))
+        tui_edit_search(&ed, 0);
+    if (tui_menu_item(tt, "Find ~b~ackward", "C-r"))
+        tui_edit_search(&ed, 1);
+    if (tui_menu_item(tt, "~R~eplace", "M-%"))
+        tui_edit_replace(&ed);
+    tui_menu_end(tt);
     help_menu(tt);
 
     tui_size(tt, &cw, &ch);
     tui_at(tt, 0, 0);
     tui_editor(tt, "##editor", &ed, cw, ch);
-    if (tui_edit_selection(&ed, &from, &to))
+    if (tui_edit_prompt(&ed, line, sizeof(line)))
+        snprintf(status, sizeof(status), " %s", line); /* searching / replacing */
+    else if (tui_edit_selection(&ed, &from, &to))
         snprintf(status, sizeof(status), " Line %u  Col %u  %u bytes selected  ~C-w~ Cut  ~Esc w~ Copy  ~C-g~ Clear",
                  (unsigned)ed.line + 1, (unsigned)tui_edit_column(&ed) + 1, (unsigned)(to - from));
     else
@@ -522,6 +533,7 @@ int main(int argc, char **argv)
                          "\tKills in a row join up: Ctrl+K Ctrl+K takes the line and its break.\n"
                          "Esc then a key is Meta: Esc f / Esc b words, Esc < / Esc > top / bottom.\n"
                          "Undo: Ctrl+/ (or Ctrl+Z); redo: Esc then Ctrl+/.\n"
+                         "Search: Ctrl+S / Ctrl+R as you type; Esc % replaces (y n ! . q).\n"
                          "\n"
                          "Tab types a tab; Shift+Tab leaves the editor. Edit > Line numbers (F4)\n"
                          "toggles the gutter; Edit > Auto indent keeps your indentation on Enter.\n"

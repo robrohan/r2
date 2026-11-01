@@ -1663,6 +1663,55 @@ static const char *test_wm_menus_follow_keys(void)
     return 0;
 }
 
+/* "o" asks two questions in turn (the second only once the first is
+   answered, on a later run), with both answers in the same burst of bytes */
+static unsigned wm_burst_answer[2];
+static int wm_burst_asking;
+static void wm_burst_ui(tui *t, tui_window *w, void *user)
+{
+    const tui_event *ev = tui_key(t);
+    (void)w;
+    (void)user;
+    if (ev && ev->key == TUI_KEY_RUNE && ev->ch == 'o' && !ev->mods)
+    {
+        wm_burst_asking = 1;
+        tui_use_key(t);
+    }
+    if (wm_burst_asking == 1)
+    {
+        unsigned r = tui_message(t, "First?", "One", TUI_MB_YES | TUI_MB_NO);
+        if (r)
+        {
+            wm_burst_answer[0] = r;
+            wm_burst_asking = 2; /* the next question waits for the next run */
+        }
+    }
+    else if (wm_burst_asking == 2)
+    {
+        unsigned r = tui_message(t, "Second?", "Two", TUI_MB_YES | TUI_MB_NO);
+        if (r)
+        {
+            wm_burst_answer[1] = r;
+            wm_burst_asking = 0;
+        }
+    }
+}
+
+static const char *test_wm_keys_in_one_burst(void)
+{
+    /* keys that arrive together behave like keys typed one at a time */
+    tui t;
+    tui_test_init(&t, VT_COLS, VT_ROWS);
+    wm_burst_answer[0] = wm_burst_answer[1] = 0;
+    wm_burst_asking = 0;
+    tui_window_open(&t, "W", (tui_rect){2, 2, 30, 8}, 0, wm_burst_ui, 0);
+    tui_update(&t, wm_now);
+    wm_keys(&t, "oyn"); /* one feed: open, answer the first, answer the second */
+    r2_assert("each key reached the box it was typed for",
+              wm_burst_answer[0] == TUI_MB_YES && wm_burst_answer[1] == TUI_MB_NO);
+    return 0;
+}
+
 static const char *test_wm_no_controller_window(void)
 {
     /* a window without a controller (nothing to draw, no menus) must not
@@ -2266,6 +2315,7 @@ static const char *r2_tui_test(void)
     r2_run_test(test_wm_open_from_menu_mid_run);
     r2_run_test(test_wm_menu_overflow);
     r2_run_test(test_wm_menus_follow_keys);
+    r2_run_test(test_wm_keys_in_one_burst);
     r2_run_test(test_wm_no_controller_window);
     r2_run_test(test_wm_limits);
     r2_run_test(test_wm_resize);

@@ -46,6 +46,16 @@
     redoes (Emacs' C-M-_). Typing undoes up to 20 characters at a time,
     anything else one key at a time.
 
+    Search (Emacs isearch): Ctrl+S forward, Ctrl+R backward; type to find,
+    Ctrl+S / Ctrl+R again for the next match (again after a failure wraps
+    around; on an empty search, the last one); Backspace shortens it, Enter
+    or Esc stays, Ctrl+G goes back, any other key stops and does its job.
+    An all-lower-case search ignores case. Esc % (M-%) is query replace:
+    asks what (Enter alone: the last search) and with what (Enter alone:
+    nothing, i.e. delete the matches), then y / Space replace, n / Backspace skip,
+    ! replace the rest, . replace and stop, q / Enter / Esc stop.
+    tui_edit_prompt() gives the line to show while searching.
+
     Clipboard (give the editor a tui_clipboard, see below): Ctrl+W kill (cut) the
     region, Ctrl+Y yank (paste), Esc w copy; Ctrl+K, Esc d and
     Esc Backspace kill into it too, and kills in a row join up. Borland
@@ -61,13 +71,14 @@ FEATURES
         R2_TUI_EDIT_NO_SELECTION    mark and Shift selection
         R2_TUI_EDIT_NO_CLIPBOARD    kill / yank / cut / copy / paste
         R2_TUI_EDIT_NO_UNDO         undo / redo
-        R2_TUI_EDIT_NO_SEARCH       find / replace               (next)
+        R2_TUI_EDIT_NO_SEARCH       incremental search, query replace
         R2_TUI_EDIT_NO_HIGHLIGHT    per-line colouring callback  (next)
         R2_TUI_EDIT_MINIMAL         all of the above off
 
     The features marked (next) are not written yet.
 
 CHANGES
+    v0.4  incremental search (Ctrl+S / Ctrl+R) and query replace (Esc %)
     v0.3  undo / redo (Ctrl+/ or Ctrl+_ or Ctrl+Z; Esc Ctrl+/ redoes)
     v0.2  selection (mark, Shift), clipboard and kills, Esc as Meta
     v0.1  gap buffer, movement, editing, scrolling, line numbers
@@ -102,6 +113,11 @@ extern "C"
 #ifndef R2_TUI_EDIT_NO_HIGHLIGHT
 #define R2_TUI_EDIT_NO_HIGHLIGHT
 #endif
+#endif
+
+/* longest search / replace text */
+#ifndef R2_TUI_EDIT_QUERY
+#define R2_TUI_EDIT_QUERY 64
 #endif
 
 /* editor flags */
@@ -144,6 +160,14 @@ extern "C"
         uint8_t undoing;    /* applying history: don't record it */
         uint8_t typing;     /* the last key typed a character (typing groups up) */
         uint8_t typed;      /* characters typed in this group */
+#ifndef R2_TUI_EDIT_NO_SEARCH
+        uint8_t search;     /* searching or replacing (R2__ED_SEARCH_*) */
+        uint8_t failing, wrapped;
+        uint32_t search_from;      /* the cursor when the search began */
+        uint32_t match, match_len; /* the match on screen */
+        uint32_t replaced;         /* how many the last query replace changed */
+        char query[R2_TUI_EDIT_QUERY], last[R2_TUI_EDIT_QUERY], with[R2_TUI_EDIT_QUERY];
+#endif
     } tui_edit;
 
     /** Use buf (cap bytes) for the text; starts empty. */
@@ -177,6 +201,14 @@ extern "C"
     R2_TUI_DEF int tui_edit_redo(tui_edit *e);
     /** Start a new undo step (so the next changes don't undo with the last ones). */
     R2_TUI_DEF void tui_edit_undo_group(tui_edit *e);
+    /** Start an incremental search (what Ctrl+S / Ctrl+R do), for menus. */
+    R2_TUI_DEF void tui_edit_search(tui_edit *e, int backward);
+    /** Find text from the cursor and select it; 1 if found. Smart case. */
+    R2_TUI_DEF int tui_edit_find(tui_edit *e, s8 text, int backward);
+    /** Start a query replace (what Esc % does), for menus. */
+    R2_TUI_DEF void tui_edit_replace(tui_edit *e);
+    /** The line to show while searching or replacing (a status line); 0 if none. */
+    R2_TUI_DEF int tui_edit_prompt(const tui_edit *e, char *buf, size_t cap);
     /**
      * The editor widget, w x h cells at the layout cursor. Handles the keys
      * above while it has focus. Returns TUI_CHANGED when the text changed.
@@ -459,6 +491,9 @@ extern "C"
         e->mark_on = e->meta = e->last_kill = 0;
         e->lines = 1;
         e->goal = -1;
+#ifndef R2_TUI_EDIT_NO_SEARCH
+        e->search = 0; /* no search */
+#endif
         e->undoing = 1; /* a new text has no history */
         tui_edit_insert(e, text);
         e->undoing = 0;
@@ -782,6 +817,368 @@ extern "C"
         return any;
     }
 
+    /* ---------------- search ---------------- */
+
+    enum
+    {
+        R2__ED_SEARCH_NONE,
+        R2__ED_SEARCH_FWD,  /* incremental, forward */
+        R2__ED_SEARCH_BACK, /* incremental, backward */
+        R2__ED_ASK_FROM,    /* query replace: asking what to replace */
+        R2__ED_ASK_TO,      /* ... and with what */
+        R2__ED_REPLACING,   /* ... and going through the matches */
+        R2__ED_REPLACED     /* finished: shows how many until the next key */
+    };
+
+#ifndef R2_TUI_EDIT_NO_SEARCH
+    static size_t r2__ed_strlen(const char *s)
+    {
+        size_t n = 0;
+        while (s[n])
+            n++;
+        return n;
+    }
+
+    /* smart case: a query with no capitals ignores case */
+    static int r2__ed_folds(const char *q)
+    {
+        for (; *q; q++)
+            if (*q >= 'A' && *q <= 'Z')
+                return 0;
+        return 1;
+    }
+
+    static int r2__ed_match_at(const tui_edit *e, uint32_t at, const char *q, uint32_t qn, int fold)
+    {
+        uint32_t i;
+        if (at + qn > tui_edit_len(e))
+            return 0;
+        for (i = 0; i < qn; i++)
+        {
+            uint8_t a = r2__ed_at(e, at + i), b = (uint8_t)q[i];
+            if (fold && a >= 'A' && a <= 'Z')
+                a = (uint8_t)(a + 32);
+            if (a != b)
+                return 0;
+        }
+        return 1;
+    }
+
+    /* the first match starting at or after from (backward: at or before) */
+    static int r2__ed_find(const tui_edit *e, const char *q, uint32_t from, int backward, uint32_t *found)
+    {
+        uint32_t qn = (uint32_t)r2__ed_strlen(q), len = tui_edit_len(e), at;
+        int fold = r2__ed_folds(q);
+        if (qn == 0 || qn > len)
+            return 0;
+        if (!backward)
+        {
+            for (at = from; at + qn <= len; at++)
+                if ((r2__ed_at(e, at) & 0xC0u) != 0x80u && r2__ed_match_at(e, at, q, qn, fold))
+                {
+                    *found = at;
+                    return 1;
+                }
+            return 0;
+        }
+        at = from < len - qn ? from : len - qn;
+        for (;; at--)
+        {
+            if ((r2__ed_at(e, at) & 0xC0u) != 0x80u && r2__ed_match_at(e, at, q, qn, fold))
+            {
+                *found = at;
+                return 1;
+            }
+            if (at == 0)
+                return 0;
+        }
+    }
+
+#endif
+
+    R2_TUI_DEF int tui_edit_find(tui_edit *e, s8 text, int backward)
+    {
+#ifndef R2_TUI_EDIT_NO_SEARCH
+        char q[R2_TUI_EDIT_QUERY];
+        uint32_t i, at;
+        if (text.len == 0 || text.len >= sizeof(q))
+            return 0;
+        for (i = 0; i < text.len; i++)
+            q[i] = (char)text.data[i];
+        q[text.len] = '\0';
+        {
+            /* backward starts before the selection (a previous match), forward after it */
+            uint32_t from, to, start = e->cursor;
+            if (backward && tui_edit_selection(e, &from, &to))
+                start = from;
+            if (backward && start == 0)
+                return 0;
+            if (!r2__ed_find(e, q, backward ? start - 1 : e->cursor, backward, &at))
+                return 0;
+        }
+#ifndef R2_TUI_EDIT_NO_SELECTION
+        e->mark = at;
+        tui_edit_goto(e, at + text.len);
+        e->mark_on = 1;
+        e->mark_shift = 1;
+#else
+        /* nothing to select with: the cursor goes past the match, the way we are going */
+        tui_edit_goto(e, backward ? at : at + text.len);
+#endif
+        return 1;
+#else
+        (void)e;
+        (void)text;
+        (void)backward;
+        return 0;
+#endif
+    }
+
+#ifndef R2_TUI_EDIT_NO_SEARCH
+    /* show the match: the cursor at its end (forward) or start (backward) */
+    static void r2__ed_show_match(tui_edit *e, uint32_t at)
+    {
+        e->match = at;
+        e->match_len = (uint32_t)r2__ed_strlen(e->query);
+        e->failing = 0;
+        tui_edit_goto(e, e->search == R2__ED_SEARCH_BACK ? at : at + e->match_len);
+    }
+
+    /* look for the query again, from the current match (or the next one) */
+    static void r2__ed_research(tui_edit *e, int next)
+    {
+        int back = e->search == R2__ED_SEARCH_BACK;
+        uint32_t at, from;
+        if (!e->query[0])
+        {
+            e->failing = 0;
+            e->match_len = 0;
+            tui_edit_goto(e, e->search_from);
+            return;
+        }
+        if (next && e->failing)
+        {
+            /* again after a failure: wrap around */
+            from = back ? tui_edit_len(e) : 0;
+            e->wrapped = 1;
+        }
+        else if (next)
+            from = back ? (e->match ? e->match - 1 : 0) : e->match + 1;
+        else
+            from = e->match;
+        if (r2__ed_find(e, e->query, from, back, &at) && !(next && back && !e->wrapped && at >= e->match && e->match_len))
+            r2__ed_show_match(e, at);
+        else
+            e->failing = 1;
+    }
+#endif
+
+    R2_TUI_DEF void tui_edit_search(tui_edit *e, int backward)
+    {
+#ifndef R2_TUI_EDIT_NO_SEARCH
+        e->search = backward ? R2__ED_SEARCH_BACK : R2__ED_SEARCH_FWD;
+        e->search_from = e->match = e->cursor;
+        e->match_len = 0;
+        e->failing = e->wrapped = 0;
+        e->query[0] = '\0';
+        e->mark_on = 0;
+#else
+        (void)e;
+        (void)backward;
+#endif
+    }
+
+    R2_TUI_DEF void tui_edit_replace(tui_edit *e)
+    {
+#ifndef R2_TUI_EDIT_NO_SEARCH
+        if (e->flags & TUI_EDIT_READ_ONLY)
+            return;
+        e->search = R2__ED_ASK_FROM;
+        e->query[0] = '\0'; /* empty: Enter takes the default, the last search */
+        e->with[0] = '\0';
+        e->replaced = 0;
+        e->mark_on = 0;
+#else
+        (void)e;
+#endif
+    }
+
+    R2_TUI_DEF int tui_edit_prompt(const tui_edit *e, char *buf, size_t cap)
+    {
+#ifndef R2_TUI_EDIT_NO_SEARCH
+        size_t n = 0;
+        char num[12];
+        uint32_t v, k = 0;
+        if (!cap)
+            return 0;
+        buf[0] = '\0';
+        switch (e->search)
+        {
+        case R2__ED_SEARCH_FWD:
+        case R2__ED_SEARCH_BACK:
+            if (e->failing)
+                n = r2__tui_append(buf, n, cap, "Failing ", 0);
+            if (e->wrapped)
+                n = r2__tui_append(buf, n, cap, "Wrapped ", 0);
+            n = r2__tui_append(buf, n, cap, e->search == R2__ED_SEARCH_BACK ? "I-search backward: " : "I-search: ", 0);
+            r2__tui_append(buf, n, cap, e->query, 0);
+            return 1;
+        case R2__ED_REPLACING:
+            n = r2__tui_append(buf, n, cap, "Replace \"", 0);
+            n = r2__tui_append(buf, n, cap, e->query, 0);
+            n = r2__tui_append(buf, n, cap, "\" with \"", 0);
+            n = r2__tui_append(buf, n, cap, e->with, 0);
+            r2__tui_append(buf, n, cap, "\"? y n ! . q", 0);
+            return 1;
+        case R2__ED_REPLACED:
+            v = e->replaced;
+            do
+            {
+                num[k++] = (char)('0' + v % 10);
+                v /= 10;
+            } while (v);
+            n = r2__tui_append(buf, n, cap, "Replaced ", 0);
+            while (k && n + 1 < cap)
+                buf[n++] = num[--k];
+            buf[n] = '\0';
+            r2__tui_append(buf, n, cap, e->replaced == 1 ? " occurrence" : " occurrences", 0);
+            return 1;
+        default:
+            return 0;
+        }
+#else
+        (void)e;
+        if (cap)
+            buf[0] = '\0';
+        return 0;
+#endif
+    }
+
+#ifndef R2_TUI_EDIT_NO_SEARCH
+    /* the next match for query replace (from the cursor); stops when there is none */
+    static void r2__ed_replace_next(tui_edit *e)
+    {
+        uint32_t at;
+        if (r2__ed_find(e, e->query, e->cursor, 0, &at))
+        {
+            e->match = at;
+            e->match_len = (uint32_t)r2__ed_strlen(e->query);
+            tui_edit_goto(e, at);
+        }
+        else
+            e->search = R2__ED_REPLACED;
+    }
+
+    static void r2__ed_replace_one(tui_edit *e)
+    {
+        uint32_t wl = (uint32_t)r2__ed_strlen(e->with);
+        tui_edit_goto(e, e->match);
+        tui_edit_delete(e, e->match, e->match + e->match_len);
+        if (!tui_edit_insert(e, s8_from_bytes(e->with, wl)))
+        {
+            e->search = R2__ED_REPLACED; /* full */
+            return;
+        }
+        e->replaced++;
+    }
+
+    /* keys while searching / replacing; 1 if the key was taken */
+    static int r2__ed_search_key(tui_edit *e, const tui_event *ev, unsigned *res)
+    {
+        int ctrl = ev->key == TUI_KEY_RUNE && ev->mods == TUI_MOD_CTRL;
+        int plain = ev->key == TUI_KEY_RUNE && !(ev->mods & (TUI_MOD_CTRL | TUI_MOD_ALT)) && ev->ch >= 0x20u;
+        if (e->search == R2__ED_REPLACED)
+            e->search = R2__ED_SEARCH_NONE; /* the "Replaced N" note goes */
+        if (e->search == R2__ED_SEARCH_FWD || e->search == R2__ED_SEARCH_BACK)
+        {
+            if (plain)
+            {
+                size_t n = r2__ed_strlen(e->query);
+                uint8_t enc[4];
+                uint32_t k = utf8_encode(ev->ch, enc), i;
+                if (n + k < sizeof(e->query))
+                {
+                    for (i = 0; i < k; i++)
+                        e->query[n + i] = (char)enc[i];
+                    e->query[n + k] = '\0';
+                }
+                r2__ed_research(e, 0);
+                return 1;
+            }
+            if (ctrl && (ev->ch == 's' || ev->ch == 'r'))
+            {
+                e->search = ev->ch == 'r' ? R2__ED_SEARCH_BACK : R2__ED_SEARCH_FWD;
+                if (!e->query[0])
+                    r2__tui_copy(e->query, sizeof(e->query), e->last); /* the last search again */
+                r2__ed_research(e, e->match_len != 0 || e->failing);
+                return 1;
+            }
+            if (ev->key == TUI_KEY_BACKSPACE && !ev->mods)
+            {
+                size_t n = r2__ed_strlen(e->query);
+                if (n)
+                {
+                    n--;
+                    while (n > 0 && ((uint8_t)e->query[n] & 0xC0u) == 0x80u)
+                        n--;
+                    e->query[n] = '\0';
+                }
+                e->match = e->search_from;
+                e->wrapped = 0;
+                r2__ed_research(e, 0);
+                return 1;
+            }
+            if (ctrl && ev->ch == 'g')
+            {
+                e->search = R2__ED_SEARCH_NONE;
+                tui_edit_goto(e, e->search_from);
+                return 1;
+            }
+            /* anything else ends the search where it is (Enter / Esc do only that) */
+            if (e->query[0])
+                r2__tui_copy(e->last, sizeof(e->last), e->query);
+            e->search = R2__ED_SEARCH_NONE;
+            return (ev->key == TUI_KEY_ENTER || ev->key == TUI_KEY_ESC) && !ev->mods;
+        }
+        if (e->search == R2__ED_REPLACING)
+        {
+            rune c = plain ? r2__tui_lower(ev->ch) : 0;
+            if (c == 'y' || c == ' ')
+            {
+                r2__ed_replace_one(e);
+                *res = TUI_CHANGED;
+                if (e->search == R2__ED_REPLACING)
+                    r2__ed_replace_next(e);
+            }
+            else if (c == 'n' || (ev->key == TUI_KEY_BACKSPACE && !ev->mods) || (ev->key == TUI_KEY_DELETE && !ev->mods))
+            {
+                tui_edit_goto(e, e->match + e->match_len);
+                r2__ed_replace_next(e);
+            }
+            else if (c == '!')
+            {
+                while (e->search == R2__ED_REPLACING)
+                {
+                    r2__ed_replace_one(e);
+                    *res = TUI_CHANGED;
+                    if (e->search == R2__ED_REPLACING)
+                        r2__ed_replace_next(e);
+                }
+            }
+            else if (c == '.')
+            {
+                r2__ed_replace_one(e);
+                *res = TUI_CHANGED;
+                e->search = R2__ED_REPLACED;
+            }
+            else
+                e->search = R2__ED_REPLACED; /* q, Enter, Esc, Ctrl+G, anything: stop */
+            return 1;
+        }
+        return 0;
+    }
+#endif
+
     /* ---------------- the widget ---------------- */
 
     /* the key while the editor has focus; returns TUI_CHANGED, *used if it took it */
@@ -928,6 +1325,27 @@ extern "C"
         int ro = (e->flags & TUI_EDIT_READ_ONLY) != 0, kill = 0, movement;
         uint32_t from, to;
         *used = 1;
+
+#ifndef R2_TUI_EDIT_NO_SEARCH
+        if (e->search && r2__ed_search_key(e, &ev, &res))
+            return res;
+        if (!e->meta && r2__ed_is(&ev, TUI_KEY_RUNE, TUI_MOD_CTRL, 's'))
+        {
+            tui_edit_search(e, 0);
+            return 0;
+        }
+        if (!e->meta && r2__ed_is(&ev, TUI_KEY_RUNE, TUI_MOD_CTRL, 'r'))
+        {
+            tui_edit_search(e, 1);
+            return 0;
+        }
+        if ((e->meta || ev.mods == TUI_MOD_ALT) && ev.key == TUI_KEY_RUNE && ev.ch == '%' && !ro)
+        {
+            e->meta = 0;
+            tui_edit_replace(e);
+            return 0;
+        }
+#endif
 
         /* Esc then a key is Meta+key */
         if (e->meta)
@@ -1164,9 +1582,52 @@ extern "C"
         tw = w - gutter;
         if (tw < 1)
             tw = 1;
+#ifndef R2_TUI_EDIT_NO_SEARCH
+        /* query replace asks with input boxes (modal: they get the keys) */
+        if (e->search == R2__ED_ASK_FROM)
+        {
+            /* "Replace (default foo):" as Emacs asks: Enter on nothing takes foo */
+            char prompt[R2_TUI_EDIT_QUERY + 32];
+            size_t n = r2__tui_append(prompt, 0, sizeof(prompt), "~R~eplace", 0);
+            unsigned r;
+            if (e->last[0])
+            {
+                n = r2__tui_append(prompt, n, sizeof(prompt), " (default ", 0);
+                n = r2__tui_append(prompt, n, sizeof(prompt), e->last, 0);
+                n = r2__tui_append(prompt, n, sizeof(prompt), ")", 0);
+            }
+            r2__tui_append(prompt, n, sizeof(prompt), ":", 0);
+            r = tui_input_box(t, "Replace", prompt, e->query, sizeof(e->query));
+            if (r == TUI_MB_OK && !e->query[0])
+                r2__tui_copy(e->query, sizeof(e->query), e->last);
+            if (r == TUI_MB_OK && e->query[0])
+            {
+                r2__tui_copy(e->last, sizeof(e->last), e->query);
+                e->search = R2__ED_ASK_TO;
+            }
+            else if (r)
+                e->search = R2__ED_SEARCH_NONE;
+        }
+        if (e->search == R2__ED_ASK_TO)
+        {
+            unsigned r = tui_input_box(t, "Replace with", "~W~ith:", e->with, sizeof(e->with));
+            if (r == TUI_MB_OK)
+            {
+                e->search = R2__ED_REPLACING;
+                e->replaced = 0;
+                r2__ed_replace_next(e);
+            }
+            else if (r)
+                e->search = R2__ED_SEARCH_NONE;
+        }
+#endif
         if (focused && ev)
         {
             int typing = ev->key == TUI_KEY_RUNE && !(ev->mods & (TUI_MOD_CTRL | TUI_MOD_ALT)) && !e->meta;
+#ifndef R2_TUI_EDIT_NO_SEARCH
+            if (e->search)
+                typing = 0; /* searching / replacing: each key is its own undo step */
+#endif
             if (!(typing && e->typing && e->typed < 20))
                 tui_edit_undo_group(e);
             e->typing = (uint8_t)typing;
@@ -1181,6 +1642,14 @@ extern "C"
         r2__tui_place(t, w, h, &x, &y);
         tui_fill(t, (tui_rect){x, y, w, h}, ' ', TUI_DEFAULT);
         tui_edit_selection(e, &s0, &s1);
+#ifndef R2_TUI_EDIT_NO_SEARCH
+        if ((e->search == R2__ED_SEARCH_FWD || e->search == R2__ED_SEARCH_BACK || e->search == R2__ED_REPLACING) &&
+            e->match_len && !e->failing)
+        {
+            s0 = e->match;
+            s1 = e->match + e->match_len;
+        }
+#endif
         body = t->cur >= 0 ? r2__tui_body(t, t->cur) : t->theme->body;
         sel_style = TUI_STYLE(TUI_STYLE_FG(body), TUI_STYLE_BG(body), TUI_STYLE_ATTR(body) | TUI_REVERSE);
 

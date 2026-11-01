@@ -53,6 +53,8 @@ OVERVIEW
 CHANGES
     v0.4  immediate-mode widgets (label, button, checkbox, radio, text input,
           list, scroll view) with Tab focus and hot letters; tui_input_box
+    v0.7  windows settle after every key, so keys that arrive together (serial,
+          paste, typing ahead) behave like keys typed one at a time
     v0.6  after handling a key or a menu choice a window runs once more, so
           menus and status declared before the change show the new state
     v0.5  the command palette moves to Ctrl+] (Ctrl+Space is set-mark in the editor)
@@ -4993,27 +4995,11 @@ extern "C"
             r2__tui_run(t, R2__TUI_DESKTOP, ev);
     }
 
-    R2_TUI_DEF int tui_update(tui *t, uint32_t now_ms)
+    /* run what needs running (a controller may open windows or change
+       things, so go round a few times) */
+    static void r2__tui_settle(tui *t)
     {
-        tui_event ev;
         int pass, i;
-        t->now = now_ms;
-        tui_step(t, now_ms);
-        if (t->chord && (uint32_t)(now_ms - t->chord_time) >= R2_TUI_PREFIX_MS)
-        {
-            t->chord = 0; /* the prefix waited long enough */
-            t->compose_dirty = 1;
-        }
-        if (t->layout_dirty)
-            r2__tui_layout(t);
-        while (tui_poll(t, &ev))
-        {
-            r2__tui_handle(t, &ev);
-            if (t->layout_dirty)
-                r2__tui_layout(t);
-        }
-        /* run what needs running (a controller may open windows or change
-           things, so go round a few times) */
         for (pass = 0; pass < 4; pass++)
         {
             int ran = 0;
@@ -5032,6 +5018,28 @@ extern "C"
         }
         if (t->layout_dirty)
             r2__tui_layout(t);
+    }
+
+    R2_TUI_DEF int tui_update(tui *t, uint32_t now_ms)
+    {
+        tui_event ev;
+        t->now = now_ms;
+        tui_step(t, now_ms);
+        if (t->chord && (uint32_t)(now_ms - t->chord_time) >= R2_TUI_PREFIX_MS)
+        {
+            t->chord = 0; /* the prefix waited long enough */
+            t->compose_dirty = 1;
+        }
+        /* Settle after every key: run what needs running before the next
+           key is handled, so keys that arrive together (a serial line, a
+           paste, typing ahead) behave exactly like keys typed one by one,
+           e.g. a key that opens a dialog, then keys for the dialog. */
+        r2__tui_settle(t);
+        while (tui_poll(t, &ev))
+        {
+            r2__tui_handle(t, &ev);
+            r2__tui_settle(t);
+        }
         if (!t->compose_dirty)
             return 0;
         r2__tui_compose(t);
