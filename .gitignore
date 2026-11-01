@@ -2,3 +2,8 @@
 xxx_*
 bin
 cppcheck_report.txt
+docs/r2_tui_manual.aux
+docs/r2_tui_manual.log
+docs/r2_tui_manual.toc
+docs/r2_tui_manual.out
+docs/r2_tui_manual.pdf

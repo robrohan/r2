@@ -1,0 +1,202 @@
+{
+  "nodes": [
+    {
+      "id": "g-mac",
+      "type": "group",
+      "label": "Developer Mac [macOS]",
+      "x": 0,
+      "y": 0,
+      "width": 460,
+      "height": 560
+    },
+    {
+      "id": "g-term",
+      "type": "group",
+      "label": "Terminal.app [VT100/xterm, Ctrl+\\ prefix keys]",
+      "x": 40,
+      "y": 80,
+      "width": 380,
+      "height": 240
+    },
+    {
+      "id": "g-ci",
+      "type": "group",
+      "label": "GitHub Actions [ubuntu-latest, macos-latest]",
+      "x": 540,
+      "y": 0,
+      "width": 380,
+      "height": 440
+    },
+    {
+      "id": "g-wasm",
+      "type": "group",
+      "label": "Node.js [emcc build: make test_wasm, not in CI]",
+      "x": 1000,
+      "y": 0,
+      "width": 380,
+      "height": 240
+    },
+    {
+      "id": "g-esp",
+      "type": "group",
+      "label": "ESP32-S3 board [Chestnut, Xtensa LX7, -mabi=call0]",
+      "x": 0,
+      "y": 640,
+      "width": 460,
+      "height": 600
+    },
+    {
+      "id": "g-host",
+      "type": "group",
+      "label": "Host computer [planned: terminal over USB serial]",
+      "x": 540,
+      "y": 640,
+      "width": 380,
+      "height": 280
+    },
+    {
+      "id": "g-pi",
+      "type": "group",
+      "label": "Raspberry Pi [planned: Chestnut, HDMI console]",
+      "x": 1000,
+      "y": 640,
+      "width": 380,
+      "height": 440
+    },
+    {
+      "id": "title",
+      "type": "text",
+      "text": "# Deployment view\nWhere r2's programs and headers run. Instances are links to the Level 2 boxes. Chestnut hardware is **planned** for r2_tui (the quant SIMD hook already exists).\n\n**C4 notation:**\n- `[Person]` purple\n- `[Software System]` / `[Container]` cyan\n- `[Component]` green\n- data orange\n- tooling red\n- notes + legends yellow\n- plain = external\n- Arrows read *caller → callee*, labelled *what [how]*",
+      "x": -560,
+      "y": -460,
+      "width": 420,
+      "height": 440,
+      "color": "3"
+    },
+    {
+      "id": "d-demo",
+      "type": "file",
+      "file": "containers.canvas",
+      "subpath": "#ctr-demo",
+      "x": 80,
+      "y": 160,
+      "width": 300,
+      "height": 120
+    },
+    {
+      "id": "d-mac-tests",
+      "type": "file",
+      "file": "containers.canvas",
+      "subpath": "#tool-tests",
+      "x": 80,
+      "y": 400,
+      "width": 300,
+      "height": 120
+    },
+    {
+      "id": "d-ci-tests",
+      "type": "file",
+      "file": "containers.canvas",
+      "subpath": "#tool-tests",
+      "x": 580,
+      "y": 80,
+      "width": 300,
+      "height": 120
+    },
+    {
+      "id": "d-ci-matrix",
+      "type": "text",
+      "text": "## Build matrix\n*[Infrastructure: .github/workflows/c-cpp.yml]*\n`make test NO_BLAS=1`, again with `SIMD_FORCE_SCALAR=1`, and `SIMD_AVX2=1` on Ubuntu.",
+      "x": 580,
+      "y": 240,
+      "width": 300,
+      "height": 160
+    },
+    {
+      "id": "d-wasm-tests",
+      "type": "file",
+      "file": "containers.canvas",
+      "subpath": "#tool-tests",
+      "x": 1040,
+      "y": 80,
+      "width": 300,
+      "height": 120
+    },
+    {
+      "id": "d-esp-quant",
+      "type": "file",
+      "file": "containers.canvas",
+      "subpath": "#ctr-quant",
+      "x": 80,
+      "y": 720,
+      "width": 300,
+      "height": 120
+    },
+    {
+      "id": "d-esp-maths",
+      "type": "file",
+      "file": "containers.canvas",
+      "subpath": "#ctr-maths",
+      "x": 80,
+      "y": 880,
+      "width": 300,
+      "height": 120
+    },
+    {
+      "id": "d-esp-tui",
+      "type": "file",
+      "file": "containers.canvas",
+      "subpath": "#ctr-tui",
+      "x": 80,
+      "y": 1040,
+      "width": 300,
+      "height": 120
+    },
+    {
+      "id": "d-host-term",
+      "type": "text",
+      "text": "## Serial terminal\n*[Infrastructure: screen / minicom / Terminal.app]*\nShows the TUI the board sends over the UART and sends keys back.",
+      "x": 580,
+      "y": 720,
+      "width": 300,
+      "height": 160
+    },
+    {
+      "id": "d-pi-tui",
+      "type": "file",
+      "file": "containers.canvas",
+      "subpath": "#ctr-tui",
+      "x": 1040,
+      "y": 720,
+      "width": 300,
+      "height": 120
+    },
+    {
+      "id": "d-pi-vt",
+      "type": "text",
+      "text": "## VT100 emulator [planned]\n*[Infrastructure: Chestnut console]*\nTurns r2_tui's escape codes into console glyphs, for a keyboard and screen on the Pi itself.",
+      "x": 1040,
+      "y": 880,
+      "width": 300,
+      "height": 160
+    }
+  ],
+  "edges": [
+    {
+      "id": "e-d-esp-tui-d-host-term",
+      "fromNode": "d-esp-tui",
+      "toNode": "d-host-term",
+      "label": "frames out, keys in [UART, planned]",
+      "fromSide": "right",
+      "toSide": "left"
+    },
+    {
+      "id": "e-d-pi-tui-d-pi-vt",
+      "fromNode": "d-pi-tui",
+      "toNode": "d-pi-vt",
+      "label": "escape codes [planned]",
+      "fromSide": "bottom",
+      "toSide": "top"
+    }
+  ]
+}

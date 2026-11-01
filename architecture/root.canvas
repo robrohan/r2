@@ -1,0 +1,23 @@
+{
+	"nodes":[
+		{"id":"legend","type":"text","text":"# C4 Level 1: System context\nr2 is a family of single-file C headers (stb style): maths, quantized maths, UTF-8 strings and a keyboard-driven terminal UI. This level shows who uses it and what it talks to at run time.\n\nShift+click a box to go in (or open its code in 3D). Starter map generated on 2026-10-31: check it before trusting it.\n\n**C4 notation:**\n- `[Person]` purple\n- `[Software System]` / `[Container]` cyan\n- `[Component]` green\n- data orange\n- tooling red\n- notes + legends yellow\n- plain = external\n- Arrows read *caller → callee*, labelled *what [how]*","x":-460,"y":-460,"width":406,"height":394,"color":"3"},
+		{"id":"person-dev","type":"text","text":"## Application developer\n*[Person]*\nCopies headers into a C project and `#include`s them (README \"Installation\"), e.g. Chestnut's `vendor/r2/`.","x":289,"y":-443,"width":300,"height":160,"color":"6"},
+		{"id":"person-user","type":"text","text":"## Keyboard user\n*[Person]*\nDrives an r2_tui app from a terminal: menus, windows, the Ctrl+\\ prefix and the Ctrl+Space palette. No mouse.","x":1145,"y":-496,"width":300,"height":160,"color":"6"},
+		{"id":"system-r2","type":"text","text":"## r2 header libraries\n*[Software System: C11, header-only, no malloc]*\nVectors/matrices/quaternions, int8/int16/int4 quantized ops with SIMD dispatch, UTF-8 strings, and a Borland-style terminal UI with docking windows and a fuzzy command palette.\nInside: [[containers.canvas]]","x":100,"y":-160,"width":680,"height":240,"color":"5"},
+		{"id":"ext-terminal","type":"text","text":"## Terminal\n*[External system: VT100 / xterm-compatible]*\nTerminal.app, iTerm2, Linux console, or a host terminal at the far end of a serial line. Shows the escape codes r2_tui sends, and sends key bytes back.","x":1145,"y":-234,"width":300,"height":200},
+		{"id":"ext-posix","type":"text","text":"## POSIX tty layer\n*[External system: macOS / Linux kernel]*\nRaw mode, window size and non-blocking reads for the Mac/Linux adapter: `termios`, `ioctl(TIOCGWINSZ)`, `poll`, `SIGWINCH`.","x":906,"y":320,"width":300,"height":200},
+		{"id":"ext-chestnut","type":"text","text":"## Chestnut\n*[External system: cooperative OS, ESP32-S3 / Raspberry Pi]*\nThe main consumer (`r2_tui.h:6`, `r2_quant.h:8`). Vendors the headers; must supply the Xtensa PIE dot kernels when built with `-DR2_XTENSA_PIE` (`r2_quant.h:156`).","x":-363,"y":311,"width":300,"height":240},
+		{"id":"ext-blas","type":"text","text":"## BLAS\n*[External system: OpenBLAS or Apple Accelerate]*\nOptional: with `-DHAVE_BLAS`, r2_maths hands vector and matrix work to `cblas_*` (`r2_maths.h:50`).","x":292,"y":422,"width":300,"height":200},
+		{"id":"deploy-link","type":"text","text":"## Deployment view\n*[Note]*\nWhere the code runs: developer Mac, CI runners, and (planned) Chestnut on ESP32-S3 and Raspberry Pi.\nInside: [[deployment.canvas]]","x":-461,"y":-53,"width":300,"height":200,"color":"3"}
+	],
+	"edges":[
+		{"id":"e-person-dev-system-r2","fromNode":"person-dev","toNode":"system-r2","label":"Copies in and calls [#include, C11]"},
+		{"id":"e-person-user-ext-terminal","fromNode":"person-user","toNode":"ext-terminal","toSide":"top","label":"Types keys, reads the screen"},
+		{"id":"e-system-r2-ext-terminal","fromNode":"system-r2","toNode":"ext-terminal","label":"Draws the screen [ANSI escape codes, UTF-8]"},
+		{"id":"e-ext-terminal-system-r2","fromNode":"ext-terminal","fromSide":"bottom","toNode":"system-r2","toSide":"right","label":"Sends keys [byte stream into tui_feed]"},
+		{"id":"e-system-r2-ext-posix","fromNode":"system-r2","fromSide":"bottom","toNode":"ext-posix","toSide":"left","label":"Raw mode, size, reads [termios, ioctl, poll]"},
+		{"id":"e-system-r2-ext-blas","fromNode":"system-r2","fromSide":"bottom","toNode":"ext-blas","toSide":"top","label":"Offloads vector/matrix ops [cblas_*, HAVE_BLAS]"},
+		{"id":"e-ext-chestnut-system-r2","fromNode":"ext-chestnut","toNode":"system-r2","toSide":"left","label":"Calls the libraries [vendored headers]"},
+		{"id":"e-system-r2-ext-chestnut","fromNode":"system-r2","fromSide":"bottom","toNode":"ext-chestnut","toSide":"right","label":"Calls PIE dot kernels [extern r2_xtensa_pie_dot_*]"}
+	]
+}

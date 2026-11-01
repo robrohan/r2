@@ -1,0 +1,37 @@
+{
+	"nodes":[
+		{"id":"g-r2","type":"group","label":"r2 header libraries [Software System]","x":-16,"y":2,"width":1373,"height":1113},
+		{"id":"title","type":"text","text":"# C4 Level 2: Containers\nEach header family is a separately usable unit (copy one in, include it). The demo app and the test runner are the runnable programs built from this repo.\n\nThe headers live at the repo root, so their code links open the whole repo.\n\n**C4 notation:**\n- `[Person]` purple\n- `[Software System]` / `[Container]` cyan\n- `[Component]` green\n- data orange\n- tooling red\n- notes + legends yellow\n- plain = external\n- Arrows read *caller → callee*, labelled *what [how]*","x":-560,"y":-460,"width":420,"height":520,"color":"3"},
+		{"id":"ctr-strings","type":"text","text":"## r2_strings\n*[Container: C header]*\nUTF-8 as `s8` views (pointer + byte length). Decodes runes on demand with U+FFFD for bad input; never reads past `len`.\nKey: `r2_strings.h`\nCode: [[..]]","x":61,"y":62,"width":300,"height":200,"color":"5"},
+		{"id":"ctr-tui","type":"text","text":"## r2_tui\n*[Container: C headers]*\nTerminal UI: diff renderer, key parser, overlapping/docked windows with immediate-mode contents, focus-following menu bar, widgets, Ctrl+\\ prefix, fuzzy palette.\nKey: `r2_tui.h`, `r2_termui.h`, `r2_tui_posix.h`\nInside: [[components-tui.canvas]]","x":1004,"y":54,"width":300,"height":200,"color":"5"},
+		{"id":"ctr-demo","type":"text","text":"## tui_demo\n*[Container: example program, C11 + POSIX]*\nShows r2_tui off: docked file and log panes, notes, glyph and key windows; `--baud` throttles output to serial speed.\nKey: `examples/tui_demo.c` → `bin/tui_demo` (`make demo`)\nCode: [[../examples]]","x":72,"y":297,"width":300,"height":200,"color":"5"},
+		{"id":"ctr-maths","type":"text","text":"## r2_maths\n*[Container: C header]*\nvec2/3/4, quaternions, mat3/mat4, generic `vecn_*`/`mat_mul`, lookat/perspective for OpenGL. Optional BLAS backend.\nKey: `r2_maths.h`\nCode: [[..]]","x":602,"y":548,"width":300,"height":200,"color":"5"},
+		{"id":"ctr-quant","type":"text","text":"## r2_quant + r2_simd\n*[Container: C headers]*\nSymmetric int8/int16/int4 quantize, dot and matmul. Compile-time SIMD: AVX2, SSE4.1, NEON, Xtensa PIE hook, or scalar.\nKey: `r2_quant.h`, `r2_simd.h`\nCode: [[..]]","x":997,"y":315,"width":300,"height":200,"color":"5"},
+		{"id":"tool-tests","type":"text","text":"## Test runner\n*[Tooling: r2_unit + suites → bin/run_tests]*\nOne binary, five suites (maths, quant, strings, termui, tui); `./bin/run_tests tui` runs one. Includes a model VT terminal and fuzz/exhaustive tests.\nKey: `tests.c`, `tests/r2_tui.c`\nCode: [[../tests]]","x":646,"y":876,"width":300,"height":200,"color":"1"},
+		{"id":"tool-build","type":"text","text":"## Build & CI\n*[Tooling: make, shell, GitHub Actions]*\n`make test`, `test_clang`, `test_wasm`, `demo`, `check` (cppcheck). CI runs Ubuntu and macOS, plus scalar and AVX2 builds.\nKey: `Makefile`, `test.sh`, `check.sh`, `.github/workflows/c-cpp.yml`\nCode: [[../.github/workflows]]","x":20,"y":875,"width":300,"height":200,"color":"1"},
+		{"id":"ctr-unit","type":"text","text":"## r2_unit\n*[Container: C header]*\nTwo macros, `r2_assert` and `r2_run_test`: a minimal unit test harness, shipped like the other headers.\nKey: `r2_unit.h`\nCode: [[..]]","x":995,"y":548,"width":300,"height":200,"color":"5"},
+		{"id":"w-dev","type":"file","file":"root.canvas","subpath":"#person-dev","x":-20,"y":-314,"width":300,"height":120},
+		{"id":"w-user","type":"file","file":"root.canvas","subpath":"#person-user","x":763,"y":-574,"width":306,"height":174},
+		{"id":"w-terminal","type":"file","file":"root.canvas","subpath":"#ext-terminal","x":761,"y":-294,"width":316,"height":185},
+		{"id":"w-posix","type":"file","file":"root.canvas","subpath":"#ext-posix","x":1249,"y":-299,"width":312,"height":188},
+		{"id":"w-blas","type":"file","file":"root.canvas","subpath":"#ext-blas","x":-366,"y":572,"width":320,"height":157},
+		{"id":"w-chestnut","type":"file","file":"root.canvas","subpath":"#ext-chestnut","x":1717,"y":305,"width":323,"height":220},
+		{"id":"ctr-edit","type":"text","text":"## r2_tui_edit\n*[Container: C header]*\nA multi-line text editor widget for r2_tui: gap buffer in caller memory, incrementally tracked lines, CUA and Emacs keys, Esc as Meta, mark and Shift selection, kill/yank clipboard, undo/redo, incremental search and query replace. A highlighting hook is next; every feature switches off with `-D`.\nKey: `r2_tui_edit.h`\nCode: [[..]]","x":2120,"y":54,"width":300,"height":240,"color":"5"}
+	],
+	"edges":[
+		{"id":"e-w-dev-g-r2","fromNode":"w-dev","toNode":"g-r2","label":"Copies in and #includes"},
+		{"id":"e-w-user-w-terminal","fromNode":"w-user","toNode":"w-terminal","label":"Types keys, reads the screen"},
+		{"id":"e-ctr-tui-w-terminal","fromNode":"ctr-tui","fromSide":"top","toNode":"w-terminal","toSide":"bottom","label":"Draws the screen [escape codes]"},
+		{"id":"e-ctr-tui-ctr-strings","fromNode":"ctr-tui","toNode":"ctr-strings","label":"Iterates and encodes UTF-8 [s8_next_rune, utf8_encode]"},
+		{"id":"e-ctr-demo-ctr-tui","fromNode":"ctr-demo","toNode":"ctr-tui","label":"Opens windows, feeds keys, renders [tui_update, tui_render]"},
+		{"id":"e-ctr-tui-w-posix","fromNode":"ctr-tui","fromSide":"top","toNode":"w-posix","toSide":"bottom","label":"Raw mode, size, reads [r2_tui_posix.h: termios]"},
+		{"id":"e-ctr-maths-w-blas","fromNode":"ctr-maths","fromSide":"left","toNode":"w-blas","toSide":"right","label":"Offloads vector/matrix ops [cblas_*]"},
+		{"id":"e-ctr-quant-w-chestnut","fromNode":"ctr-quant","fromSide":"right","toNode":"w-chestnut","toSide":"left","label":"Calls PIE dot kernels [extern, R2_XTENSA_PIE]"},
+		{"id":"e-w-chestnut-ctr-tui","fromNode":"w-chestnut","toNode":"ctr-tui","label":"Will drive its UI [planned: UART bytes in, frames out]"},
+		{"id":"e-tool-tests-ctr-unit","fromNode":"tool-tests","toNode":"ctr-unit","label":"Asserts with [r2_assert, r2_run_test]"},
+		{"id":"e-tool-tests-ctr-maths","fromNode":"tool-tests","fromSide":"top","toNode":"ctr-maths","toSide":"bottom","label":"Tests [exact + property checks]"},
+		{"id":"e-tool-build-tool-tests","fromNode":"tool-build","toNode":"tool-tests","label":"Builds and runs"},
+		{"id":"e-ctr-edit-ctr-tui","fromNode":"ctr-edit","fromSide":"left","toNode":"ctr-tui","toSide":"right","label":"Is a widget of [tui_editor, r2_tui internals]"},
+		{"id":"e-ctr-demo-ctr-edit","fromNode":"ctr-demo","fromSide":"top","toNode":"ctr-edit","toSide":"top","label":"Edits text [tui_editor]"}
+	]
+}
