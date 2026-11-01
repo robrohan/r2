@@ -51,13 +51,13 @@ OVERVIEW
     escape sequence.
 
 CHANGES
-    v0.4  immediate-mode widgets (label, button, checkbox, radio, text input,
-          list, scroll view) with Tab focus and hot letters; tui_input_box
     v0.7  windows settle after every key, so keys that arrive together (serial,
           paste, typing ahead) behave like keys typed one at a time
     v0.6  after handling a key or a menu choice a window runs once more, so
           menus and status declared before the change show the new state
     v0.5  the command palette moves to Ctrl+] (Ctrl+Space is set-mark in the editor)
+    v0.4  immediate-mode widgets (label, button, checkbox, radio, text input,
+          list, scroll view) with Tab focus and hot letters; tui_input_box
     v0.3  window command prefix (Ctrl+\\ then a key), minimize, and a fuzzy
           command palette over menus, window commands and windows
     v0.2  window manager: overlapping and docked windows, z-order, focus,
