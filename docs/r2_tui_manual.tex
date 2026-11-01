@@ -1,0 +1,1273 @@
+% r2_tui developer's manual
+% Build: pdflatex r2_tui_manual.tex (run it twice for the table of contents)
+\documentclass[11pt,a4paper]{article}
+
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage[margin=2.5cm]{geometry}
+\usepackage{xcolor}
+\usepackage{listings}
+\usepackage{booktabs}
+\usepackage{longtable}
+\usepackage{array}
+\usepackage{tabularx}
+\usepackage{enumitem}
+\usepackage[hidelinks]{hyperref}
+
+\definecolor{codebg}{gray}{0.96}
+\definecolor{comment}{rgb}{0.35,0.45,0.35}
+\lstset{
+  language=C,
+  basicstyle=\ttfamily\small,
+  backgroundcolor=\color{codebg},
+  commentstyle=\color{comment}\itshape,
+  keywordstyle=\bfseries,
+  columns=fullflexible,
+  keepspaces=true,
+  showstringspaces=false,
+  frame=single,
+  rulecolor=\color{codebg},
+  framesep=4pt,
+  xleftmargin=6pt,
+  xrightmargin=6pt,
+  breaklines=true,
+  aboveskip=8pt,
+  belowskip=8pt
+}
+
+% a function, type or macro name (underscores print as they are)
+\newcommand{\fn}[1]{\texttt{\detokenize{#1}}}
+% a key or key sequence
+\newcommand{\key}[1]{\texttt{#1}}
+\newcommand{\bs}{\textbackslash}
+\newcommand{\prefix}{\key{Ctrl+\bs}}
+
+\setlist{itemsep=2pt,topsep=4pt}
+\setlength{\parskip}{4pt}
+\setlength{\parindent}{0pt}
+
+\title{\textbf{r2\_tui}\\[4pt]\large Developer's Manual}
+\author{Terminal UI for Chestnut and anything else with a terminal}
+\date{\texttt{r2\_tui.h} v0.7 \quad \texttt{r2\_tui\_edit.h} v0.4}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+\noindent r2\_tui is a keyboard-driven text user interface in the style of the
+Borland IDEs: overlapping and docked windows with shadows, a menu bar that
+follows the focused window like the Mac's, message and input boxes, a fuzzy
+command palette, widgets and a multi-line text editor. It is a set of
+single-file C11 headers that never allocate memory, never block, use no C
+library, and talk to the terminal only through bytes you move. This manual is
+for developers who build applications on it or port it to a new platform.
+\end{abstract}
+
+\tableofcontents
+\newpage
+
+%======================================================================
+\section{Introduction}
+
+r2\_tui was written as the user interface for Chestnut, a cooperative
+operating system that runs on the Raspberry Pi and the ESP32-S3. Chestnut's
+graphics library was too slow under its cooperative scheduler, so the UI lives
+in a terminal instead: over a serial line to a host terminal, in a Mac or Linux
+terminal, or on a device console with a VT100 emulator.
+
+\subsection{Design rules}
+
+Everything in the library follows from a few rules:
+
+\begin{description}[style=nextline]
+\item[No allocation.] All memory is given to the library: one arena for the
+  screen and window manager, and separate buffers for editor text, clipboard
+  and undo history. Sizes are fixed at compile time or by the size of the
+  memory you hand over.
+\item[Never block.] You feed in the bytes that arrive from the keyboard and pull
+  out the bytes to send, in chunks as small as 64 bytes, between which you can
+  yield. Nothing waits for input or output.
+\item[No C library.] The headers need only \fn{<stdint.h>} and \fn{<stddef.h>}.
+  \texttt{make wasm} proves it: the UI and editor link to a WebAssembly module
+  with zero imports.
+\item[Only changed cells are sent.] A diff renderer compares what the
+  application drew with what the terminal shows. Changing one cell costs under
+  50 bytes; drawing the same thing again costs nothing.
+\item[Keyboard only.] Every feature is reachable without a mouse, without
+  \key{Alt}/\key{Option}, and without function keys (which a Mac terminal often
+  swallows).
+\item[Retained windows, immediate-mode contents.] The window manager keeps
+  windows, positions, focus and docking. What is \emph{in} a window is drawn by
+  a function you write, every time it runs, without building a widget tree.
+\end{description}
+
+\subsection{Files}
+
+\begin{longtable}{@{}p{0.27\textwidth}p{0.68\textwidth}@{}}
+\toprule
+\textbf{File} & \textbf{What it is} \\
+\midrule
+\endhead
+\fn{r2_tui.h} & The library: cells, width table, drawing, renderer, input
+  parser, window manager, menus, message and input boxes, command prefix,
+  command palette, widgets. \\
+\fn{r2_tui_edit.h} & Optional text editor widget (gap buffer, selection,
+  clipboard, undo, search and replace). Must be implemented in the same C file
+  as \fn{r2_tui.h}. \\
+\fn{r2_tui_posix.h} & Mac and Linux terminal plumbing: raw mode, alternate
+  screen, window size, non-blocking reads, a clock. Not used on Chestnut. \\
+\fn{r2_termui.h} & VT100 and ANSI escape sequences as macros. \\
+\fn{r2_strings.h} & UTF-8 strings (\fn{s8}) used for all text. \\
+\fn{examples/tui_app.c} & A starter application: windows, menus, docking,
+  dialogs, no editor. \texttt{make app}. \\
+\fn{examples/tui_demo.c} & Everything: editor, widgets, test windows.
+  \texttt{make demo}. \\
+\fn{tools/gen_tui_width.py} & Generates the character width table from
+  Python's Unicode data. \\
+\fn{tools/wasm_check.c} & The freestanding wasm build check. \texttt{make wasm}. \\
+\fn{tests/r2_tui.c}, \fn{tests/r2_tui_edit.c} & The test suites. \\
+\bottomrule
+\end{longtable}
+
+\subsection{Status}
+
+Everything described here is implemented and tested, with two exceptions
+noted where they come up: the editor's syntax highlighting hook
+(\fn{R2_TUI_EDIT_NO_HIGHLIGHT} is reserved for it) and the Chestnut window
+server (section~\ref{sec:server}). Lisp bindings, so that tool calls from a
+language model can drive the UI, are planned.
+
+%======================================================================
+\section{Quick start}
+
+\subsection{A complete program}
+
+This is \fn{examples/tui_app.c} cut down to its bones. It opens one window
+with a File menu and runs until \key{Ctrl+Q}.
+
+\begin{lstlisting}
+#define _DEFAULT_SOURCE        /* POSIX + SIGWINCH for r2_tui_posix.h */
+#define _DARWIN_C_SOURCE
+#include "r2_tui_posix.h"
+
+#define R2_TUI_IMPLEMENTATION  /* in exactly one C file */
+#include "r2_tui.h"
+
+static uint8_t arena[R2_TUI_ARENA_SIZE(400, 200)]; /* largest screen */
+static tui t;
+static int running = 1;
+
+static void hello(tui *t, tui_window *w, void *user)
+{
+    tui_menu_begin(t, "~F~ile");
+    if (tui_menu_item(t, "E~x~it", "Ctrl+Q"))
+        running = 0;
+    tui_menu_end(t);
+    tui_text(t, 1, 1, S8("Hello from r2_tui"), TUI_DEFAULT);
+}
+
+int main(void)
+{
+    tui_posix p;
+    uint8_t in[256], out[1024];
+    int cols, rows;
+    size_t n;
+
+    tui_init(&t, arena, sizeof(arena), 80, 25);
+    tui_posix_open(&p);
+    if (tui_posix_size(&cols, &rows) == 0)
+        tui_resize(&t, cols, rows);
+    tui_window_open(&t, "Hello", (tui_rect){-1, -1, 40, 8}, 0, hello, 0);
+
+    while (running) {
+        uint32_t now = tui_posix_now_ms();
+        n = tui_posix_read(in, sizeof(in));         /* never blocks */
+        tui_feed(&t, in, n, now);                   /* bytes -> keys */
+        tui_update(&t, now);                        /* keys -> screen */
+        while ((n = tui_render(&t, out, sizeof(out))) > 0)
+            tui_posix_write(out, n);                /* changed cells */
+        tui_posix_wait(tui_input_pending(&t) ? (int)t.esc_ms : 1000);
+    }
+    tui_posix_close(&p);
+    return 0;
+}
+\end{lstlisting}
+
+\subsection{Building}
+
+The headers are stb-style: include them anywhere for the declarations, and
+define \fn{R2_TUI_IMPLEMENTATION} (and \fn{R2_TUI_EDIT_IMPLEMENTATION} for the
+editor) before including in exactly one C file. \fn{r2_tui.h} includes
+\fn{r2_strings.h} and \fn{r2_termui.h}, which must sit next to it, and turns on
+\fn{R2_STRINGS_IMPLEMENTATION} for you. All functions are \texttt{static}, so
+several C files may each have their own implementation without link clashes.
+
+\begin{longtable}{@{}p{0.28\textwidth}p{0.67\textwidth}@{}}
+\toprule
+\textbf{Make target} & \textbf{Does} \\
+\midrule
+\endhead
+\texttt{make app} & The starter app, \fn{bin/tui_app}. \\
+\texttt{make demo} & The full demo, \fn{bin/tui_demo}
+  (\texttt{--baud 115200} throttles output to serial speed). \\
+\texttt{make test} & All suites with gcc (\texttt{./bin/run\_tests tui} or
+  \texttt{edit} runs one). \\
+\texttt{make test\_tui}, \texttt{make test\_edit} & One suite. \\
+\texttt{make test\_edit\_flags} & The editor suite with each feature
+  compiled out. \\
+\texttt{make test\_clang} & All suites with clang. \\
+\texttt{make wasm} & The freestanding wasm32 check (clang and wasm-ld). \\
+\texttt{make check} & cppcheck. \\
+\bottomrule
+\end{longtable}
+
+The code is C11 and builds without warnings under
+\texttt{-Wall -Wextra -Wpedantic -Wshadow} with gcc and clang, and for the
+ESP32-S3 with \texttt{xtensa-esp32s3-elf-gcc -mabi=call0}.
+
+%======================================================================
+\section{Architecture}
+
+\subsection{Data flow}
+
+\begin{lstlisting}[language={},frame=single]
+ keyboard bytes                                      terminal bytes
+      |                                                    ^
+ tui_feed() ---> input parser ---> event queue             |
+                                       |              tui_render()
+                                  tui_update()       (diff, chunks)
+                                       |                    ^
+         route each key: palette, menus, move mode,         |
+         modal box, prefix, shortcuts, focused window   back buffer
+                                       |                    ^
+         run the controllers that need it ("settle")        |
+                                       |                    |
+         controllers record drawing commands  --->  compositor paints
+         into a shared command pool                desktop, docks,
+                                                   windows (z-order),
+                                                   menus, palette, status
+\end{lstlisting}
+
+\begin{enumerate}
+\item \fn{tui_feed} turns raw bytes into key events. Escape sequences may be
+  split across calls; a lone \key{Esc} waits \fn{esc_ms} (50~ms by default) for
+  the rest of a sequence before it counts as the \key{Esc} key.
+\item \fn{tui_update} takes the events one at a time. Each goes to whoever
+  owns it at that moment (section~\ref{sec:routing}). After \emph{every}
+  event the library runs any controller that needs it, so keys that arrive in
+  one batch (a serial line, a paste, typing ahead) behave exactly like keys
+  typed one by one.
+\item A \emph{controller} is your function for a window. It draws the window's
+  contents and declares its menus. Its drawing is recorded as commands in a
+  shared pool rather than drawn straight away.
+\item The compositor replays the recorded commands back to front into the
+  back buffer, with frames, shadows, the menu bar, the palette and the status
+  line. Moving a window or opening a menu re-composes without running any
+  controller.
+\item \fn{tui_render} compares the back buffer with the front buffer (what
+  the terminal shows) and writes escape sequences for the cells that differ.
+\end{enumerate}
+
+\subsection{When controllers run}
+
+A controller runs only when its window needs it:
+
+\begin{itemize}
+\item it was just opened, or its inside changed size (resize, dock, zoom);
+\item it gained or lost focus (widgets look different when focused);
+\item a key was routed to it, or one of its menu items was chosen;
+\item once more after that key or menu choice, so that menus and status
+  declared \emph{before} the change show the new state;
+\item an answer arrived for a message or input box it asked;
+\item it was told it may ask again after a busy message box closed;
+\item the application called \fn{tui_window_invalidate} (its data changed);
+\item the theme or the screen size changed.
+\end{itemize}
+
+There is no frame loop: an idle UI runs nothing and sends nothing.
+
+\subsection{Why commands are recorded}
+
+Recording drawing as commands, instead of drawing directly, does two jobs.
+Windows can be moved, raised, overlapped and composed under menus without
+asking their owners to draw again, which matters when a controller is
+expensive (Lisp, for example). And it is the seam for a future window server
+on Chestnut (section~\ref{sec:server}): an application task can build its
+command list and send it to the task that owns the terminal.
+
+%======================================================================
+\section{Integrating with a platform}
+
+\subsection{The loop}
+
+Every platform runs the same five steps; only where the bytes come from and
+go to changes.
+
+\begin{lstlisting}
+n = read_some_bytes(in, sizeof(in));    /* 0 is fine */
+tui_feed(&t, in, n, now_ms);
+tui_update(&t, now_ms);                 /* returns 1 if the screen changed */
+while ((n = tui_render(&t, out, sizeof(out))) > 0)
+    send_bytes(out, n);
+sleep_until_input_or(tui_input_pending(&t) ? t.esc_ms : idle_ms);
+\end{lstlisting}
+
+\fn{now_ms} is any millisecond counter; only differences are used, so it may
+wrap. Call \fn{tui_step} (or \fn{tui_update}) when idle while
+\fn{tui_input_pending} is true, so a lone \key{Esc} turns into the \key{Esc}
+key on time.
+
+\subsection{POSIX terminals (Mac and Linux)}
+
+\fn{r2_tui_posix.h} is a header of static functions. Define
+\fn{_DEFAULT_SOURCE} and \fn{_DARWIN_C_SOURCE} before the first include.
+
+\begin{longtable}{@{}p{0.38\textwidth}p{0.57\textwidth}@{}}
+\toprule
+\textbf{Function} & \textbf{Does} \\
+\midrule
+\endhead
+\fn{int tui_posix_open(tui_posix *p)} & Raw mode (no echo, no signals, no
+  flow control), alternate screen, line wrap off, \fn{SIGWINCH} handler.
+  0 on success. \\
+\fn{void tui_posix_close(tui_posix *p)} & Restores attributes, cursor, the
+  main screen and cooked mode. Always call it. \\
+\fn{int tui_posix_size(int *cols, int *rows)} & Size from
+  \fn{ioctl(TIOCGWINSZ)}. \\
+\fn{int tui_posix_resized(void)} & 1 once after each \fn{SIGWINCH}. \\
+\fn{size_t tui_posix_read(void *buf, size_t cap)} & Whatever is waiting;
+  never blocks. \\
+\fn{int tui_posix_write(const void *buf, size_t n)} & Writes everything. \\
+\fn{void tui_posix_wait(int ms)} & Sleeps until input or a timeout
+  (\fn{poll}). \\
+\fn{uint32_t tui_posix_now_ms(void)} & Monotonic milliseconds. \\
+\bottomrule
+\end{longtable}
+
+Because raw mode turns signals off, \key{Ctrl+C}, \key{Ctrl+Z} and
+\key{Ctrl+\bs} reach the application as keys. The application decides what
+quits.
+
+\subsection{Chestnut and serial lines}
+
+On a cooperative OS the UI is a task that must never hold the processor for
+long. The renderer is resumable: give it a small buffer, send the chunk,
+yield, and call it again; a frame may span many turns. Drawing between chunks
+is allowed; the terminal always ends up showing the latest state.
+
+\begin{lstlisting}
+for (;;) {                                   /* the UI task */
+    uint32_t now = ms();
+    size_t n = uart_read(in, sizeof(in));    /* non-blocking */
+    tui_feed(&t, in, n, now);
+    tui_update(&t, now);
+    n = tui_render(&t, out, 128);            /* one chunk */
+    if (n)
+        uart_write(out, n);
+    yield();
+}
+\end{lstlisting}
+
+At 115200 baud a full 80 by 25 repaint takes over a second, so the diff
+renderer matters: ordinary edits cost tens of bytes.
+
+There is no \fn{ioctl} on a serial line. \fn{tui_query_size} writes a request
+(save cursor, move to row and column 999, ask for the cursor position, restore)
+into your buffer; send it, and the terminal's reply arrives as a
+\fn{TUI_EV_RESIZE} event that \fn{tui_update} applies. Over a slow or bursty
+line, raise \fn{t.esc_ms} (or \fn{R2_TUI_ESC_MS}) so escape sequences that
+arrive in pieces are not mistaken for a lone \key{Esc}.
+
+On the ESP32-S3 (\texttt{-mabi=call0 -Os}) the whole UI with widgets is about
+24~KB of code and 4~KB of read-only data; the editor adds about 7~KB, or about
+3.7~KB with \fn{R2_TUI_EDIT_MINIMAL}. The 80 by 25 arena is 29~KB and the
+\fn{tui} structure about 3~KB.
+
+\subsection{WebAssembly}
+
+\fn{tools/wasm_check.c} builds the UI, the editor, \fn{r2_strings.h} and
+\fn{r2_quant.h} for \texttt{wasm32} with clang alone (no emcc, no C library).
+wasm-ld fails if anything needs a function the module does not define. The
+module exports a small API a JavaScript terminal could drive:
+\fn{r2_init}, \fn{r2_in}, \fn{r2_out}, \fn{r2_feed}, \fn{r2_update},
+\fn{r2_resize} and \fn{r2_render}. Like every freestanding target it supplies
+\fn{memset}, \fn{memcpy}, \fn{memmove} and \fn{memcmp}, which compilers may
+call for you (the headers never do).
+
+%======================================================================
+\section{Memory and configuration}
+
+\subsection{The arena}
+
+\fn{tui_init(&t, arena, size, cols, rows)} carves everything it needs from
+the arena: the back and front cell buffers, combining-mark tables, the window
+slots, the shared command pool and two menu bars. \fn{R2_TUI_ARENA_SIZE(cols,
+rows)} gives the size needed for a screen of up to that many cells; it is a
+constant expression, so the arena can be a static array.
+
+\begin{lstlisting}
+static uint8_t arena[R2_TUI_ARENA_SIZE(132, 50)];
+tui t;
+if (tui_init(&t, arena, sizeof(arena), 80, 25) != 0) /* too small */ ...
+tui_resize(&t, 132, 50);  /* fine: fits the arena; clears the screen */
+\end{lstlisting}
+
+The \fn{tui} structure itself (about 3~KB) holds the input queue, the parser,
+the widget state pool and the palette's results. On a 64-bit machine
+\fn{R2_TUI_ARENA_SIZE(80, 25)} is 29\,288 bytes and
+\fn{R2_TUI_ARENA_SIZE(132, 50)} is 67\,240.
+
+\subsection{Configuration macros}
+
+Define any of these before including the header (the same value in every file
+that includes it).
+
+\begin{longtable}{@{}p{0.33\textwidth}p{0.12\textwidth}p{0.48\textwidth}@{}}
+\toprule
+\textbf{Macro} & \textbf{Default} & \textbf{Meaning} \\
+\midrule
+\endhead
+\fn{R2_TUI_MAX_WINDOWS} & 8 & User windows open at once (at most 30). Two
+  more slots are internal: the desktop and the message box. \\
+\fn{R2_TUI_CMD_POOL} & 6144 & Bytes of recorded drawing shared by all
+  windows. An editor filling a large window wants 32~KB. \\
+\fn{R2_TUI_MAX_COMBINING} & 64 & Combining marks the screen can hold. \\
+\fn{R2_TUI_EVENT_QUEUE} & 32 & Keys waiting for \fn{tui_update}. \\
+\fn{R2_TUI_ESC_MS} & 50 & How long a lone \key{Esc} waits. \\
+\fn{R2_TUI_TITLE_MAX} & 32 & Window title bytes. \\
+\fn{R2_TUI_STATUS_MAX} & 96 & Status line bytes per window. \\
+\fn{R2_TUI_MENU_MAX} & 8 & Menus per menu bar. \\
+\fn{R2_TUI_MENU_ITEMS} & 48 & Items per menu bar. \\
+\fn{R2_TUI_MENU_TEXT} & 768 & Label and shortcut bytes per menu bar. \\
+\fn{R2_TUI_MESSAGE_MAX} & 256 & Message box text bytes. \\
+\fn{R2_TUI_INPUT_MAX} & 128 & Longest text an input box edits. \\
+\fn{R2_TUI_PREFIX} & \texttt{"Ctrl+\bs\bs"} & The window command prefix
+  (a C string). \\
+\fn{R2_TUI_PREFIX_MS} & 2000 & How long the prefix waits for its key. \\
+\fn{R2_TUI_PALETTE_KEY} & \texttt{"Ctrl+]"} & The command palette key. \\
+\fn{R2_TUI_PALETTE_MAX} & 128 & Palette results. \\
+\fn{R2_TUI_MAX_WIDGETS} & 64 & Focusable widgets per window (more draw,
+  but Tab skips them). \\
+\fn{R2_TUI_STATE_SLOTS} & 32 & Widget state kept between runs (least
+  recently used goes). \\
+\fn{R2_TUI_EDIT_QUERY} & 64 & Editor search and replace text bytes. \\
+\bottomrule
+\end{longtable}
+
+When a fixed area runs out the library degrades rather than fails: a window
+whose drawing overflows the command pool shows a red \texttt{!} on its frame;
+menu declarations past the limits are not recorded; extra combining marks and
+events are dropped.
+
+%======================================================================
+\section{Screen, drawing and input}
+
+These are the low-level layer. Applications using the window manager rarely
+call the \fn{tui_draw_*} functions themselves; windows use \fn{tui_text} and
+friends (section~\ref{sec:controllers}).
+
+\subsection{Cells and styles}
+
+A cell (\fn{tui_cell}) is 32 bits: a 21-bit rune and an 11-bit style. A style
+(\fn{tui_style}) is a foreground colour (4 bits), a background colour
+(4 bits) and attributes (3 bits).
+
+\begin{lstlisting}
+tui_style s = TUI_STYLE(TUI_BRIGHT_YELLOW, TUI_BLUE, TUI_BOLD);
+\end{lstlisting}
+
+The colours are the 16 ANSI colours, \fn{TUI_BLACK} to \fn{TUI_WHITE} and
+\fn{TUI_DARK_GRAY} to \fn{TUI_BRIGHT_WHITE}. Attributes are \fn{TUI_BOLD},
+\fn{TUI_UNDERLINE} and \fn{TUI_REVERSE}. \fn{TUI_DEFAULT} is a special style
+meaning ``the window's own colours'', resolved when the window is composed.
+
+\subsection{Text}
+
+All text is UTF-8, passed as \fn{s8} (pointer and length, from
+\fn{r2_strings.h}): \fn{S8("literal")} or \fn{s8_from_cstr(p)}.
+
+\begin{itemize}
+\item Wide characters (CJK, most emoji) take two cells. The right half is the
+  rune \fn{TUI_RUNE_CONT}. A wide character cut by the clip or the screen edge
+  becomes a space; overwriting half of one blanks the other half.
+\item Combining marks attach to the previous cell (one per cell).
+\item Joiners, variation selectors, bidirectional controls, the BOM and tag
+  characters are dropped, so the terminal cannot merge or reorder glyphs
+  behind the layout's back. An emoji ZWJ sequence draws as its parts.
+\item Control characters are drawn as \texttt{?}, so text from a file can never
+  inject an escape sequence.
+\end{itemize}
+
+\fn{tui_rune_width} and \fn{tui_text_width} give columns. The width table is
+generated from Unicode 16.0 by \fn{tools/gen_tui_width.py}: about 2.3~KB of
+packed ranges, searched by bisection. A test checks the C lookup against the
+generator's checksum for all 1.1 million codepoints.
+
+\subsection{Drawing}
+
+\begin{longtable}{@{}p{0.48\textwidth}p{0.47\textwidth}@{}}
+\toprule
+\textbf{Function} & \textbf{Does} \\
+\midrule
+\endhead
+\fn{tui_draw_rune(t, x, y, r, style)} & One rune; returns columns (0--2). \\
+\fn{tui_draw_text(t, x, y, s8, style)} & A line of text; returns columns. \\
+\fn{tui_draw_fill(t, rect, rune, style)} & Fill a rectangle. \\
+\fn{tui_draw_box(t, rect, style, kind)} & \fn{TUI_BOX_SINGLE} or
+  \fn{TUI_BOX_DOUBLE} outline. \\
+\fn{tui_draw_shadow(t, rect)} & Darken cells, keeping their characters. \\
+\fn{tui_clip(t, rect)}, \fn{tui_clip_reset(t)} & Limit drawing. \\
+\fn{tui_set_cursor(t, x, y, visible)} & Where the cursor goes after a frame. \\
+\fn{tui_get_cell}, \fn{tui_get_mark} & Read the back buffer (tests). \\
+\bottomrule
+\end{longtable}
+
+\subsection{The renderer}
+\label{sec:renderer}
+
+\fn{size_t tui_render(tui *t, uint8_t *out, size_t cap)} writes the next part
+of the frame (at most \fn{cap} bytes, at least \fn{R2_TUI_RENDER_MIN}, 64) and
+returns its length, or 0 when the terminal is up to date. Its guarantees:
+
+\begin{itemize}
+\item Only differing cells are sent, with the shortest cursor move (none,
+  forward, or absolute) and a colour change only when the colour changes.
+\item The front buffer is updated as bytes are produced, so an interrupted
+  frame stays consistent.
+\item A frame is wrapped in synchronized-update brackets
+  (\texttt{ESC[?2026h} \ldots\ \texttt{ESC[?2026l}) and hides the cursor while
+  drawing. If nothing really changed (something was drawn again identically),
+  nothing at all is sent.
+\item The renderer never writes past the right edge and never relies on line
+  wrap.
+\end{itemize}
+
+\fn{tui_render_pending} tells whether a frame is in progress or due.
+\fn{tui_invalidate} forgets what the terminal shows and repaints everything
+(use it after something else wrote to the terminal).
+
+\subsection{Input}
+
+\fn{tui_feed(t, bytes, n, now_ms)} parses; \fn{tui_poll(t, &ev)} takes the next
+event (applications using \fn{tui_update} do not call it). An event
+(\fn{tui_event}) has a \fn{type} (\fn{TUI_EV_KEY} or \fn{TUI_EV_RESIZE}), a
+\fn{key}, a \fn{ch} (for \fn{TUI_KEY_RUNE}) and \fn{mods}
+(\fn{TUI_MOD_SHIFT}, \fn{TUI_MOD_ALT}, \fn{TUI_MOD_CTRL}).
+
+\begin{itemize}
+\item Keys: \fn{TUI_KEY_RUNE} (a character), \fn{ENTER}, \fn{TAB},
+  \fn{BACKSPACE}, \fn{ESC}, the arrows, \fn{HOME}, \fn{END}, \fn{PGUP},
+  \fn{PGDN}, \fn{INSERT}, \fn{DELETE}, \fn{TUI_KEY_F1} to \fn{TUI_KEY_F12}.
+\item CSI and SS3 sequences from xterm, VT100 and the Linux console, with
+  modifiers (\texttt{ESC[1;5A} is \key{Ctrl+Up}).
+\item \key{Ctrl}+letter arrives as \fn{TUI_KEY_RUNE} with the lower-case letter
+  and \fn{TUI_MOD_CTRL}. Byte \texttt{0x00} is \key{Ctrl+Space}; \texttt{0x1C}
+  to \texttt{0x1F} are \key{Ctrl+\bs}, \key{Ctrl+]}, \key{Ctrl+\textasciicircum}
+  and \key{Ctrl+\_} (which is also what \key{Ctrl+/} sends).
+  \texttt{0x08} and \texttt{0x7F} are \key{Backspace}; CR and LF are
+  \key{Enter}. Terminals cannot report \key{Ctrl+Shift}+letter separately.
+\item \key{Esc} followed by a key is \key{Alt}+key (how terminals send
+  \key{Alt}, and \key{Option} on a Mac with ``Use Option as Meta key'').
+\item A cursor-position reply is a \fn{TUI_EV_RESIZE} only while a
+  \fn{tui_query_size} request is outstanding; otherwise the same bytes are
+  \key{F3} with modifiers, as xterm intends.
+\end{itemize}
+
+\fn{tui_key_name} writes a readable name (\texttt{Ctrl+Alt+F5}, \texttt{Shift+Tab}).
+
+%======================================================================
+\section{The window manager}
+
+\subsection{Windows}
+
+\begin{lstlisting}
+tui_window *w = tui_window_open(&t, "Title", rect, flags, controller, user);
+\end{lstlisting}
+
+The rectangle includes the frame. A width or height of 0 or less asks for the
+default (50 by 14, shrunk to fit); \texttt{x} or \texttt{y} below 0 asks for
+the next cascade position; dialogs are centred. The result is 0 when all
+\fn{R2_TUI_MAX_WINDOWS} slots are in use. Windows get the lowest free number
+from 1 to 9, shown on the frame and used by \prefix\ then a digit.
+
+\begin{longtable}{@{}p{0.3\textwidth}p{0.65\textwidth}@{}}
+\toprule
+\textbf{Flag} & \textbf{Meaning} \\
+\midrule
+\endhead
+\fn{TUI_WIN_DIALOG} & Dialog colours; opened centred; kept inside the
+  desktop rather than the work area. \\
+\fn{TUI_WIN_MODAL} & Takes all input until closed: no menus, no switching. \\
+\fn{TUI_WIN_NO_SHADOW} & No shadow. \\
+\fn{TUI_WIN_NO_RESIZE} & Move only; no zoom. \\
+\fn{TUI_WIN_ASK_CLOSE} & Closing asks the controller (\fn{tui_closing}
+  returns 1 once) instead of closing. \\
+\fn{TUI_WIN_NO_CLOSE} & Cannot be closed by the user. \\
+\bottomrule
+\end{longtable}
+
+Other calls: \fn{tui_window_close}, \fn{tui_window_focus} (also brings back a
+minimized window), \fn{tui_window_invalidate} (run its controller),
+\fn{tui_window_set_title}, \fn{tui_focused_window},
+\fn{tui_window_dock(t, w, side, size)} with \fn{TUI_DOCK_LEFT},
+\fn{TUI_DOCK_RIGHT}, \fn{TUI_DOCK_BOTTOM} or \fn{TUI_DOCK_NONE} to float again.
+\fn{tui_window} fields such as \fn{frame}, \fn{flags}, \fn{dock},
+\fn{zoomed}, \fn{hidden} (minimized) and \fn{runs} may be read; change windows
+only through the functions.
+
+\subsection{Layout}
+
+Row 0 is the menu bar and the last row the status line; between them is the
+desktop. Docked windows take the left and right edges (full height, 20
+columns by default, at most a third of the width) and the bottom between them
+(6 rows by default, at most half the height); several on one side share it.
+What is left is the \emph{work area} (\fn{tui_work_area}). Floating windows
+are kept inside it, shrunk if need be; a zoomed (maximized) window fills it.
+A minimized window is not drawn and a minimized dock gives its space back.
+
+\subsection{Focus, z-order and the desktop}
+
+The focused window has a double frame and is on top of the floating windows
+(modal windows are always above the rest). \fn{tui_set_desktop(t, controller,
+user)} gives the desktop a controller: its menus show when the focused window
+declares none, and its status text shows when no window has focus.
+
+\subsection{Routing a key}
+\label{sec:routing}
+
+Each key goes to the first of these that wants it:
+
+\begin{enumerate}
+\item the command palette, if open;
+\item the open menu;
+\item move and size mode;
+\item the topmost modal window (nothing below gets keys);
+\item the key after the command prefix;
+\item the prefix itself, then the palette key;
+\item the window manager's own keys (Appendix~\ref{app:keys});
+\item a shortcut of a menu item on the menu bar;
+\item the focused window's controller (or the desktop's).
+\end{enumerate}
+
+So menu shortcuts win over a window's own keys. To show a key in a menu
+without binding it, write the shortcut in a form the parser does not accept,
+such as Emacs notation: \texttt{"C-w"} is displayed but not bound. The demo's
+editor uses this so that \key{Ctrl+W} reaches the editor.
+
+\subsection{The command prefix and palette}
+
+\fn{tui_set_prefix(t, "Ctrl+\bs\bs")} sets the window command prefix (0
+turns it off; the hints then fall back to function keys).
+\fn{tui_set_palette_key(t, "Ctrl+]")} sets the palette key (0 for none;
+\prefix\ then \key{/} still opens it). \fn{tui_palette(t)} opens it from code,
+including from a menu item.
+
+The palette lists every enabled item of the focused window's and the
+desktop's menus (\texttt{File > Save}; a command both declare is listed once),
+the window commands, and the other windows. Matching is fuzzy: the query's
+letters must appear in order; starts of words and runs of consecutive letters
+score higher, gaps and length lower. Results are kept in score order.
+
+\subsection{Themes}
+
+\fn{tui_set_theme(t, &theme)} replaces the colours (0 for the default Borland
+theme) and re-runs every window. A \fn{tui_theme} has: \fn{desktop} and
+\fn{desktop_rune}; \fn{menu}, \fn{menu_hot}, \fn{menu_sel},
+\fn{menu_sel_hot}, \fn{menu_disabled}; \fn{frame}, \fn{frame_active},
+\fn{frame_move}; \fn{body}; \fn{dialog_frame}, \fn{dialog_body}; \fn{status},
+\fn{status_hot}; \fn{button}, \fn{button_focus}, \fn{button_hot}; \fn{hot},
+\fn{focus} (foreground only, on the window's background); \fn{input},
+\fn{input_focus}; \fn{list}, \fn{list_sel}, \fn{list_sel_focus};
+\fn{scrollbar}.
+
+%======================================================================
+\section{Writing controllers}
+\label{sec:controllers}
+
+\subsection{The shape of a controller}
+
+\begin{lstlisting}
+static void notes(tui *t, tui_window *w, void *user)
+{
+    struct notes *n = user;
+    int cw, ch;
+
+    file_menu(t);                       /* shared menus: just call */
+    tui_menu_begin(t, "~N~ote");
+    if (tui_menu_item(t, "~R~ename", "F2"))
+        n->renaming = 1;
+    tui_menu_end(t);
+
+    tui_size(t, &cw, &ch);              /* inside of the window */
+    tui_text(t, 1, 0, s8_from_cstr(n->text), TUI_DEFAULT);
+    tui_status(t, " ~F2~ Rename  ~Ctrl+\\~ Commands");
+
+    const tui_event *ev = tui_key(t);   /* a key for this window? */
+    if (ev && ev->key == TUI_KEY_RUNE && ev->ch == 'x' && !ev->mods) {
+        n->count++;
+        tui_use_key(t);                 /* handled */
+    }
+}
+\end{lstlisting}
+
+\begin{itemize}
+\item Coordinates are relative to the inside of the window (inside the
+  frame). \fn{tui_size} gives its width and height.
+\item Drawing: \fn{tui_text}, \fn{tui_fill}, \fn{tui_box} and \fn{tui_cursor}
+  (where the terminal cursor goes while this window has focus). Use
+  \fn{TUI_DEFAULT} for the window's own colours.
+\item \fn{tui_key} returns the key this run is for, or 0. Call
+  \fn{tui_use_key} if you handled it; an unused \key{Tab} or \key{Shift+Tab}
+  moves widget focus.
+\item \fn{tui_focused} is 1 when this window has focus. \fn{tui_status} sets the
+  status line while it has focus; \texttt{\textasciitilde} marks the
+  highlighted parts.
+\item Keep application state outside the controller (\fn{user}, or statics):
+  the controller is called many times and must be quick and must not block.
+\end{itemize}
+
+\subsection{Menus}
+
+Menus are declared on every run, between \fn{tui_menu_begin} and
+\fn{tui_menu_end}. \fn{tui_menu_item} returns 1 when that item was chosen
+(from the menu, a shortcut or the palette); \fn{tui_menu_item_flags} adds
+\fn{TUI_ITEM_DISABLED} and \fn{TUI_ITEM_CHECKED}; \fn{tui_menu_separator}
+draws a line. Only the focused window's (and the desktop's) declarations are
+recorded; other windows' calls return 0. Because declarations are just calls,
+menus shared by every window are a function every controller calls.
+
+A chosen item is identified by its position among the items declared in the
+run, so the same controller must declare its menu the same way on the run
+that handles the choice (it naturally does). Labels mark their hot letter with
+\texttt{\textasciitilde}: \texttt{"\textasciitilde F\textasciitilde ile"}.
+
+Shortcut strings are \emph{modifiers} then a key, joined by \texttt{+}:
+modifiers \texttt{Ctrl}, \texttt{Alt}, \texttt{Shift} (any case); keys
+\texttt{F1}--\texttt{F12}, \texttt{Enter}, \texttt{Tab}, \texttt{Backspace},
+\texttt{Esc}, \texttt{Up}, \texttt{Down}, \texttt{Left}, \texttt{Right},
+\texttt{Home}, \texttt{End}, \texttt{PgUp}, \texttt{PgDn}, \texttt{Ins},
+\texttt{Insert}, \texttt{Del}, \texttt{Delete}, \texttt{Space}, or a single
+character. Anything else is shown but not bound.
+
+\subsection{Message and input boxes}
+
+Both are modal boxes owned by the library, asked for from inside a controller
+by calling the function on every run while you want the answer:
+
+\begin{lstlisting}
+if (n->quitting) {
+    unsigned r = tui_message(t, "Quit", "Leave without saving?",
+                             TUI_MB_YES | TUI_MB_NO | TUI_MB_CANCEL);
+    if (r == TUI_MB_YES) running = 0;
+    if (r) n->quitting = 0;        /* 0 means: still asking */
+}
+if (n->renaming) {
+    unsigned r = tui_input_box(t, "Rename", "New ~n~ame:", n->name,
+                               sizeof(n->name));
+    if (r) n->renaming = 0;        /* TUI_MB_OK: n->name holds it */
+}
+\end{lstlisting}
+
+\begin{itemize}
+\item The result is 0 while the box is up, then the button
+  (\fn{TUI_MB_OK}, \fn{YES}, \fn{NO}, \fn{CANCEL}) once.
+\item The box is identified by its title and the window that asked. The answer
+  goes only to that window; if it runs without collecting it, the answer is
+  dropped.
+\item There is one box at a time. Another window asking while it is up gets 0
+  and is run again when the box is free.
+\item The input box copies the text into your buffer only on OK. It edits at
+  most \fn{R2_TUI_INPUT_MAX} bytes.
+\item Message box keys: \key{Left}, \key{Right}, \key{Tab} move; \key{Enter} or
+  \key{Space} choose; the hot letter chooses; \key{Esc} means Cancel (or the
+  last button). Text wraps at 46 columns; \texttt{\bs n} breaks a line.
+\end{itemize}
+
+\subsection{Closing}
+
+Without \fn{TUI_WIN_ASK_CLOSE}, closing just closes. With it, the controller
+sees \fn{tui_closing} return 1 once and decides, for example by asking with
+\fn{tui_message} and calling \fn{tui_window_close} on Yes.
+
+%======================================================================
+\section{Widgets}
+
+Widgets are immediate mode: call them on every run; they draw themselves and
+report what happened.
+
+\subsection{Layout}
+
+A layout cursor places widgets so you do not pass coordinates.
+\fn{tui_at(t, x, y)} moves it; each widget goes below the previous one;
+\fn{tui_same_line(t)} puts the next widget beside the last; \fn{tui_space(t,
+n)} skips lines.
+
+\begin{lstlisting}
+tui_at(t, 2, 1);
+tui_label(t, "~N~ame:");  tui_same_line(t);
+tui_input(t, "~N~ame##name", name, sizeof(name), 22);
+tui_checkbox(t, "~W~rap long lines", &wrap);
+tui_radio(t, "~S~paces", &indent, 0);  tui_same_line(t);
+tui_radio(t, "~T~abs", &indent, 1);
+if (tui_list(t, "schemes", items, 8, &sel, 20, 6) & TUI_CHANGED) ...
+if (tui_button(t, "~O~K")) ...
+\end{lstlisting}
+
+\subsection{Identity, focus and hot letters}
+
+A widget's identity is a hash of its whole label and its window. Two widgets
+with the same visible label are told apart with a suffix that is not shown:
+\texttt{"Go\#\#1"}, \texttt{"Go\#\#2"} (repeating a label still works, but
+then identity depends on call order).
+
+\key{Tab} and \key{Shift+Tab} move focus in call order, wrapping round, unless
+the focused widget used the key (the editor types a tab). A label's hot letter
+works on its own unless the focused widget takes letters (a text input, a
+list or the editor), in which case \key{Alt}+letter does. Focus survives a
+widget disappearing: it moves to one that exists.
+
+State kept between runs (text cursors, scroll positions) lives in
+\fn{R2_TUI_STATE_SLOTS} slots in the \fn{tui} structure; the least recently
+used slot is recycled and starts clean.
+
+\subsection{Reference}
+
+\begin{longtable}{@{}p{0.45\textwidth}p{0.5\textwidth}@{}}
+\toprule
+\textbf{Widget} & \textbf{Keys and result} \\
+\midrule
+\endhead
+\fn{tui_label(t, text)} & Text with a hot letter; not focusable. \\
+\fn{int tui_button(t, label)} & \key{Enter}, \key{Space}, hot letter.
+  Returns 1 when pressed. \\
+\fn{int tui_checkbox(t, label, &value)} & \key{Space}, hot letter. Returns 1
+  when toggled. \\
+\fn{int tui_radio(t, label, &value, option)} & \key{Space}, hot letter. Sets
+  \fn{*value} to \fn{option}; returns 1 if that changed it. \\
+\fn{unsigned tui_input(t, label, buf, cap, w)} & One line of UTF-8 text in
+  \fn{buf} (\fn{cap} bytes with the NUL), \fn{w} columns, scrolling sideways.
+  Arrows, \key{Home}, \key{End}, \key{Backspace}, \key{Delete},
+  \key{Ctrl+A/E/B/F/D/K}. Returns \fn{TUI_CHANGED} and/or \fn{TUI_SUBMIT}
+  (\key{Enter}). \\
+\fn{unsigned tui_list(t, label, items, count, &sel, w, h)} & Arrows,
+  \key{PgUp}, \key{PgDn}, \key{Home}, \key{End}, first letter. Returns
+  \fn{TUI_CHANGED} and/or \fn{TUI_SUBMIT}. Scrollbar when needed. \\
+\fn{tui_scroll_begin(t, label, w, h, content_h)} \ldots\
+  \fn{tui_scroll_end(t)} & A \fn{w} by \fn{h} view of \fn{content_h} lines drawn
+  between the calls at \texttt{y = 0 .. content\_h}; clipped and scrolled.
+  Focused: arrows, \key{PgUp}, \key{PgDn}, \key{Space}, \key{Home}, \key{End}.
+  Views do not nest; widgets inside are not scrolled into view. \\
+\bottomrule
+\end{longtable}
+
+%======================================================================
+\section{The text editor}
+
+\fn{r2_tui_edit.h} adds a multi-line editor as a widget. Implement it in the
+same C file as \fn{r2_tui.h} (it uses the widget internals; the header stops
+with an error otherwise).
+
+\subsection{Setting up}
+
+\begin{lstlisting}
+#define R2_TUI_IMPLEMENTATION
+#include "r2_tui.h"
+#define R2_TUI_EDIT_IMPLEMENTATION
+#include "r2_tui_edit.h"
+
+static char text[16 * 1024], clip_mem[4096], history[8192];
+static tui_edit ed;
+static tui_clipboard clip;
+
+tui_edit_init(&ed, text, sizeof(text));
+tui_clipboard_init(&clip, clip_mem, sizeof(clip_mem));
+ed.clip = &clip;                               /* optional */
+tui_edit_undo_init(&ed, history, sizeof(history)); /* optional */
+ed.flags = TUI_EDIT_LINE_NUMBERS | TUI_EDIT_AUTO_INDENT;
+tui_edit_set(&ed, S8("hello\nworld"));
+
+static void editor(tui *t, tui_window *w, void *user)
+{
+    int cw, ch;
+    char line[100];
+    tui_size(t, &cw, &ch);
+    tui_at(t, 0, 0);
+    if (tui_editor(t, "##ed", &ed, cw, ch) & TUI_CHANGED) ...
+    if (tui_edit_prompt(&ed, line, sizeof(line)))  /* searching? */
+        tui_status(t, line);
+}
+\end{lstlisting}
+
+\subsection{The editor structure}
+
+\fn{tui_edit} is public so applications can read it: \fn{cursor} (a byte
+offset), \fn{line} (from 0), \fn{lines}, \fn{top_line}, \fn{left},
+\fn{modified} (set by any change; clear it yourself after saving),
+\fn{mark_on} and \fn{mark}, \fn{upos} and \fn{ulen} (something to undo when
+\fn{upos} is above 0, to redo when \fn{upos} is below \fn{ulen}). Set
+\fn{flags}, \fn{tab} (tab width, 4) and \fn{clip}; change the rest only
+through the functions.
+
+\begin{longtable}{@{}p{0.3\textwidth}p{0.65\textwidth}@{}}
+\toprule
+\textbf{Flag} & \textbf{Meaning} \\
+\midrule
+\endhead
+\fn{TUI_EDIT_LINE_NUMBERS} & A gutter with line numbers. \\
+\fn{TUI_EDIT_READ_ONLY} & Moving, selecting and copying only. \\
+\fn{TUI_EDIT_AUTO_INDENT} & \key{Enter} copies the line's leading blanks. \\
+\fn{TUI_EDIT_SPACES} & \key{Tab} inserts spaces to the next tab stop. \\
+\bottomrule
+\end{longtable}
+
+\subsection{Functions}
+
+\begin{longtable}{@{}p{0.47\textwidth}p{0.48\textwidth}@{}}
+\toprule
+\textbf{Function} & \textbf{Does} \\
+\midrule
+\endhead
+\fn{tui_edit_init(e, buf, cap)} & Use \fn{buf} for the text; starts empty. \\
+\fn{int tui_edit_set(e, s8)} & Replace the text, cursor at the start, new
+  history. 0 if it does not fit. \\
+\fn{uint32_t tui_edit_len(e)} & Bytes of text. \\
+\fn{uint32_t tui_edit_get(e, out, cap)} & Copy out (NUL terminated). \\
+\fn{int tui_edit_insert(e, s8)} & Insert at the cursor. 0 if it does not
+  fit (nothing changes). \\
+\fn{tui_edit_delete(e, from, to)} & Delete bytes \texttt{[from, to)}. \\
+\fn{tui_edit_goto(e, offset)} & Move the cursor (snapped to a character). \\
+\fn{uint32_t tui_edit_column(e)} & The cursor's display column. \\
+\fn{unsigned tui_editor(t, label, e, w, h)} & The widget. \fn{TUI_CHANGED}
+  when the text changed. \\
+\fn{tui_clipboard_init(c, buf, cap)} & A clipboard (shareable). \\
+\fn{int tui_edit_selection(e, &from, &to)} & The selected range, if any. \\
+\fn{tui_edit_copy}, \fn{tui_edit_cut}, \fn{int tui_edit_paste} & For
+  menus. \\
+\fn{tui_edit_undo_init(e, buf, cap)} & Undo history memory. \\
+\fn{int tui_edit_undo}, \fn{int tui_edit_redo} & One step; 1 if done. \\
+\fn{tui_edit_undo_group(e)} & Start a new undo step. \\
+\fn{tui_edit_search(e, backward)} & Start an incremental search. \\
+\fn{int tui_edit_find(e, s8, backward)} & Find from the cursor and select
+  (without selection compiled in: the cursor goes past the match). \\
+\fn{tui_edit_replace(e)} & Start a query replace. \\
+\fn{int tui_edit_prompt(e, buf, cap)} & The line to show while searching or
+  replacing; 0 if none. \\
+\bottomrule
+\end{longtable}
+
+\subsection{How it works}
+
+The text is a gap buffer in your memory. The editor keeps the line count, the
+cursor's line and the first line on screen up to date as it edits, so a key
+press never rescans the whole text. Invalid UTF-8 steps one byte at a time in
+both directions; tabs and wide characters are measured in display columns.
+
+\textbf{Selection.} The region is between \fn{mark} and \fn{cursor}. A region
+made with \key{Ctrl+Space} follows Emacs: moving extends it, typing does not
+replace it. One made with \key{Shift}+movement follows CUA: a plain move
+clears it and typing replaces it.
+
+\textbf{Clipboard.} Kills (\key{Ctrl+W}, \key{Ctrl+K}, \key{Esc d},
+\key{Esc Backspace}) and copies go to the clipboard. Kills in a row join up,
+appending or prepending by direction. When the clipboard is full the text is
+cut at a character boundary.
+
+\textbf{Undo.} History is a log of records, oldest first:
+kind (1 byte), position (4), length (4), step number (4), the text, and the
+record size (4) so undo can walk backwards. An insert records the text it put
+in, a delete the text it took out; typing into the same record grows it.
+Every key is a step, except that up to 20 typed characters join one step;
+\fn{tui_edit_cut} and \fn{tui_edit_paste} always start their own. When the
+memory fills, whole steps are dropped from the old end (never part of a
+step); a single change larger than the memory clears the history. A new
+change after undo ends redo.
+
+\textbf{Search.} Matching is byte-wise with ASCII case folding when the query
+has no capital letters (Emacs' smart case). Query replace asks with two input
+boxes; the first starts empty and shows the last search as its default.
+
+\subsection{Feature switches}
+
+Define before including; each removes its code and keys.
+
+\begin{longtable}{@{}p{0.38\textwidth}p{0.57\textwidth}@{}}
+\toprule
+\textbf{Macro} & \textbf{Removes} \\
+\midrule
+\endhead
+\fn{R2_TUI_EDIT_NO_SELECTION} & The mark and Shift selection. \\
+\fn{R2_TUI_EDIT_NO_CLIPBOARD} & Kill, yank, cut, copy, paste. \\
+\fn{R2_TUI_EDIT_NO_UNDO} & Undo and redo. \\
+\fn{R2_TUI_EDIT_NO_SEARCH} & Incremental search and query replace. \\
+\fn{R2_TUI_EDIT_NO_HIGHLIGHT} & Reserved for the highlighting hook (not
+  written yet). \\
+\fn{R2_TUI_EDIT_MINIMAL} & All of the above. \\
+\bottomrule
+\end{longtable}
+
+On the ESP32-S3 the editor is about 7.2~KB of code with everything and
+3.7~KB minimal.
+
+%======================================================================
+\section{Testing}
+
+The tests are plain C, in the style of the rest of r2 (\fn{r2_unit.h}). Each
+suite also compiles on its own.
+
+\begin{itemize}
+\item \textbf{A model terminal.} The renderer's output is applied byte by byte
+  to a small VT100 model (cursor moves, colours, wide-character rules as
+  xterm has them) which must end up equal to the back buffer. Thousands of
+  random drawing rounds run with random chunk sizes, drawing in the middle of
+  frames.
+\item \textbf{Keys as bytes.} Window manager, widget and editor tests type real
+  key bytes and read the composed screen. A random-key fuzz runs on each
+  layer with invariants (focus on an open window, text valid UTF-8, cursor on
+  screen).
+\item \textbf{Models.} The editor's incremental bookkeeping is checked against
+  a plain byte array over 20\,000 random edits; undo and redo against
+  snapshots, including with a history too small to keep everything.
+\item \textbf{Exhaustive checks.} The width table for every codepoint; the
+  key parser for every key re-fed split at every byte.
+\item \textbf{Mutation testing.} During development each behaviour was broken
+  on purpose to see a test fail; gaps found that way became tests.
+\item \textbf{Builds.} gcc and clang, AddressSanitizer and UBSan, every editor
+  feature switch, the wasm module, and the ESP32-S3 compiler.
+\end{itemize}
+
+Interactive checks in a real terminal are by hand: \texttt{make demo} and
+\texttt{make app}.
+
+%======================================================================
+\section{Extending}
+
+\subsection{A new widget}
+
+A widget follows the pattern of those in \fn{r2_tui.h}:
+
+\begin{lstlisting}
+unsigned my_widget(tui *t, const char *label, ...)
+{
+    uint32_t id = r2__tui_wid(t, label);           /* identity */
+    int focused = r2__tui_wreg(t, id, KIND);       /* focusable */
+    tui_wstate *st = r2__tui_state(t, id);         /* kept state */
+    const tui_event *ev = tui_key(t);
+    int x, y;
+    if (r2__tui_hot_hit(t, label))                 /* hot letter */
+        r2__tui_wfocus(t, id, KIND);
+    if (focused && ev) { /* handle it */ tui_use_key(t); }
+    r2__tui_place(t, w, h, &x, &y);                /* layout */
+    /* draw with tui_text / tui_fill at (x, y) */
+}
+\end{lstlisting}
+
+The \fn{r2__} functions are internal: they are visible in the C file that has
+the implementation and may change.
+
+\subsection{Other changes}
+
+\begin{itemize}
+\item \textbf{Keys.} New escape sequences go in \fn{r2__tui_csi} and
+  \fn{r2__tui_ss3}; add them to the key table test.
+\item \textbf{The width table.} After a Python upgrade with newer Unicode data,
+  run \texttt{python3 tools/gen\_tui\_width.py r2\_tui.h}; it rewrites the
+  generated block and the checksum the test compares.
+\item \textbf{A theme.} Copy the Borland theme, change colours, pass it to
+  \fn{tui_set_theme}.
+\end{itemize}
+
+\subsection{The Chestnut window server}
+\label{sec:server}
+
+Planned, not built. One Chestnut task would own the terminal, focus and the
+menu bar; each application task would own its windows and send its command
+lists and menu declarations to it. The recorded command format and the
+per-window ownership in this library are what make that split possible.
+
+%======================================================================
+\section{Limitations}
+
+\begin{itemize}
+\item Keyboard only; no mouse.
+\item 16 colours (no 256-colour or true-colour themes).
+\item One combining mark per cell; emoji ZWJ sequences draw as their parts.
+\item One message or input box at a time.
+\item Scroll views do not nest and do not follow widget focus.
+\item The editor has one cursor, a fixed-size buffer, and no highlighting yet.
+\item Terminal.app cannot report \key{Ctrl+Shift}+letter, \key{Ctrl+Shift+Space}
+  or \key{Ctrl+Esc} as separate keys; \key{Alt} needs ``Use Option as Meta
+  key''; macOS may take \key{Ctrl+Space} for switching input sources.
+\item Over \texttt{idf.py monitor}, \key{Ctrl+]} quits the monitor; set another
+  palette key there.
+\end{itemize}
+
+%======================================================================
+\appendix
+
+\section{Key reference}
+\label{app:keys}
+
+\subsection{Window commands (\prefix\ then a key)}
+
+\begin{longtable}{@{}p{0.3\textwidth}p{0.65\textwidth}@{}}
+\toprule
+\textbf{After the prefix} & \textbf{Does} \\
+\midrule
+\endhead
+a letter & Open the menu with that hot letter (\key{Shift} is fine). \\
+\key{1}--\key{9} & Focus that window (and bring it back if minimized). \\
+\key{Space} & The system menu. \\
+\key{/} & The command palette. \\
+\key{Up} & Maximize. \\
+\key{Down} & Restore a maximized window, otherwise minimize. \\
+\key{Left}, \key{Right}, \key{Tab}, \key{Shift+Tab} & Previous or next
+  window. \\
+\key{Enter} & Move (arrows) and size (\key{Shift}+arrows); \key{Enter} done,
+  \key{Esc} back. A docked window's arrows change its size. \\
+\key{Backspace}, \key{Delete} & Close. \\
+\prefix & Send the prefix to the window. \\
+\key{Esc}, any other key, 2 seconds & Cancel. \\
+\bottomrule
+\end{longtable}
+
+\subsection{Other window manager keys}
+
+\begin{longtable}{@{}p{0.3\textwidth}p{0.65\textwidth}@{}}
+\toprule
+\textbf{Key} & \textbf{Does} \\
+\midrule
+\endhead
+\key{Ctrl+]} & The command palette (\key{Up}/\key{Down} or
+  \key{Ctrl+P}/\key{Ctrl+N} choose, \key{Enter} runs, \key{Backspace} and
+  \key{Ctrl+U} edit, \key{Esc} or \key{Ctrl+G} close). \\
+\key{F10}, \key{Alt}+letter & Menus. \\
+\key{Alt+Space} & The system menu. \\
+\key{F6}, \key{Shift+F6}, \key{Alt+1}--\key{9} & Switch windows. \\
+\key{F5} & Zoom. \\
+\key{Ctrl+F5} & Move and size. \\
+\key{Alt+F3} & Close. \\
+In a menu & Arrows move, \key{Enter} or the hot letter chooses, \key{Esc}
+  closes. \\
+\bottomrule
+\end{longtable}
+
+\subsection{Editor}
+
+\begin{longtable}{@{}p{0.36\textwidth}p{0.59\textwidth}@{}}
+\toprule
+\textbf{Key} & \textbf{Does} \\
+\midrule
+\endhead
+Arrows, \key{Home}, \key{End}, \key{PgUp}, \key{PgDn} & Move. \\
+\key{Ctrl+Home}, \key{Ctrl+End} & Top, bottom. \\
+\key{Ctrl+Left}, \key{Ctrl+Right} & Words. \\
+\key{Ctrl+A}, \key{Ctrl+E} & Start, end of the line. \\
+\key{Ctrl+B}, \key{Ctrl+F}, \key{Ctrl+P}, \key{Ctrl+N} & Back, forward, up,
+  down. \\
+\key{Ctrl+D}, \key{Delete}, \key{Backspace} & Delete. \\
+\key{Ctrl+K} & Kill to the end of the line (or join the next). \\
+\key{Enter}, \key{Tab} & New line, tab. \key{Shift+Tab} leaves the editor. \\
+\key{Esc} then a key & Meta: \key{Esc f}/\key{b} words, \key{Esc <}/\key{>}
+  top and bottom, \key{Esc v} page up, \key{Esc d} and \key{Esc Backspace}
+  kill a word, \key{Esc w} copy, \key{Esc \%} replace. \key{Esc Esc}
+  clears the selection. \\
+\key{Ctrl+Space} & Set the mark. \\
+\key{Shift}+movement & Select (CUA). \\
+\key{Ctrl+G} & Clear the selection; leave a search. \\
+\key{Ctrl+W}, \key{Ctrl+Y} & Kill (cut), yank (paste). \\
+\key{Shift+Del}, \key{Ctrl+Ins}, \key{Shift+Ins} & Cut, copy, paste
+  (Borland). \\
+\key{Ctrl+/}, \key{Ctrl+Z} & Undo. \\
+\key{Esc} then \key{Ctrl+/} & Redo. \\
+\key{Ctrl+S}, \key{Ctrl+R} & Incremental search forward, backward. \\
+In a search & Type to search; \key{Ctrl+S}/\key{Ctrl+R} next (again after a
+  failure wraps; on an empty search, the last one); \key{Backspace} shorter;
+  \key{Enter} or \key{Esc} stay; \key{Ctrl+G} back; other keys stop. \\
+In query replace & \key{y} or \key{Space} replace, \key{n} skip, \key{!}
+  the rest, \key{.} this one and stop, \key{q}, \key{Enter} or \key{Esc}
+  stop. \\
+\bottomrule
+\end{longtable}
+
+\section{API index}
+
+\subsection{r2\_tui.h}
+
+\begin{description}[style=nextline,font=\normalfont\bfseries]
+\item[Setup] \fn{tui_init}, \fn{tui_resize}, \fn{tui_invalidate},
+  \fn{R2_TUI_ARENA_SIZE}
+\item[Text] \fn{tui_rune_width}, \fn{tui_text_width}
+\item[Drawing] \fn{tui_clip}, \fn{tui_clip_reset}, \fn{tui_draw_rune},
+  \fn{tui_draw_text}, \fn{tui_draw_fill}, \fn{tui_draw_box},
+  \fn{tui_draw_shadow}, \fn{tui_set_cursor}, \fn{tui_get_cell},
+  \fn{tui_get_mark}
+\item[Output] \fn{tui_render}, \fn{tui_render_pending}
+\item[Input] \fn{tui_feed}, \fn{tui_step}, \fn{tui_poll},
+  \fn{tui_input_pending}, \fn{tui_query_size}, \fn{tui_key_name}
+\item[Windows] \fn{tui_update}, \fn{tui_window_open}, \fn{tui_window_close},
+  \fn{tui_window_dock}, \fn{tui_window_focus}, \fn{tui_window_invalidate},
+  \fn{tui_window_set_title}, \fn{tui_focused_window}, \fn{tui_set_desktop},
+  \fn{tui_set_theme}, \fn{tui_set_prefix}, \fn{tui_set_palette_key},
+  \fn{tui_palette}, \fn{tui_work_area}
+\item[In a controller] \fn{tui_text}, \fn{tui_fill}, \fn{tui_box},
+  \fn{tui_cursor}, \fn{tui_size}, \fn{tui_key}, \fn{tui_use_key},
+  \fn{tui_focused}, \fn{tui_status}, \fn{tui_closing}
+\item[Menus] \fn{tui_menu_begin}, \fn{tui_menu_end}, \fn{tui_menu_item},
+  \fn{tui_menu_item_flags}, \fn{tui_menu_separator}
+\item[Boxes] \fn{tui_message}, \fn{tui_input_box}
+\item[Widgets] \fn{tui_at}, \fn{tui_same_line}, \fn{tui_space},
+  \fn{tui_label}, \fn{tui_button}, \fn{tui_checkbox}, \fn{tui_radio},
+  \fn{tui_input}, \fn{tui_list}, \fn{tui_scroll_begin}, \fn{tui_scroll_end}
+\end{description}
+
+\subsection{r2\_tui\_edit.h}
+
+\begin{description}[style=nextline,font=\normalfont\bfseries]
+\item[Text] \fn{tui_edit_init}, \fn{tui_edit_set}, \fn{tui_edit_len},
+  \fn{tui_edit_get}, \fn{tui_edit_insert}, \fn{tui_edit_delete},
+  \fn{tui_edit_goto}, \fn{tui_edit_column}
+\item[Widget] \fn{tui_editor}
+\item[Selection and clipboard] \fn{tui_clipboard_init},
+  \fn{tui_edit_selection}, \fn{tui_edit_copy}, \fn{tui_edit_cut},
+  \fn{tui_edit_paste}
+\item[Undo] \fn{tui_edit_undo_init}, \fn{tui_edit_undo}, \fn{tui_edit_redo},
+  \fn{tui_edit_undo_group}
+\item[Search] \fn{tui_edit_search}, \fn{tui_edit_find},
+  \fn{tui_edit_replace}, \fn{tui_edit_prompt}
+\end{description}
+
+\subsection{r2\_tui\_posix.h}
+
+\fn{tui_posix_open}, \fn{tui_posix_close}, \fn{tui_posix_size},
+\fn{tui_posix_resized}, \fn{tui_posix_read}, \fn{tui_posix_write},
+\fn{tui_posix_write_str}, \fn{tui_posix_wait}, \fn{tui_posix_now_ms}
+
+\section{What goes to the terminal}
+
+The library only ever sends these, so a terminal or emulator (such as the
+planned Chestnut console) needs nothing more:
+
+\begin{longtable}{@{}p{0.35\textwidth}p{0.6\textwidth}@{}}
+\toprule
+\textbf{Bytes} & \textbf{Meaning} \\
+\midrule
+\endhead
+\texttt{ESC[}\textit{row}\texttt{;}\textit{col}\texttt{H} & Move the cursor. \\
+\texttt{ESC[}\textit{n}\texttt{C} & Move the cursor right. \\
+\texttt{ESC[0;}\ldots\texttt{m} & Colours and attributes: always starting
+  with a reset; \texttt{1} bold, \texttt{4} underline, \texttt{7} reverse,
+  \texttt{30}--\texttt{37} and \texttt{90}--\texttt{97} foreground,
+  \texttt{40}--\texttt{47} and \texttt{100}--\texttt{107} background. \\
+\texttt{ESC[?2026h}, \texttt{ESC[?2026l} & Synchronized update on and off
+  (ignored by terminals that lack it). \\
+\texttt{ESC[?25l}, \texttt{ESC[?25h} & Hide and show the cursor. \\
+UTF-8 text & Printable characters only (controls are drawn as \texttt{?}). \\
+\texttt{ESC7 ESC[999;999H ESC[6n ESC8} & Size query
+  (\fn{tui_query_size}). \\
+\texttt{ESC[?1049h}, \texttt{ESC[?7l} & Alternate screen, wrap off (the
+  POSIX adapter only). \\
+\bottomrule
+\end{longtable}
+
+\end{document}

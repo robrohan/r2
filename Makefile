@@ -1,4 +1,4 @@
-.PHONY: all test test_strings test_maths test_quant test_tui test_edit test_edit_flags test_clang wasm demo clean build help
+.PHONY: all test test_strings test_maths test_quant test_tui test_edit test_edit_flags test_clang wasm test_wasm demo app clean build help
 
 help:
 	@echo "Available targets:"
@@ -12,7 +12,9 @@ help:
 	@echo "  test_edit_flags - the editor suite with each -D feature switch off"
 	@echo "  test_clang   - build and run all tests with clang"
 	@echo "  wasm         - check the freestanding headers build for wasm32 with clang (no libc)"
+	@echo "  test_wasm    - drive the wasm module's exports natively; prints how to open the test page"
 	@echo "  demo         - build the terminal UI demo (bin/tui_demo)"
+	@echo "  app          - build the plain windowing app, no editor (bin/tui_app)"
 	@echo "  check        - run static analysis / lint (check.sh)"
 	@echo "  perf         - run perf stat on the test binary (Linux only, run as sudo)"
 	@echo "  clean        - remove build artifacts"
@@ -128,9 +130,21 @@ wasm:
 	wasm-ld --no-entry bin/wasm_check.o -o bin/r2.wasm
 	@echo "bin/r2.wasm: freestanding build OK"
 
+# the module's exports driven natively, as examples/wasm/index.html drives them
+test_wasm: wasm
+	$(CC) -std=c11 $(C_ERRS) -O1 -g -fsanitize=address,undefined -fno-sanitize-recover=all \
+		tools/wasm_host_test.c -o bin/wasm_host_test
+	./bin/wasm_host_test
+	@echo "test page: python3 -m http.server 8000, then open http://localhost:8000/examples/wasm/"
+
 demo:
 	mkdir -p bin
 	$(CC) -std=c11 $(C_ERRS) -O2 examples/tui_demo.c -o bin/tui_demo
+
+# just the window manager: no editor, no test windows (a starting point to copy)
+app:
+	mkdir -p bin
+	$(CC) -std=c11 $(C_ERRS) -O2 examples/tui_app.c -o bin/tui_app
 
 perf:
 #####################################
