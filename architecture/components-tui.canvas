@@ -8,26 +8,26 @@
 		{"id":"c-dialogs","type":"text","text":"## Message boxes\n*[Component: r2_tui.h:3067]*\n`tui_message` (Yes/No/OK/Cancel, word wrap) and `tui_input_box` (a line of text); the answer goes back to the controller that asked.\nCode: [[..]]","x":1588,"y":45,"width":300,"height":200,"color":"4"},
 		{"id":"c-palette","type":"text","text":"## Prefix & command palette\n*[Component: r2_tui.h:3239, 3960]*\nCtrl+\\ then a key (menus, windows 1-9, max/min, move, close). Ctrl+Space fuzzy-searches menu items, window commands and windows.\nCode: [[..]]","x":25,"y":520,"width":300,"height":200,"color":"4"},
 		{"id":"c-menus","type":"text","text":"## Menu bar & system menu\n*[Component: r2_tui.h:2559-3066]*\nMenus declared by the focused window's controller (Mac style); shortcuts; ≡ system menu; move/size mode.\nKey: `tui_menu_begin`, `tui_menu_item`\nCode: [[..]]","x":451,"y":779,"width":300,"height":200,"color":"4"},
-		{"id":"c-cells","type":"text","text":"## Cells & drawing\n*[Component: r2_tui.h:761-1133]*\nBack buffer of 4-byte cells; text/fill/box/shadow with clipping; wide chars, combining marks; control chars drawn as `?`.\nKey: `tui_draw_text`\nCode: [[..]]","x":1601,"y":501,"width":300,"height":200,"color":"4"},
+		{"id":"c-cells","type":"text","text":"## Cells & drawing\n*[Component: r2_tui.h:761-1133]*\nBack buffer of 4-byte cells; text/fill/box/shadow with clipping; wide chars, combining marks; control chars drawn as `?`.\nKey: `tui_draw_text`\nCode: [[..]]","x":1654,"y":567,"width":300,"height":200,"color":"4"},
 		{"id":"c-width","type":"text","text":"## Width table\n*[Component: generated data, r2_tui.h:599]*\n0/1/2 columns per codepoint from Unicode 16.0, packed ranges (~2.3 KB), binary search.\nKey: `tui_rune_width`\nCode: [[..]]","x":1140,"y":567,"width":300,"height":200,"color":"4"},
 		{"id":"c-posix","type":"text","text":"## POSIX adapter\n*[Component: r2_tui_posix.h]*\nMac/Linux only: raw mode, alternate screen, `SIGWINCH`, non-blocking read, `poll` wait, ms clock. Chestnut brings its own.\nCode: [[..]]","x":365,"y":1111,"width":300,"height":200,"color":"4"},
 		{"id":"c-termui","type":"text","text":"## Escape codes\n*[Component: r2_termui.h]*\nVT100/ANSI sequences as macros: cursor, erase, SGR colours (16/256/RGB), alt screen, sync update.\nCode: [[..]]","x":968,"y":1114,"width":300,"height":200,"color":"4"},
-		{"id":"c-render","type":"text","text":"## Diff renderer\n*[Component: r2_tui.h:1134]*\nCompares back and front buffers; sends only changed cells in resumable chunks (any size ≥ 64 bytes), wrapped in synchronized update.\nKey: `tui_render`\nCode: [[..]]","x":1596,"y":1115,"width":300,"height":200,"color":"4"},
+		{"id":"c-render","type":"text","text":"## Diff renderer\n*[Component: r2_tui.h:1134]*\nCompares back and front buffers; sends only changed cells in resumable chunks (any size ≥ 64 bytes), wrapped in synchronized update.\nKey: `tui_render`\nCode: [[..]]","x":1659,"y":1114,"width":300,"height":200,"color":"4"},
 		{"id":"tool-gen","type":"text","text":"## Width table generator\n*[Tooling: Python unicodedata]*\nRewrites the generated block in `r2_tui.h` and its checksum, which a test checks for all 1.1M codepoints.\nKey: `tools/gen_tui_width.py`\nCode: [[../tools]]","x":1140,"y":884,"width":300,"height":200,"color":"1"},
 		{"id":"w-chestnut","type":"file","file":"root.canvas","subpath":"#ext-chestnut","x":17,"y":-449,"width":315,"height":198},
 		{"id":"w-demo","type":"file","file":"containers.canvas","subpath":"#ctr-demo","x":447,"y":-310,"width":314,"height":220},
-		{"id":"w-tests","type":"file","file":"containers.canvas","subpath":"#tool-tests","x":1581,"y":-332,"width":306,"height":226},
-		{"id":"w-strings","type":"file","file":"containers.canvas","subpath":"#ctr-strings","x":2140,"y":480,"width":313,"height":236},
+		{"id":"w-tests","type":"file","file":"containers.canvas","subpath":"#tool-tests","x":2370,"y":26,"width":306,"height":226},
+		{"id":"w-strings","type":"file","file":"containers.canvas","subpath":"#ctr-strings","x":2228,"y":550,"width":313,"height":236},
 		{"id":"w-posix","type":"file","file":"root.canvas","subpath":"#ext-posix","x":361,"y":1536,"width":306,"height":203},
-		{"id":"w-terminal","type":"file","file":"root.canvas","subpath":"#ext-terminal","x":1593,"y":1520,"width":304,"height":201},
-		{"id":"c-widgets","type":"text","text":"## Widgets\n*[Component: r2_tui.h, widgets section]*\nImmediate-mode label, button, checkbox, radio, text input (Emacs keys), list and scroll view, placed by a layout cursor; Tab focus and hot letters; per-widget state in a small LRU pool.\nKey: `tui_button`, `tui_input`, `tui_list`\nCode: [[..]]","x":2540,"y":80,"width":300,"height":240,"color":"4"}
+		{"id":"w-terminal","type":"file","file":"root.canvas","subpath":"#ext-terminal","x":1657,"y":1520,"width":304,"height":201},
+		{"id":"c-widgets","type":"text","text":"## Widgets\n*[Component: r2_tui.h, widgets section]*\nImmediate-mode label, button, checkbox, radio, text input (Emacs keys), list and scroll view, placed by a layout cursor; Tab focus and hot letters; per-widget state in a small LRU pool.\nKey: `tui_button`, `tui_input`, `tui_list`\nCode: [[..]]","x":1289,"y":-324,"width":299,"height":194,"color":"4"}
 	],
 	"edges":[
 		{"id":"e-w-demo-c-route","fromNode":"w-demo","fromSide":"bottom","toNode":"c-route","toSide":"top","label":"Updates each loop [tui_update]"},
 		{"id":"e-w-demo-c-input","fromNode":"w-demo","fromSide":"left","toNode":"c-input","toSide":"top","label":"Feeds key bytes [tui_feed]"},
 		{"id":"e-w-demo-c-wm","fromNode":"w-demo","fromSide":"right","toNode":"c-wm","toSide":"top","label":"Opens windows [tui_window_open]"},
 		{"id":"e-w-chestnut-c-input","fromNode":"w-chestnut","fromSide":"bottom","toNode":"c-input","toSide":"top","label":"Will feed UART bytes [planned]"},
-		{"id":"e-w-tests-c-dialogs","fromNode":"w-tests","fromSide":"bottom","toNode":"c-dialogs","toSide":"top","label":"Drives with key bytes, checks the screen [model VT]"},
+		{"id":"e-w-tests-c-dialogs","fromNode":"w-tests","toNode":"c-dialogs","label":"Drives with key bytes, checks the screen [model VT]"},
 		{"id":"e-c-route-c-input","fromNode":"c-route","fromSide":"left","toNode":"c-input","toSide":"right","label":"Takes events [tui_poll]"},
 		{"id":"e-c-route-c-wm","fromNode":"c-route","fromSide":"right","toNode":"c-wm","toSide":"left","label":"Runs controllers, lays out"},
 		{"id":"e-c-route-c-menus","fromNode":"c-route","fromSide":"bottom","toNode":"c-menus","toSide":"top","label":"Routes menu keys, draws the bar"},
@@ -44,7 +44,7 @@
 		{"id":"e-c-render-w-terminal","fromNode":"c-render","fromSide":"bottom","toNode":"w-terminal","toSide":"top","label":"Sends changed cells [escape codes]"},
 		{"id":"e-c-posix-c-termui","fromNode":"c-posix","fromSide":"right","toNode":"c-termui","toSide":"left","label":"Alt screen, reset [ESC_ALT_SCREEN_ON]"},
 		{"id":"e-c-posix-w-posix","fromNode":"c-posix","fromSide":"bottom","toNode":"w-posix","toSide":"top","label":"Raw mode, size, reads [termios, ioctl, poll]"},
-		{"id":"e-c-wm-c-widgets","fromNode":"c-wm","fromSide":"right","toNode":"c-widgets","toSide":"left","label":"Controllers call [tui_button, tui_input, ...]"},
-		{"id":"e-c-dialogs-c-widgets","fromNode":"c-dialogs","fromSide":"right","toNode":"c-widgets","toSide":"left","label":"Input box is built from [tui_input, tui_button]"}
+		{"id":"e-c-wm-c-widgets","fromNode":"c-wm","toNode":"c-widgets","label":"Controllers call [tui_button, tui_input, ...]"},
+		{"id":"e-c-dialogs-c-widgets","fromNode":"c-dialogs","toNode":"c-widgets","label":"Input box is built from [tui_input, tui_button]"}
 	]
 }
