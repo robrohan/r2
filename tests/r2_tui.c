@@ -815,6 +815,27 @@ static const char *test_tui_size_query(void)
     return 0;
 }
 
+static const char *test_tui_size_reply_bounds(void)
+{
+    /* found by tools/fuzz: a size reply with a 0, or one so large that
+       cols * rows wrapped past 32 bits, got through to tui_resize */
+    tui t;
+    tui_event ev;
+    uint8_t out[64];
+    tui_test_init(&t, VT_COLS, VT_ROWS);
+    tui_query_size(&t, out, sizeof(out));
+    TUI_FEED(&t, "\x1b[0;3R", 0);
+    r2_assert("a 0 row reply is dropped", !tui_poll(&t, &ev));
+    tui_query_size(&t, out, sizeof(out));
+    TUI_FEED(&t, "\x1b[4;1073741824R", 0);
+    r2_assert("a huge reply is a resize", tui_poll(&t, &ev) && ev.type == TUI_EV_RESIZE);
+    r2_assert("huge numbers saturate, not wrap", ev.x > 1000 && ev.y == 4);
+    r2_assert("resize where cols * rows wraps is refused", tui_resize(&t, 1 << 30, 4) == -1);
+    r2_assert("resize to a huge size is refused", tui_resize(&t, 0x7FFFFFFF, 0x7FFFFFFF) == -1);
+    r2_assert("size unchanged", t.cols == VT_COLS && t.rows == VT_ROWS);
+    return 0;
+}
+
 static const char *test_tui_input_fuzz(void)
 {
     /* random bytes biased towards escape sequences: never crashes, never
@@ -2282,6 +2303,7 @@ static const char *r2_tui_test(void)
     r2_run_test(test_tui_esc_timeout);
     r2_run_test(test_tui_bad_input);
     r2_run_test(test_tui_size_query);
+    r2_run_test(test_tui_size_reply_bounds);
     r2_run_test(test_tui_input_fuzz);
     r2_run_test(test_tui_key_names);
 

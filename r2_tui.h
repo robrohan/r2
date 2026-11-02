@@ -919,7 +919,8 @@ extern "C"
 
     R2_TUI_DEF int tui_resize(tui *t, int cols, int rows)
     {
-        if (cols < 1 || rows < 1 || (uint32_t)cols * (uint32_t)rows > t->cap_cells)
+        /* divide rather than multiply: cols * rows can wrap past 32 bits */
+        if (cols < 1 || rows < 1 || (uint32_t)cols > t->cap_cells / (uint32_t)rows)
             return -1;
         t->cols = cols;
         t->rows = rows;
@@ -1496,7 +1497,7 @@ extern "C"
             uint8_t c = b[j];
             if (c >= '0' && c <= '9')
             {
-                if (np < 4)
+                if (np < 4 && p[np] < 100000u) /* saturate: no wrap to a small number */
                     p[np] = p[np] * 10u + (uint32_t)(c - '0');
                 have = 1;
             }
@@ -1547,8 +1548,11 @@ extern "C"
         case 'R':
             if (t->cpr_pending && np == 2)
             {
-                /* cursor position report: the reply to tui_query_size */
+                /* cursor position report: the reply to tui_query_size
+                   (rows and columns count from 1; a 0 is dropped) */
                 t->cpr_pending = 0;
+                if (p[0] == 0 || p[1] == 0)
+                    break;
                 ev->type = TUI_EV_RESIZE;
                 ev->key = TUI_KEY_NONE;
                 ev->mods = 0;
@@ -4880,7 +4884,7 @@ extern "C"
         if (ev->type == TUI_EV_RESIZE)
         {
             int cols = ev->x, rows = ev->y;
-            while ((uint32_t)cols * (uint32_t)rows > t->cap_cells && rows > 1)
+            while (cols > 0 && rows > 1 && (uint32_t)cols > t->cap_cells / (uint32_t)rows)
                 rows--;
             tui_resize(t, cols, rows);
             return;

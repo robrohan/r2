@@ -1,4 +1,4 @@
-.PHONY: all test test_strings test_maths test_quant test_tui test_edit test_edit_flags test_clang wasm test_wasm demo app clean build help
+.PHONY: all test test_strings test_maths test_quant test_tui test_edit test_edit_flags test_clang test_asan fuzz fuzz_run wasm test_wasm demo app clean build help
 
 help:
 	@echo "Available targets:"
@@ -11,6 +11,9 @@ help:
 	@echo "  test_edit    - build and run only the text editor widget suite with gcc"
 	@echo "  test_edit_flags - the editor suite with each -D feature switch off"
 	@echo "  test_clang   - build and run all tests with clang"
+	@echo "  test_asan    - build and run all tests under AddressSanitizer + UBSan"
+	@echo "  fuzz         - build the libFuzzer harnesses in tools/fuzz (needs clang with libFuzzer)"
+	@echo "  fuzz_run     - run one harness: make fuzz_run FUZZ=input SECS=60"
 	@echo "  wasm         - check the freestanding headers build for wasm32 with clang (no libc)"
 	@echo "  test_wasm    - drive the wasm module's exports natively; prints how to open the test page"
 	@echo "  demo         - build the terminal UI demo (bin/tui_demo)"
@@ -119,6 +122,41 @@ test_clang: clean
 	LDFLAGS='$(BLAS_LDFLAGS)' \
 	./test.sh
 	./bin/run_tests_clang
+
+# the whole suite with ASan + UBSan, so the random tests catch out of bounds
+# reads and writes that don't happen to crash. No OpenMP or -O3: slower, but
+# the sanitizer reports are readable.
+test_asan: clean
+	mkdir -p bin
+	OUT=./bin/run_tests_asan \
+	CFLAGS='-std=c11 $(C_ERRS) -g -O1 -fno-omit-frame-pointer -fsanitize=address,undefined -fno-sanitize-recover=all $(SIMD_FLAGS) $(BLAS_CFLAGS)' \
+	LDFLAGS='-fsanitize=address,undefined $(BLAS_LDFLAGS)' \
+	./test.sh
+	./bin/run_tests_asan
+
+# coverage-guided fuzzing with libFuzzer (tools/fuzz/*.c, seeds in
+# tools/fuzz/corpus/<name>). Apple's clang has no libFuzzer; on macOS use
+# Homebrew's: make fuzz FUZZ_CC=$$(brew --prefix llvm)/bin/clang
+FUZZ_CC      ?= clang
+FUZZ_FLAGS   := -std=c11 $(C_ERRS) -g -O1 -fno-omit-frame-pointer \
+		-fsanitize=fuzzer,address,undefined -fno-sanitize-recover=all
+FUZZ_TARGETS := $(patsubst tools/fuzz/%.c,bin/fuzz_%,$(wildcard tools/fuzz/*.c))
+FUZZ ?= input
+SECS ?= 60
+
+fuzz: $(FUZZ_TARGETS)
+
+bin/fuzz_%: tools/fuzz/%.c r2_strings.h r2_tui.h r2_tui_edit.h
+	mkdir -p bin
+	$(FUZZ_CC) $(FUZZ_FLAGS) $< -o $@
+
+# new inputs found go in bin/corpus_<name> (the checked in seeds stay as
+# they are); crashes land in bin/ as crash-<hash>, rerun one with
+# ./bin/fuzz_<name> bin/crash-<hash>
+fuzz_run: bin/fuzz_$(FUZZ)
+	mkdir -p bin/corpus_$(FUZZ)
+	./bin/fuzz_$(FUZZ) -max_total_time=$(SECS) -artifact_prefix=bin/ \
+		bin/corpus_$(FUZZ) tools/fuzz/corpus/$(FUZZ)
 
 # clang only (no emcc, no libc): strings, quant and tui must build for
 # wasm32 with nothing imported. wasm-ld fails on any missing function.
