@@ -2,7 +2,7 @@
 #include "../r2_tui.h"
 #define R2_TUI_EDIT_IMPLEMENTATION
 #include "../r2_tui_edit.h"
-#include "../r2_unit.h"
+#include "../../r2_unit.h"
 
 #include <stdint.h>
 #include <stdio.h>

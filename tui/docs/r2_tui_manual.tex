@@ -104,6 +104,8 @@ Everything in the library follows from a few rules:
 
 \subsection{Files}
 
+Paths are relative to the \fn{tui/} directory of the r2 repository.
+
 \begin{longtable}{@{}p{0.27\textwidth}p{0.68\textwidth}@{}}
 \toprule
 \textbf{File} & \textbf{What it is} \\
@@ -118,15 +120,15 @@ Everything in the library follows from a few rules:
 \fn{r2_tui_posix.h} & Mac and Linux terminal plumbing: raw mode, alternate
   screen, window size, non-blocking reads, a clock. Not used on Chestnut. \\
 \fn{r2_termui.h} & VT100 and ANSI escape sequences as macros. \\
-\fn{r2_strings.h} & UTF-8 strings (\fn{s8}) used for all text. \\
+\fn{../r2_strings.h} & UTF-8 strings (\fn{s8}) used for all text. Lives in the repo root, shared with the rest of r2. \\
 \fn{examples/tui_app.c} & A starter application: windows, menus, docking,
   dialogs, no editor. \texttt{make app}. \\
 \fn{examples/tui_demo.c} & Everything: editor, widgets, test windows.
   \texttt{make demo}. \\
 \fn{tools/gen_tui_width.py} & Generates the character width table from
   Python's Unicode data. \\
-\fn{tools/wasm_check.c} & The freestanding wasm build check. \texttt{make wasm}. \\
-\fn{tests/r2_tui.c}, \fn{tests/r2_tui_edit.c} & The test suites. \\
+\fn{../tools/wasm_check.c} & The freestanding wasm build check. \texttt{make wasm}. \\
+\fn{tests/r2_tui.c}, \fn{tests/r2_tui_edit.c}, \fn{tests/r2_termui.c} & The test suites, run from the repo root's \fn{tests.c}. \\
 \bottomrule
 \end{longtable}
 
@@ -199,7 +201,9 @@ int main(void)
 The headers are stb-style: include them anywhere for the declarations, and
 define \fn{R2_TUI_IMPLEMENTATION} (and \fn{R2_TUI_EDIT_IMPLEMENTATION} for the
 editor) before including in exactly one C file. \fn{r2_tui.h} includes
-\fn{r2_strings.h} and \fn{r2_termui.h}, which must sit next to it, and turns on
+\fn{r2_strings.h} and \fn{r2_termui.h}. \fn{r2_termui.h} sits next to it in \fn{tui/}; \fn{r2_strings.h}
+is in the repo root, so build with \texttt{-I} pointing there (the Makefile
+passes \texttt{-I.}) or copy all the headers into one directory. It turns on
 \fn{R2_STRINGS_IMPLEMENTATION} for you. All functions are \texttt{static}, so
 several C files may each have their own implementation without link clashes.
 

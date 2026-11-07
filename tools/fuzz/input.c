@@ -1,6 +1,6 @@
 /* the key parser (tui_feed / tui_poll) on arbitrary bytes and timing */
 #define R2_TUI_IMPLEMENTATION
-#include "../../r2_tui.h"
+#include "../../tui/r2_tui.h"
 #include "fuzz.h"
 
 static uint8_t arena[R2_TUI_ARENA_SIZE(80, 25)];

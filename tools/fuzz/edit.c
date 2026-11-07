@@ -6,9 +6,9 @@
     then the key stream (see fuzz.h).
 */
 #define R2_TUI_IMPLEMENTATION
-#include "../../r2_tui.h"
+#include "../../tui/r2_tui.h"
 #define R2_TUI_EDIT_IMPLEMENTATION
-#include "../../r2_tui_edit.h"
+#include "../../tui/r2_tui_edit.h"
 #include "fuzz.h"
 
 #include <string.h>
@@ -36,7 +36,7 @@ static void app_ui(tui *t, tui_window *w, void *user)
     tui_editor(t, "##ed", &a->e, a->w, a->h);
 }
 
-/* recount what the editor tracks incrementally (as tests/r2_tui_edit.c does) */
+/* recount what the editor tracks incrementally (as tui/tests/r2_tui_edit.c does) */
 static void check(const app *a, int text_valid)
 {
     static char s[sizeof(a->buf) + 1];
