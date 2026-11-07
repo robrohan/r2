@@ -13,7 +13,13 @@ Current Libraries:
 
 - Vector, matrix and quaternion: [r2_maths.h](./r2_maths.h)
 - UTF-8 String library: [r2_strings.h](./r2_strings.h)
-- Simple ncurses like library thing: [r2_termui.h](./r2_termui.h)
+- Terminal escape codes: [r2_termui.h](./r2_termui.h)
+- Terminal UI (cells, diff renderer, keyboard input; no malloc, never blocks): [r2_tui.h](./r2_tui.h)
+  with a POSIX terminal adapter [r2_tui_posix.h](./r2_tui_posix.h) and a text editor widget
+  [r2_tui_edit.h](./r2_tui_edit.h). Try `make demo && ./bin/tui_demo` for everything, or
+  `make app && ./bin/tui_app` for just the windowing (a starter app to copy: `examples/tui_app.c`).
+  It also runs in a browser as wasm (clang only, nothing imported): `make test_wasm`, then
+  `python3 -m http.server 8000` and open `http://localhost:8000/examples/wasm/`.
 - Minimal unit testing: [r2_unit.h](./r2_unit.h)
 
 ## Installation

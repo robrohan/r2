@@ -1,4 +1,4 @@
-.PHONY: all test test_strings test_maths test_quant test_clang clean build help
+.PHONY: all test test_strings test_maths test_quant test_tui test_edit test_edit_flags test_clang test_asan fuzz fuzz_run wasm test_wasm demo app clean build help
 
 help:
 	@echo "Available targets:"
@@ -7,8 +7,17 @@ help:
 	@echo "  test_strings - build and run only the strings test suite with gcc"
 	@echo "  test_maths   - build and run only the maths test suite with gcc"
 	@echo "  test_quant   - build and run only the quantized-math test suite with gcc"
+	@echo "  test_tui     - build and run only the terminal UI test suite with gcc"
+	@echo "  test_edit    - build and run only the text editor widget suite with gcc"
+	@echo "  test_edit_flags - the editor suite with each -D feature switch off"
 	@echo "  test_clang   - build and run all tests with clang"
-	@echo "  test_wasm    - build and run all tests with emcc (needs emsdk env)"
+	@echo "  test_asan    - build and run all tests under AddressSanitizer + UBSan"
+	@echo "  fuzz         - build the libFuzzer harnesses in tools/fuzz (needs clang with libFuzzer)"
+	@echo "  fuzz_run     - run one harness: make fuzz_run FUZZ=input SECS=60"
+	@echo "  wasm         - check the freestanding headers build for wasm32 with clang (no libc)"
+	@echo "  test_wasm    - drive the wasm module's exports natively; prints how to open the test page"
+	@echo "  demo         - build the terminal UI demo (bin/tui_demo)"
+	@echo "  app          - build the plain windowing app, no editor (bin/tui_app)"
 	@echo "  check        - run static analysis / lint (check.sh)"
 	@echo "  perf         - run perf stat on the test binary (Linux only, run as sudo)"
 	@echo "  clean        - remove build artifacts"
@@ -89,6 +98,91 @@ test_quant: build_tests
 
 test_term: build_tests
 	./bin/run_tests termui
+
+test_tui: build_tests
+	./bin/run_tests tui
+
+test_edit: build_tests
+	./bin/run_tests edit
+
+# the editor suite with each feature compiled out (r2_tui_edit.h -D switches)
+test_edit_flags:
+	mkdir -p bin
+	@for f in "" -DR2_TUI_EDIT_NO_SELECTION -DR2_TUI_EDIT_NO_CLIPBOARD -DR2_TUI_EDIT_NO_UNDO -DR2_TUI_EDIT_NO_SEARCH -DR2_TUI_EDIT_MINIMAL; do \
+		echo "== edit suite $${f:-(all features)}"; \
+		$(CC) -std=c11 $(C_ERRS) -O2 $$f tests.c tests/*.c -lm -o bin/run_tests_edit && ./bin/run_tests_edit edit | tail -2 || exit 1; \
+	done
+
+# Nothing here uses OpenMP pragmas, so clang builds without OMP_FLAGS
+# (clang's -fopenmp needs libomp, which isn't always installed).
+test_clang: clean
+	mkdir -p bin
+	CC=clang OUT=./bin/run_tests_clang \
+	CFLAGS='-std=c11 $(C_ERRS) -g3 -O3 $(SIMD_FLAGS) $(BLAS_CFLAGS)' \
+	LDFLAGS='$(BLAS_LDFLAGS)' \
+	./test.sh
+	./bin/run_tests_clang
+
+# the whole suite with ASan + UBSan, so the random tests catch out of bounds
+# reads and writes that don't happen to crash. No OpenMP or -O3: slower, but
+# the sanitizer reports are readable.
+test_asan: clean
+	mkdir -p bin
+	OUT=./bin/run_tests_asan \
+	CFLAGS='-std=c11 $(C_ERRS) -g -O1 -fno-omit-frame-pointer -fsanitize=address,undefined -fno-sanitize-recover=all $(SIMD_FLAGS) $(BLAS_CFLAGS)' \
+	LDFLAGS='-fsanitize=address,undefined $(BLAS_LDFLAGS)' \
+	./test.sh
+	./bin/run_tests_asan
+
+# coverage-guided fuzzing with libFuzzer (tools/fuzz/*.c, seeds in
+# tools/fuzz/corpus/<name>). Apple's clang has no libFuzzer; on macOS use
+# Homebrew's: make fuzz FUZZ_CC=$$(brew --prefix llvm)/bin/clang
+FUZZ_CC      ?= clang
+FUZZ_FLAGS   := -std=c11 $(C_ERRS) -g -O1 -fno-omit-frame-pointer \
+		-fsanitize=fuzzer,address,undefined -fno-sanitize-recover=all
+FUZZ_TARGETS := $(patsubst tools/fuzz/%.c,bin/fuzz_%,$(wildcard tools/fuzz/*.c))
+FUZZ ?= input
+SECS ?= 60
+
+fuzz: $(FUZZ_TARGETS)
+
+bin/fuzz_%: tools/fuzz/%.c r2_strings.h r2_tui.h r2_tui_edit.h
+	mkdir -p bin
+	$(FUZZ_CC) $(FUZZ_FLAGS) $< -o $@
+
+# new inputs found go in bin/corpus_<name> (the checked in seeds stay as
+# they are); crashes land in bin/ as crash-<hash>, rerun one with
+# ./bin/fuzz_<name> bin/crash-<hash>
+fuzz_run: bin/fuzz_$(FUZZ)
+	mkdir -p bin/corpus_$(FUZZ)
+	./bin/fuzz_$(FUZZ) -max_total_time=$(SECS) -artifact_prefix=bin/ \
+		bin/corpus_$(FUZZ) tools/fuzz/corpus/$(FUZZ)
+
+# clang only (no emcc, no libc): strings, quant and tui must build for
+# wasm32 with nothing imported. wasm-ld fails on any missing function.
+# Needs clang with the WebAssembly target and wasm-ld (lld).
+wasm:
+	mkdir -p bin
+	clang --target=wasm32 -std=c11 $(C_ERRS) -O2 -ffreestanding -nostdlib \
+		-c tools/wasm_check.c -o bin/wasm_check.o
+	wasm-ld --no-entry bin/wasm_check.o -o bin/r2.wasm
+	@echo "bin/r2.wasm: freestanding build OK"
+
+# the module's exports driven natively, as examples/wasm/index.html drives them
+test_wasm: wasm
+	$(CC) -std=c11 $(C_ERRS) -O1 -g -fsanitize=address,undefined -fno-sanitize-recover=all \
+		tools/wasm_host_test.c -o bin/wasm_host_test
+	./bin/wasm_host_test
+	@echo "test page: python3 -m http.server 8000, then open http://localhost:8000/examples/wasm/"
+
+demo:
+	mkdir -p bin
+	$(CC) -std=c11 $(C_ERRS) -O2 examples/tui_demo.c -o bin/tui_demo
+
+# just the window manager: no editor, no test windows (a starting point to copy)
+app:
+	mkdir -p bin
+	$(CC) -std=c11 $(C_ERRS) -O2 examples/tui_app.c -o bin/tui_app
 
 perf:
 #####################################

@@ -112,9 +112,13 @@ extern "C"
 
 #ifdef R2_QUANT_IMPLEMENTATION
 
-#include <math.h>
-
 #include "r2_simd.h"
+
+    /* |x| without libm, so this header builds freestanding (wasm32, bare metal) */
+    static float r2__fabsf(float x)
+    {
+        return x < 0.f ? -x : x;
+    }
 
     /* round-to-nearest, ties away from zero (avoids depending on lrintf) */
     static int32_t r2__round_i32(float x)
@@ -128,7 +132,7 @@ extern "C"
         int i;
         for (i = 0; i < n; i++)
         {
-            float a = fabsf(in[i]);
+            float a = r2__fabsf(in[i]);
             if (a > max_abs)
                 max_abs = a;
         }
@@ -300,7 +304,7 @@ extern "C"
                 int32_t acc = 0;
                 for (k = 0; k < c1; k++)
                     acc += (int32_t)m1[i * c1 + k] * (int32_t)m2[k * c2 + j];
-                float av = fabsf((float)acc * scale);
+                float av = r2__fabsf((float)acc * scale);
                 if (av > max_abs)
                     max_abs = av;
             }
@@ -333,7 +337,7 @@ extern "C"
         int i;
         for (i = 0; i < n; i++)
         {
-            float a = fabsf(in[i]);
+            float a = r2__fabsf(in[i]);
             if (a > max_abs)
                 max_abs = a;
         }
@@ -556,7 +560,7 @@ extern "C"
         int i;
         for (i = 0; i < n; i++)
         {
-            float a = fabsf(in[i]);
+            float a = r2__fabsf(in[i]);
             if (a > max_abs)
                 max_abs = a;
         }

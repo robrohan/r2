@@ -1,0 +1,16 @@
+{
+  "title": "r2",
+  "description": "C4 map of r2: single-file C headers for maths, quantized maths, UTF-8 strings and a keyboard-driven terminal UI (the planned UI for Chestnut).",
+  "root": "root.canvas",
+  "created": "2026-10-31T21:26:05Z",
+  "cost": {
+    "currency": "$",
+    "salary": 120000,
+    "overhead": 1.8,
+    "mode": "organic",
+    "ai_share": 0.5,
+    "token_price": 10,
+    "reasoning_multiplier": 500,
+    "chars_per_token": 4
+  }
+}

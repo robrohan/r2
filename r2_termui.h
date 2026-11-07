@@ -99,6 +99,26 @@ the cursor will move to the home position, at the upper left of the screen. */
 
 #define ESC_HIDE_CURSOR            "\033[?25l"
 
+/* DEC save / restore cursor (also saves attributes); more widely supported than ESC[s / ESC[u */
+#define ESC_SAVE_CURSOR_DEC        "\0337"
+#define ESC_RESTORE_CURSOR_DEC     "\0338"
+
+/* Cursor shape: 0 default, 1/2 block (blink/steady), 3/4 underline, 5/6 bar */
+#define ESC_CURSOR_STYLE           "\033[%d q"
+
+/* Alternate screen: draw a full-screen UI without losing the shell's scrollback */
+#define ESC_ALT_SCREEN_ON          "\033[?1049h"
+#define ESC_ALT_SCREEN_OFF         "\033[?1049l"
+
+/* Synchronized update: the terminal holds the display until the END, so a
+   frame never shows half drawn. Terminals that don't know it ignore it. */
+#define ESC_SYNC_BEGIN             "\033[?2026h"
+#define ESC_SYNC_END               "\033[?2026l"
+
+/* Line wrap at the right margin (DECAWM) */
+#define ESC_AUTOWRAP_ON            "\033[?7h"
+#define ESC_AUTOWRAP_OFF           "\033[?7l"
+
 #define ESC_SHOW_CURSOR            "\033[?25h"
 
 /* Save current cursor position. */
@@ -144,6 +164,7 @@ the cursor will move to the home position, at the upper left of the screen. */
 #define ESC_SET_ATTRIBUTE_MODE_3   "\033[%d;%d;%dm"
 #define ESC_SET_ATTRIBUTE_MODE_2   "\033[%d;%dm"
 #define ESC_SET_ATTRIBUTE_MODE_1   "\033[%dm"
+#define ESC_RESET_ATTRIBUTES       "\033[0m"
 /*
 0	Reset all attributes
 1	Bright

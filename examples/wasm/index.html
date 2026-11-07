@@ -1,0 +1,383 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>r2_tui wasm</title>
+<!--
+    A test page for bin/r2.wasm (tools/wasm_check.c): the page is the
+    terminal, the module is r2_tui with the editor and widgets, built with
+    clang alone. Serve the repo root and open this folder:
+
+        make wasm
+        python3 -m http.server 8000
+        open http://localhost:8000/examples/wasm/
+-->
+<style>
+    :root {
+        --page: #1b1d22;
+        --panel: #262930;
+        --text: #c9ccd3;
+        --dim: #8a8f99;
+        --ok: #55ff55;
+        --bad: #ff5555;
+        --line: #3a3e47;
+    }
+    * { box-sizing: border-box; }
+    html, body { height: 100%; margin: 0; }
+    body {
+        background: var(--page);
+        color: var(--text);
+        font: 13px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif;
+        display: flex;
+        flex-direction: column;
+    }
+    header, footer {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px 14px;
+        align-items: center;
+        padding: 8px 16px;
+        background: var(--panel);
+        border-bottom: 1px solid var(--line);
+    }
+    footer { border-top: 1px solid var(--line); border-bottom: 0; font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 12px; }
+    header strong { color: #fff; margin-right: 6px; }
+    button {
+        font: inherit;
+        color: var(--text);
+        background: #31353e;
+        border: 1px solid var(--line);
+        border-radius: 4px;
+        padding: 2px 8px;
+        cursor: pointer;
+    }
+    button:hover { background: #3b404a; }
+    label { display: inline-flex; gap: 4px; align-items: center; color: var(--dim); }
+    select { font: inherit; background: #31353e; color: var(--text); border: 1px solid var(--line); border-radius: 4px; }
+    #stage { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; padding: 8px; overflow: hidden; }
+    canvas { display: block; outline: none; box-shadow: 0 0 0 1px var(--line); }
+    canvas:focus { box-shadow: 0 0 0 1px #5555ff; }
+    #error { display: none; max-width: 640px; padding: 16px 20px; background: var(--panel); border: 1px solid var(--bad); border-radius: 6px; }
+    #error code { color: #fff; }
+    .sep { color: var(--line); }
+    .ok { color: var(--ok); }
+    .bad { color: var(--bad); }
+    #keys { color: #fff; }
+</style>
+</head>
+<body>
+<header>
+    <strong>r2_tui · wasm32</strong>
+    <span>Send:</span>
+    <button data-send="\x17" title="the browser closes the tab on Ctrl+W">Ctrl+W</button>
+    <button data-send="\x0e" title="the browser opens a window on Ctrl+N">Ctrl+N</button>
+    <button data-send="\x14" title="the browser opens a tab on Ctrl+T">Ctrl+T</button>
+    <button data-send="\x00" title="macOS may switch input sources on Ctrl+Space">Ctrl+Space</button>
+    <button data-send="\x1c" title="the window command prefix">Ctrl+\</button>
+    <button data-send="\x1d" title="search every command">Ctrl+]</button>
+    <span class="sep">|</span>
+    <label><input type="checkbox" id="meta" checked> Alt/Option is Meta</label>
+    <label><input type="checkbox" id="verify" checked> Check every frame</label>
+    <label>Font <select id="font">
+        <option>13</option><option>14</option><option selected>16</option><option>18</option><option>20</option>
+    </select></label>
+</header>
+
+<div id="stage">
+    <canvas id="term" tabindex="0" aria-label="r2_tui terminal"></canvas>
+    <div id="error"></div>
+</div>
+
+<footer>
+    <span id="size">-</span><span class="sep">|</span>
+    <span>frame <span id="frame">0</span> B</span><span class="sep">|</span>
+    <span>total <span id="total">0</span> B in <span id="frames">0</span> frames</span><span class="sep">|</span>
+    <span>keys <span id="keys"></span></span><span class="sep">|</span>
+    <span id="check">-</span>
+</footer>
+
+<script type="module">
+import { Screen, COLOURS, BOLD, UNDERLINE, REVERSE, CONT, keyBytes, showBytes } from './term.js';
+
+const WASM = '../../bin/r2.wasm';
+const MAX_COLS = 160, MAX_ROWS = 60; /* the module's arena: R2_TUI_ARENA_SIZE(160, 60) */
+const MIN_COLS = 40, MIN_ROWS = 12;
+const FONT = '"DejaVu Sans Mono", Menlo, Consolas, "Liberation Mono", monospace';
+
+const $ = (id) => document.getElementById(id);
+const canvas = $('term');
+const ctx = canvas.getContext('2d');
+const enc = new TextEncoder();
+
+let ex, screen, cw = 9, ch = 18, px = 16, dpr = 1;
+let total = 0, frames = 0, checked = 0, typed = false, blinkOn = true;
+let cursorRow = -1, timer = 0;
+
+const now = () => Math.floor(performance.now()) >>> 0;
+const mem = () => new Uint8Array(ex.memory.buffer);
+
+function fail(html) {
+    canvas.style.display = 'none';
+    $('error').style.display = 'block';
+    $('error').innerHTML = html;
+}
+
+/* ---------- cells ---------- */
+
+function measure() {
+    px = parseInt($('font').value, 10);
+    dpr = window.devicePixelRatio || 1;
+    ctx.font = `${px}px ${FONT}`;
+    cw = Math.ceil(ctx.measureText('M').width);
+    ch = Math.ceil(px * 1.25);
+}
+
+function fit() {
+    const st = $('stage');
+    const cols = Math.max(MIN_COLS, Math.min(MAX_COLS, Math.floor((st.clientWidth - 16) / cw)));
+    const rows = Math.max(MIN_ROWS, Math.min(MAX_ROWS, Math.floor((st.clientHeight - 16) / ch)));
+    return [cols, rows];
+}
+
+function sizeCanvas(cols, rows) {
+    canvas.style.width = cols * cw + 'px';
+    canvas.style.height = rows * ch + 'px';
+    canvas.width = Math.round(cols * cw * dpr);
+    canvas.height = Math.round(rows * ch * dpr);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.textBaseline = 'middle';
+    $('size').textContent = `${cols}×${rows}`;
+}
+
+/* box drawing: [up, right, down, left], 1 single, 2 double; drawn, not typed,
+   so lines join whatever the font */
+const BOX = {
+    0x2500: [0, 1, 0, 1], 0x2502: [1, 0, 1, 0], 0x250c: [0, 1, 1, 0], 0x2510: [0, 0, 1, 1],
+    0x2514: [1, 1, 0, 0], 0x2518: [1, 0, 0, 1], 0x251c: [1, 1, 1, 0], 0x2524: [1, 0, 1, 1],
+    0x252c: [0, 1, 1, 1], 0x2534: [1, 1, 0, 1], 0x253c: [1, 1, 1, 1],
+    0x2550: [0, 2, 0, 2], 0x2551: [2, 0, 2, 0], 0x2554: [0, 2, 2, 0], 0x2557: [0, 0, 2, 2],
+    0x255a: [2, 2, 0, 0], 0x255d: [2, 0, 0, 2], 0x2560: [2, 2, 2, 0], 0x2563: [2, 0, 2, 2],
+    0x2566: [0, 2, 2, 2], 0x2569: [2, 2, 0, 2], 0x256c: [2, 2, 2, 2],
+};
+
+function drawBox(x0, y0, arms) {
+    const [up, right, down, left] = arms;
+    const lw = Math.max(1, Math.round(dpr)) / dpr;
+    const cx = x0 + Math.floor(cw / 2), cy = y0 + Math.floor(ch / 2);
+    const d = Math.max(2, Math.round(cw / 5)); /* half the gap of a double line */
+    const x1 = x0 + cw, y1 = y0 + ch;
+    /* lines start on whole pixels (crisp); an end short of the cell's edge
+       gets lw more, so it meets the line it turns into */
+    const h = (xa, xb, y) => ctx.fillRect(xa, y, xb - xa + (xb === x1 ? 0 : lw), lw);
+    const v = (ya, yb, x) => ctx.fillRect(x, ya, lw, yb - ya + (yb === y1 ? 0 : lw));
+    /* horizontal */
+    if (right === 1) h(cx, x1, cy);
+    if (left === 1) h(x0, cx, cy);
+    if (right === 2 || left === 2) {
+        const dbl = up === 2 || down === 2;
+        for (const s of [-1, 1]) { /* the line above, then below */
+            const vert = s < 0 ? up : down; /* a vertical arm on this side cuts it */
+            let a = left ? x0 : (dbl && vert ? cx + d : cx - d);
+            let b = right ? x1 : (dbl && vert ? cx - d : cx + d);
+            if (left && right && vert) { h(x0, cx - d, cy + s * d); h(cx + d, x1, cy + s * d); continue; }
+            if (left && !right) b = vert ? cx - d : cx + d;
+            if (right && !left) a = vert ? cx + d : cx - d;
+            h(a, b, cy + s * d);
+        }
+    }
+    /* vertical */
+    if (down === 1) v(cy, y1, cx);
+    if (up === 1) v(y0, cy, cx);
+    if (down === 2 || up === 2) {
+        for (const s of [-1, 1]) { /* the line left, then right */
+            const hor = s < 0 ? left : right;
+            let a = up ? y0 : (hor ? cy + d : cy - d);
+            let b = down ? y1 : (hor ? cy - d : cy + d);
+            if (up && down && hor) { v(y0, cy - d, cx + s * d); v(cy + d, y1, cx + s * d); continue; }
+            if (up && !down) b = hor ? cy - d : cy + d;
+            if (down && !up) a = hor ? cy + d : cy - d;
+            v(a, b, cx + s * d);
+        }
+    }
+}
+
+function drawRow(y) {
+    const s = screen, y0 = y * ch;
+    for (let x = 0; x < s.cols; x++) {
+        const i = y * s.cols + x;
+        if (s.cp[i] === CONT) continue; /* drawn with its left half */
+        const st = s.style[i], a = st >> 8;
+        let fg = st & 15, bg = (st >> 4) & 15;
+        if (a & REVERSE) [fg, bg] = [bg, fg];
+        const c = s.cp[i], wide = x + 1 < s.cols && s.cp[i + 1] === CONT;
+        const x0 = x * cw, w = wide ? 2 * cw : cw;
+        ctx.fillStyle = COLOURS[bg];
+        ctx.fillRect(x0, y0, w, ch);
+        ctx.fillStyle = COLOURS[fg];
+        if (BOX[c]) drawBox(x0, y0, BOX[c]);
+        else if (c >= 0x2591 && c <= 0x2593) { /* shades */
+            ctx.globalAlpha = (c - 0x2590) * 0.25;
+            ctx.fillRect(x0, y0, w, ch);
+            ctx.globalAlpha = 1;
+        } else if (c === 0x2588) ctx.fillRect(x0, y0, w, ch);
+        else if (c === 0x2580) ctx.fillRect(x0, y0, w, Math.ceil(ch / 2));
+        else if (c === 0x2584) ctx.fillRect(x0, y0 + Math.floor(ch / 2), w, ch - Math.floor(ch / 2));
+        else if (c === 0x258c) ctx.fillRect(x0, y0, Math.ceil(cw / 2), ch);
+        else if (c === 0x2590) ctx.fillRect(x0 + Math.floor(cw / 2), y0, cw - Math.floor(cw / 2), ch);
+        else if (c !== 32) {
+            ctx.font = `${a & BOLD ? 'bold ' : ''}${px}px ${FONT}`;
+            ctx.fillText(s.text(x, y), x0, y0 + ch / 2 + 1);
+        }
+        if (a & UNDERLINE) ctx.fillRect(x0, y0 + ch - 2, w, 1);
+    }
+    if (s.cursorOn && blinkOn && y === s.y) { /* the cursor: an underline, as on a console */
+        const st = s.style[y * s.cols + s.x];
+        ctx.fillStyle = COLOURS[(st >> 8) & REVERSE ? (st >> 4) & 15 : st & 15];
+        ctx.fillRect(s.x * cw, y0 + ch - 3, cw, 2);
+    }
+}
+
+function paint() {
+    if (cursorRow >= 0 && cursorRow < screen.rows) screen.dirty.add(cursorRow);
+    if (screen.cursorOn) screen.dirty.add(screen.y);
+    cursorRow = screen.y;
+    for (const y of screen.dirty) drawRow(y);
+    screen.dirty.clear();
+}
+
+/* ---------- the module ---------- */
+
+/* the page's screen against the library's back buffer, cell by cell */
+function verify() {
+    if (!$('verify').checked) return;
+    const s = screen;
+    for (let y = 0; y < s.rows; y++)
+        for (let x = 0; x < s.cols; x++) {
+            const cell = ex.r2_cell(x, y) >>> 0;
+            let r = cell & 0x1fffff;
+            const style = cell >>> 21, i = y * s.cols + x;
+            if (r === 0x1fffff) r = CONT;
+            if (r === 0) r = 32;
+            if (s.cp[i] !== r || s.style[i] !== style) {
+                $('check').className = 'bad';
+                $('check').textContent = `MISMATCH at ${x},${y}: page ${s.cp[i]}/${s.style[i]}, library ${r}/${style}`;
+                console.warn('r2_tui page screen differs from the library', { x, y, page: [s.cp[i], s.style[i]], lib: [r, style] });
+                return;
+            }
+        }
+    checked++;
+    $('check').className = 'ok';
+    $('check').textContent = `screen matches the library (${checked} frames)`;
+}
+
+function drain() {
+    let n, frame = 0;
+    while ((n = ex.r2_render()) > 0) {
+        const out = ex.r2_out();
+        screen.write(mem().subarray(out, out + n));
+        frame += n;
+    }
+    if (frame) {
+        total += frame;
+        frames++;
+        $('frame').textContent = frame;
+        $('total').textContent = total;
+        $('frames').textContent = frames;
+        paint();
+        verify();
+    }
+}
+
+function pump() {
+    clearTimeout(timer);
+    ex.r2_update(now());
+    drain();
+    if (ex.r2_pending()) timer = setTimeout(pump, ex.r2_esc_ms() + 5); /* a lone Esc becomes Esc */
+}
+
+function send(text) {
+    const bytes = enc.encode(text);
+    for (let k = 0; k < bytes.length; k += 256) {
+        const part = bytes.subarray(k, k + 256);
+        mem().set(part, ex.r2_in());
+        ex.r2_feed(part.length, now());
+    }
+    pump();
+}
+
+function resize() {
+    measure();
+    const [cols, rows] = fit();
+    sizeCanvas(cols, rows);
+    if (screen.cols !== cols || screen.rows !== rows) {
+        if (ex.r2_resize(cols, rows) !== 0) return;
+        screen.resize(cols, rows);
+    } else
+        for (let y = 0; y < rows; y++) screen.dirty.add(y);
+    paint();
+    pump();
+}
+
+async function load() {
+    let mod;
+    try {
+        const res = await fetch(WASM);
+        if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
+        mod = await WebAssembly.instantiate(await res.arrayBuffer(), {}); /* nothing imported */
+    } catch (err) {
+        fail(`<p><strong>Could not load <code>${WASM}</code></strong> (${err.message}).</p>
+              <p>Build it and serve the repo root (browsers won't fetch wasm from <code>file://</code>):</p>
+              <p><code>make wasm<br>python3 -m http.server 8000</code></p>
+              <p>then open <code>http://localhost:8000/examples/wasm/</code></p>`);
+        return;
+    }
+    ex = mod.instance.exports;
+    measure();
+    const [cols, rows] = fit();
+    sizeCanvas(cols, rows);
+    if (ex.r2_init(cols, rows) !== 0) {
+        fail('<p><strong>r2_init failed</strong>: the screen does not fit the module\'s arena.</p>');
+        return;
+    }
+    screen = new Screen(cols, rows, (c) => ex.r2_width(c));
+    pump();
+    canvas.focus();
+
+    canvas.addEventListener('keydown', (e) => {
+        const s = keyBytes(e, $('meta').checked);
+        if (s === null) return;
+        e.preventDefault();
+        typed = true;
+        $('keys').textContent = showBytes(s);
+        blinkOn = true;
+        send(s);
+    });
+    canvas.addEventListener('paste', (e) => {
+        const text = e.clipboardData.getData('text/plain').replace(/\r\n?/g, '\r').replace(/\n/g, '\r');
+        e.preventDefault();
+        typed = true;
+        send(text);
+    });
+    canvas.addEventListener('mousedown', () => canvas.focus());
+    for (const b of document.querySelectorAll('[data-send]'))
+        b.addEventListener('click', () => {
+            const s = b.dataset.send.replace(/\\x([0-9a-f]{2})/g, (_, h) => String.fromCharCode(parseInt(h, 16)));
+            $('keys').textContent = showBytes(s);
+            send(s);
+            canvas.focus();
+        });
+    $('font').addEventListener('change', () => { resize(); canvas.focus(); });
+    $('verify').addEventListener('change', () => { checked = 0; verify(); canvas.focus(); });
+    new ResizeObserver(resize).observe($('stage'));
+    setInterval(() => { /* blink */
+        blinkOn = !blinkOn;
+        if (screen.cursorOn) { screen.dirty.add(screen.y); paint(); }
+    }, 530);
+    window.addEventListener('beforeunload', (e) => { if (typed) { e.preventDefault(); e.returnValue = ''; } });
+}
+
+document.fonts?.ready.then(load) ?? load();
+</script>
+</body>
+</html>
