@@ -17,8 +17,8 @@ LDFLAGS=${LDFLAGS:- }
 OUT=${OUT:-run_tests}
 LIBS=${LIBS:- -lm}
 
-TESTS=./tests/*.c
+TESTS="./tests/*.c ./tui/tests/*.c"
 
 #############################
 
-${CC} ${CFLAGS} tests.c ${TESTS} ${LIBS} ${LDFLAGS} -o ${OUT}
+${CC} ${CFLAGS} -I. tests.c ${TESTS} ${LIBS} ${LDFLAGS} -o ${OUT}
