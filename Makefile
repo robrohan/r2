@@ -110,7 +110,7 @@ test_edit_flags:
 	mkdir -p bin
 	@for f in "" -DR2_TUI_EDIT_NO_SELECTION -DR2_TUI_EDIT_NO_CLIPBOARD -DR2_TUI_EDIT_NO_UNDO -DR2_TUI_EDIT_NO_SEARCH -DR2_TUI_EDIT_MINIMAL; do \
 		echo "== edit suite $${f:-(all features)}"; \
-		$(CC) -std=c11 $(C_ERRS) -O2 $$f tests.c tests/*.c -lm -o bin/run_tests_edit && ./bin/run_tests_edit edit | tail -2 || exit 1; \
+		$(CC) -std=c11 $(C_ERRS) -O2 $$f -I. tests.c tests/*.c tui/tests/*.c -lm -o bin/run_tests_edit && ./bin/run_tests_edit edit | tail -2 || exit 1; \
 	done
 
 # Nothing here uses OpenMP pragmas, so clang builds without OMP_FLAGS
@@ -146,9 +146,9 @@ SECS ?= 60
 
 fuzz: $(FUZZ_TARGETS)
 
-bin/fuzz_%: tools/fuzz/%.c r2_strings.h r2_tui.h r2_tui_edit.h
+bin/fuzz_%: tools/fuzz/%.c r2_strings.h tui/r2_tui.h tui/r2_tui_edit.h
 	mkdir -p bin
-	$(FUZZ_CC) $(FUZZ_FLAGS) $< -o $@
+	$(FUZZ_CC) $(FUZZ_FLAGS) -I. $< -o $@
 
 # new inputs found go in bin/corpus_<name> (the checked in seeds stay as
 # they are); crashes land in bin/ as crash-<hash>, rerun one with
@@ -163,26 +163,26 @@ fuzz_run: bin/fuzz_$(FUZZ)
 # Needs clang with the WebAssembly target and wasm-ld (lld).
 wasm:
 	mkdir -p bin
-	clang --target=wasm32 -std=c11 $(C_ERRS) -O2 -ffreestanding -nostdlib \
+	clang --target=wasm32 -std=c11 $(C_ERRS) -O2 -ffreestanding -nostdlib -I. \
 		-c tools/wasm_check.c -o bin/wasm_check.o
 	wasm-ld --no-entry bin/wasm_check.o -o bin/r2.wasm
 	@echo "bin/r2.wasm: freestanding build OK"
 
-# the module's exports driven natively, as examples/wasm/index.html drives them
+# the module's exports driven natively, as tui/examples/wasm/index.html drives them
 test_wasm: wasm
 	$(CC) -std=c11 $(C_ERRS) -O1 -g -fsanitize=address,undefined -fno-sanitize-recover=all \
-		tools/wasm_host_test.c -o bin/wasm_host_test
+		-I. tools/wasm_host_test.c -o bin/wasm_host_test
 	./bin/wasm_host_test
-	@echo "test page: python3 -m http.server 8000, then open http://localhost:8000/examples/wasm/"
+	@echo "test page: python3 -m http.server 8000, then open http://localhost:8000/tui/examples/wasm/"
 
 demo:
 	mkdir -p bin
-	$(CC) -std=c11 $(C_ERRS) -O2 examples/tui_demo.c -o bin/tui_demo
+	$(CC) -std=c11 $(C_ERRS) -O2 -I. tui/examples/tui_demo.c -o bin/tui_demo
 
 # just the window manager: no editor, no test windows (a starting point to copy)
 app:
 	mkdir -p bin
-	$(CC) -std=c11 $(C_ERRS) -O2 examples/tui_app.c -o bin/tui_app
+	$(CC) -std=c11 $(C_ERRS) -O2 -I. tui/examples/tui_app.c -o bin/tui_app
 
 perf:
 #####################################

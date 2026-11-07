@@ -2,7 +2,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
-#include "../r2_unit.h"
+#include "../../r2_unit.h"
 
 static const char *test_simple_test(void)
 {

@@ -11,7 +11,7 @@
 
         make wasm
         python3 -m http.server 8000
-        open http://localhost:8000/examples/wasm/
+        open http://localhost:8000/tui/examples/wasm/
 -->
 <style>
     :root {
@@ -100,7 +100,7 @@
 <script type="module">
 import { Screen, COLOURS, BOLD, UNDERLINE, REVERSE, CONT, keyBytes, showBytes } from './term.js';
 
-const WASM = '../../bin/r2.wasm';
+const WASM = '../../../bin/r2.wasm';
 const MAX_COLS = 160, MAX_ROWS = 60; /* the module's arena: R2_TUI_ARENA_SIZE(160, 60) */
 const MIN_COLS = 40, MIN_ROWS = 12;
 const FONT = '"DejaVu Sans Mono", Menlo, Consolas, "Liberation Mono", monospace';
@@ -329,7 +329,7 @@ async function load() {
         fail(`<p><strong>Could not load <code>${WASM}</code></strong> (${err.message}).</p>
               <p>Build it and serve the repo root (browsers won't fetch wasm from <code>file://</code>):</p>
               <p><code>make wasm<br>python3 -m http.server 8000</code></p>
-              <p>then open <code>http://localhost:8000/examples/wasm/</code></p>`);
+              <p>then open <code>http://localhost:8000/tui/examples/wasm/</code></p>`);
         return;
     }
     ex = mod.instance.exports;

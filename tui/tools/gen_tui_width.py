@@ -18,7 +18,7 @@ so a range covers at most 2048 codepoints (longer ones are split). The
 checksum lets the C tests confirm that the lookup agrees with this script
 for every codepoint.
 
-Usage: python3 tools/gen_tui_width.py r2_tui.h
+Usage: python3 tui/tools/gen_tui_width.py tui/r2_tui.h
 """
 import sys
 import unicodedata
@@ -75,7 +75,7 @@ def main():
     for w in widths:
         h = ((h ^ w) * 0x01000193) & 0xFFFFFFFF
 
-    block = [BEGIN + ": tools/gen_tui_width.py, Unicode %s */" % unicodedata.unidata_version]
+    block = [BEGIN + ": tui/tools/gen_tui_width.py, Unicode %s */" % unicodedata.unidata_version]
     block += ["#define R2_TUI_WIDTH_UNICODE \"%s\"" % unicodedata.unidata_version]
     block += ["#define R2_TUI_WIDTH_CHECKSUM 0x%08Xu" % h]
     block += table("r2__tui_zero", zero)

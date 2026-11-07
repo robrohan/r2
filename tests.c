@@ -23,9 +23,9 @@
 #include "tests/r2_maths.c"
 #include "tests/r2_quant.c"
 #include "tests/r2_strings.c"
-#include "tests/r2_termui.c"
-#include "tests/r2_tui.c"
-#include "tests/r2_tui_edit.c"
+#include "tui/tests/r2_termui.c"
+#include "tui/tests/r2_tui.c"
+#include "tui/tests/r2_tui_edit.c"
 ///////////////////////////////////////////////
 // Add suites here...
 // Defined in the tests files above

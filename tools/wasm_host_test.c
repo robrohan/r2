@@ -1,6 +1,6 @@
 /*
     Drives tools/wasm_check.c's exports natively, the way
-    examples/wasm/index.html does: keys in, bytes out, then reads the
+    tui/examples/wasm/index.html does: keys in, bytes out, then reads the
     library's cells. `make test_wasm` runs it under ASan / UBSan.
 */
 #include <stdio.h>

@@ -1,6 +1,6 @@
 #define R2_TUI_IMPLEMENTATION
 #include "../r2_tui.h"
-#include "../r2_unit.h"
+#include "../../r2_unit.h"
 
 #include <stdint.h>
 #include <stdio.h>
@@ -281,7 +281,7 @@ static const char *test_tui_width_table_matches_generator(void)
     uint32_t h = 0x811C9DC5u;
     for (rune r = 0; r < 0x110000u; r++)
         h = (h ^ (uint32_t)tui_rune_width(r)) * 0x01000193u;
-    r2_assert("width table disagrees with tools/gen_tui_width.py", h == R2_TUI_WIDTH_CHECKSUM);
+    r2_assert("width table disagrees with tui/tools/gen_tui_width.py", h == R2_TUI_WIDTH_CHECKSUM);
     return 0;
 }
 

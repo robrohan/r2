@@ -9,7 +9,7 @@
 
     The exports are a small C ABI a host (e.g. a JS terminal) drives:
     write key bytes into r2_in(), call r2_feed / r2_update, then read
-    r2_render() bytes from r2_out(). examples/wasm/index.html is such a
+    r2_render() bytes from r2_out(). tui/examples/wasm/index.html is such a
     host: a test page with the editor and the widgets.
 */
 #define R2_STRINGS_IMPLEMENTATION
@@ -20,10 +20,10 @@
 
 #define R2_TUI_CMD_POOL (32 * 1024) /* an editor filling a big window */
 #define R2_TUI_IMPLEMENTATION
-#include "../r2_tui.h"
+#include "../tui/r2_tui.h"
 
 #define R2_TUI_EDIT_IMPLEMENTATION
-#include "../r2_tui_edit.h"
+#include "../tui/r2_tui_edit.h"
 
 #ifdef __wasm__
 #define EXPORT(name) __attribute__((export_name(#name)))

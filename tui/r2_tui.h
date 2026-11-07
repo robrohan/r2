@@ -694,7 +694,7 @@ extern "C"
 /* ================================================================== */
 #ifdef R2_TUI_IMPLEMENTATION
 
-/* BEGIN GENERATED WIDTH TABLE: tools/gen_tui_width.py, Unicode 16.0.0 */
+/* BEGIN GENERATED WIDTH TABLE: tui/tools/gen_tui_width.py, Unicode 16.0.0 */
 #define R2_TUI_WIDTH_UNICODE "16.0.0"
 #define R2_TUI_WIDTH_CHECKSUM 0x64126B0Bu
     static const uint32_t r2__tui_zero[368] = {

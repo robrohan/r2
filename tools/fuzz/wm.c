@@ -6,7 +6,7 @@
     Data: one byte of setup, then the key stream (see fuzz.h).
 */
 #define R2_TUI_IMPLEMENTATION
-#include "../../r2_tui.h"
+#include "../../tui/r2_tui.h"
 #include "fuzz.h"
 
 #include <string.h>
