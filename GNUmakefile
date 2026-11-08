@@ -78,7 +78,7 @@ run: test test_clang check
 
 build_tests: clean
 	mkdir -p bin
-	CC=gcc OUT=./bin/run_tests \
+	CC='$(CC)' OUT=./bin/run_tests \
 	CFLAGS='-std=c11 $(C_ERRS) -g3 -v -O3 -funroll-loops $(SIMD_FLAGS) $(OMP_FLAGS) $(BLAS_CFLAGS)' \
 	LDFLAGS='$(BLAS_LDFLAGS)' \
 	./test.sh
